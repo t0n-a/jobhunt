@@ -92,7 +92,13 @@ class AgyProvider:
             except json.JSONDecodeError as exc:
                 raise LLMError(f"agy returned non-JSON output: {output[:200]}") from exc
 
-            if isinstance(parsed, dict) and "status" in parsed:
+            is_envelope = (
+                isinstance(parsed, dict)
+                and "status" in parsed
+                and "conversation_id" in parsed
+                and ("response" in parsed or "error" in parsed)
+            )
+            if is_envelope:
                 status = parsed.get("status")
                 if status != "SUCCESS":
                     err_msg = parsed.get("error") or ""

@@ -323,3 +323,40 @@ def test_atom_with_html_in_title_is_escaped(make_client):
     assert "<script>alert('x')</script>" not in response.text
     assert "<script>" not in response.text
     assert "&lt;script&gt;" in response.text
+
+
+def test_confirm_unknown_atom_returns_404(make_client):
+    client = make_client([])
+    response = client.post("/atoms/99999/confirm")
+    assert response.status_code == 404
+
+
+def test_edit_unknown_atom_returns_404(make_client):
+    client = make_client([])
+    response = client.post(
+        "/atoms/99999/edit",
+        data={"title": "Nonexistent", "description": "D", "skills": "Python"},
+    )
+    assert response.status_code == 404
+
+
+def test_answering_twice_returns_400(make_client, monkeypatch):
+    monkeypatch.setattr("jobhunt.profile.interview.MAX_TURNS", 1)
+    client = make_client(["Q1"])
+    client.post("/interview", data={"topic": "T"}, follow_redirects=True)
+
+    res1 = client.post("/interview/1/answer", data={"answer": "A1"})
+    assert res1.status_code == 200
+
+    res2 = client.post("/interview/1/answer", data={"answer": "A2"})
+    assert res2.status_code == 400
+
+
+@respx.mock
+def test_github_import_http_error_returns_400(make_client):
+    respx.get("https://api.github.com/users/nobody/repos").mock(return_value=httpx.Response(404))
+    client = make_client([])
+
+    response = client.post("/import/github", data={"username": "nobody"})
+
+    assert response.status_code == 400

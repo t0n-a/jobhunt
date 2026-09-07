@@ -172,6 +172,21 @@ def test_agy_provider_raises_on_empty_envelope_response(monkeypatch):
         provider.complete("extract", schema={"type": "object"})
 
 
+def test_agy_provider_does_not_mistake_payload_with_status_for_envelope(monkeypatch):
+    payload = {"status": "SUCCESS", "atoms": []}
+
+    class Result:
+        returncode = 0
+        stdout = json.dumps(payload)
+        stderr = ""
+
+    monkeypatch.setattr("jobhunt.llm.agy.subprocess.run", lambda *args, **kwargs: Result())
+
+    provider = AgyProvider(model="m", binary="agy")
+    res = provider.complete("extract", schema={"type": "object"})
+    assert res == payload
+
+
 def test_agy_provider_translates_schema_path_on_wsl(monkeypatch):
     monkeypatch.setattr("sys.platform", "linux")
     fake_win_path = r"\\wsl.localhost\Ubuntu\tmp\translated_schema.json"
@@ -196,13 +211,14 @@ def test_agy_provider_translates_schema_path_on_wsl(monkeypatch):
 
     assert out == {"ok": True}
     assert len(captured_argv) == 2
-    assert captured_argv[0] == ["wslpath", "-w", str(captured_argv[0][2])]
+    assert captured_argv[0][:2] == ["wslpath", "-w"]
+    wslpath_arg = captured_argv[0][2]
+    assert wslpath_arg.endswith(".json")
     agy_cmd = captured_argv[1]
     assert "--json-schema" in agy_cmd
     idx = agy_cmd.index("--json-schema")
-    posix_path = captured_argv[0][2]
     assert agy_cmd[idx + 1] == fake_win_path
-    assert agy_cmd[idx + 1] != posix_path
+    assert agy_cmd[idx + 1] != wslpath_arg
 
 
 def test_agy_provider_does_not_translate_path_for_non_exe_binary(monkeypatch):

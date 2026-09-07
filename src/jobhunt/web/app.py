@@ -1,5 +1,6 @@
 import os
 import shutil
+from contextlib import contextmanager
 from pathlib import Path
 
 import httpx
@@ -20,6 +21,24 @@ from jobhunt.profile.store import AtomStore
 from jobhunt.web.deps import get_llm, get_store
 
 HERE = Path(__file__).parent
+
+
+@contextmanager
+def _importer_errors():
+    """Translate importer exceptions into HTTP responses.
+
+    ValueError  -> 400  bad user input (unsupported file, corrupt docx, no extractable text)
+    LLMError    -> 502  the model returned something structurally unusable; retryable
+    RuntimeError-> 503  environment fault the user can act on (missing pdftotext, rate limit)
+    """
+    try:
+        yield
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except LLMError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 def create_app(config: Config) -> FastAPI:
@@ -68,14 +87,8 @@ def create_app(config: Config) -> FastAPI:
         with target.open("wb") as out:
             shutil.copyfileobj(file.file, out)
 
-        try:
+        with _importer_errors():
             atoms = import_cv(target, llm)
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        except LLMError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
-        except RuntimeError as exc:
-            raise HTTPException(status_code=503, detail=str(exc)) from exc
 
         store.add_many(atoms)
         return RedirectResponse("/atoms", status_code=303)
@@ -87,13 +100,8 @@ def create_app(config: Config) -> FastAPI:
         llm: LLMProvider = Depends(get_llm),
     ):
         try:
-            atoms = import_github(username, llm, token=os.environ.get("GITHUB_TOKEN"))
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        except LLMError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
-        except RuntimeError as exc:
-            raise HTTPException(status_code=503, detail=str(exc)) from exc
+            with _importer_errors():
+                atoms = import_github(username, llm, token=os.environ.get("GITHUB_TOKEN"))
         except httpx.HTTPStatusError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -107,14 +115,8 @@ def create_app(config: Config) -> FastAPI:
         store: AtomStore = Depends(get_store),
         llm: LLMProvider = Depends(get_llm),
     ):
-        try:
+        with _importer_errors():
             atoms = import_coursework(text, institution, llm)
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        except LLMError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
-        except RuntimeError as exc:
-            raise HTTPException(status_code=503, detail=str(exc)) from exc
 
         store.add_many(atoms)
         return RedirectResponse("/atoms", status_code=303)
@@ -164,8 +166,11 @@ def create_app(config: Config) -> FastAPI:
             interview = db.get(InterviewSession, interview_id)
             if interview is None:
                 raise HTTPException(status_code=404, detail="No such interview")
-            record_answer(interview, answer)
-            next_question(interview, llm)
+            try:
+                record_answer(interview, answer)
+                next_question(interview, llm)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
             db.add(interview)
             db.commit()
             db.refresh(interview)
@@ -183,14 +188,8 @@ def create_app(config: Config) -> FastAPI:
             interview = db.get(InterviewSession, interview_id)
             if interview is None:
                 raise HTTPException(status_code=404, detail="No such interview")
-            try:
+            with _importer_errors():
                 atoms = harvest(interview, llm)
-            except ValueError as exc:
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
-            except LLMError as exc:
-                raise HTTPException(status_code=502, detail=str(exc)) from exc
-            except RuntimeError as exc:
-                raise HTTPException(status_code=503, detail=str(exc)) from exc
             db.add(interview)
             db.commit()
         store.add_many(atoms)
