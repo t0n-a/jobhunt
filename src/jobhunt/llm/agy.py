@@ -8,16 +8,71 @@ from pathlib import Path
 from jobhunt.llm.base import LLMError
 
 
-def _strip_markdown_fence(text: str) -> str:
-    cleaned = text.strip()
-    match = re.match(
-        r"^```(?:json)?\s*\n?(.*?)\n?\s*```\s*$",
-        cleaned,
+def _extract_balanced_json(text: str) -> object | None:
+    for start_idx, start_ch in enumerate(text):
+        if start_ch not in ("{", "["):
+            continue
+
+        stack = ["}" if start_ch == "{" else "]"]
+        in_string = False
+        escape = False
+
+        for i in range(start_idx + 1, len(text)):
+            ch = text[i]
+
+            if in_string:
+                if escape:
+                    escape = False
+                elif ch == "\\":
+                    escape = True
+                elif ch == '"':
+                    in_string = False
+            else:
+                if ch == '"':
+                    in_string = True
+                elif ch == "{":
+                    stack.append("}")
+                elif ch == "[":
+                    stack.append("]")
+                elif ch in ("}", "]"):
+                    if not stack or ch != stack[-1]:
+                        break
+                    stack.pop()
+                    if not stack:
+                        candidate = text[start_idx : i + 1]
+                        try:
+                            return json.loads(candidate)
+                        except json.JSONDecodeError:
+                            break
+    return None
+
+
+def _unwrap_response(response_val: str) -> object:
+    fence_match = re.search(
+        r"```(?:json)?\s*\n?(.*?)\n?\s*```",
+        response_val,
         re.DOTALL | re.IGNORECASE,
     )
-    if match:
-        return match.group(1).strip()
-    return cleaned
+    if fence_match:
+        fenced_content = fence_match.group(1).strip()
+        try:
+            return json.loads(fenced_content)
+        except json.JSONDecodeError:
+            balanced = _extract_balanced_json(fenced_content)
+            if balanced is not None:
+                return balanced
+    else:
+        stripped = response_val.strip()
+        try:
+            return json.loads(stripped)
+        except json.JSONDecodeError:
+            pass
+
+        balanced = _extract_balanced_json(stripped)
+        if balanced is not None:
+            return balanced
+
+    raise LLMError(f"agy returned non-JSON response: {response_val[:200]}")
 
 
 class AgyProvider:
@@ -113,11 +168,7 @@ class AgyProvider:
                 if not isinstance(response_val, str) or not response_val.strip():
                     raise LLMError("agy returned an empty response")
 
-                unwrapped = _strip_markdown_fence(response_val)
-                try:
-                    return json.loads(unwrapped)
-                except json.JSONDecodeError as exc:
-                    raise LLMError(f"agy returned non-JSON response: {unwrapped[:200]}") from exc
+                return _unwrap_response(response_val)
 
             return parsed
         except subprocess.TimeoutExpired as exc:

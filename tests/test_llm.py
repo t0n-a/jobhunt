@@ -134,6 +134,89 @@ def test_agy_provider_unwraps_envelope_without_fence(monkeypatch):
     assert res == {"ok": True}
 
 
+def test_agy_provider_handles_trailing_tool_action_after_fence(monkeypatch):
+    envelope = {
+        "conversation_id": "conv-123",
+        "status": "SUCCESS",
+        "response": (
+            "```json\n"
+            "{\n"
+            '  "ok": true\n'
+            "}\n"
+            "```\n"
+            '{"ok":true,"toolAction":"Completing the task","toolSummary":"Task completion"}'
+        ),
+    }
+
+    class Result:
+        returncode = 0
+        stdout = json.dumps(envelope)
+        stderr = ""
+
+    monkeypatch.setattr("jobhunt.llm.agy.subprocess.run", lambda *args, **kwargs: Result())
+
+    provider = AgyProvider(model="m", binary="agy")
+    res = provider.complete("extract", schema={"type": "object"})
+    assert res == {"ok": True}
+
+
+def test_agy_provider_handles_text_before_fence(monkeypatch):
+    envelope = {
+        "conversation_id": "conv-123",
+        "status": "SUCCESS",
+        "response": 'Here is the result:\n```json\n{"ok": true}\n```',
+    }
+
+    class Result:
+        returncode = 0
+        stdout = json.dumps(envelope)
+        stderr = ""
+
+    monkeypatch.setattr("jobhunt.llm.agy.subprocess.run", lambda *args, **kwargs: Result())
+
+    provider = AgyProvider(model="m", binary="agy")
+    res = provider.complete("extract", schema={"type": "object"})
+    assert res == {"ok": True}
+
+
+def test_agy_provider_handles_unfenced_json_with_trailing_noise(monkeypatch):
+    envelope = {
+        "conversation_id": "conv-123",
+        "status": "SUCCESS",
+        "response": '{"ok": true}\n{"toolAction":"x"}',
+    }
+
+    class Result:
+        returncode = 0
+        stdout = json.dumps(envelope)
+        stderr = ""
+
+    monkeypatch.setattr("jobhunt.llm.agy.subprocess.run", lambda *args, **kwargs: Result())
+
+    provider = AgyProvider(model="m", binary="agy")
+    res = provider.complete("extract", schema={"type": "object"})
+    assert res == {"ok": True}
+
+
+def test_agy_provider_fence_content_containing_braces_in_strings(monkeypatch):
+    envelope = {
+        "conversation_id": "conv-123",
+        "status": "SUCCESS",
+        "response": '```json\n{"title": "Uses {curly} braces ` here"}\n```',
+    }
+
+    class Result:
+        returncode = 0
+        stdout = json.dumps(envelope)
+        stderr = ""
+
+    monkeypatch.setattr("jobhunt.llm.agy.subprocess.run", lambda *args, **kwargs: Result())
+
+    provider = AgyProvider(model="m", binary="agy")
+    res = provider.complete("extract", schema={"type": "object"})
+    assert res == {"title": "Uses {curly} braces ` here"}
+
+
 def test_agy_provider_raises_on_envelope_error_status(monkeypatch):
     envelope = {
         "conversation_id": "conv-123",
