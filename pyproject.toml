@@ -1,0 +1,44 @@
+[project]
+name = "jobhunt"
+version = "0.1.0"
+description = "Local-first job search agent with a skill-gap coaching loop"
+requires-python = ">=3.12,<3.13"
+license = { text = "MIT" }
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "sqlmodel>=0.0.22",
+    "jinja2>=3.1",
+    "python-multipart>=0.0.12",
+    "pydantic>=2.9",
+    "pyyaml>=6.0",
+    "httpx>=0.27",
+    "python-docx>=1.1",
+    "python-dotenv>=1.0",
+]
+
+[project.scripts]
+jobhunt = "jobhunt.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8.3", "respx>=0.21", "ruff>=0.7", "jsonschema>=4.20"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/jobhunt"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+markers = ["live: hits the real agy CLI; requires auth and network"]
+addopts = "-m 'not live'"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.File", "fastapi.Form"]

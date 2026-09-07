@@ -1,0 +1,15 @@
+# Copy to config.yaml and edit. config.yaml is gitignored.
+profile:
+  name: Your Name
+  email: you@example.com
+  location: Porto, Portugal
+  github_username: your-github-handle
+
+llm:
+  provider: agy            # "agy" (Antigravity CLI) or "openai_compat"
+  model: gemini-3.8-flash-medium
+  binary: agy.exe          # resolved on PATH; agy.exe works from inside WSL
+  timeout_seconds: 300
+  cache_dir: ./data/llm_cache
+
+data_dir: ./data

@@ -1,0 +1,12 @@
+Ada Lovelace
+ada@example.com | Porto, Portugal
+
+EDUCATION
+BSc Software Engineering, ISEP, 2022-2026
+
+PROJECTS
+URL Shortener - Flask service with Redis caching, deployed to a VPS.
+Handled 2000 requests/day.
+
+SKILLS
+Python, Flask, Redis, Docker

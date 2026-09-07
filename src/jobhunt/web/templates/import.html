@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Import — jobhunt{% endblock %}
+{% block content %}
+<h1>Import</h1>
+<p class="empty">Everything imported arrives unconfirmed. Review it on the
+  Evidence page before it reaches a resume.</p>
+
+<section>
+  <h2>CV</h2>
+  <form method="post" action="/import/cv" enctype="multipart/form-data">
+    <input type="file" name="file" accept=".pdf,.docx,.txt" required>
+    <button type="submit">Import CV</button>
+  </form>
+</section>
+
+<section>
+  <h2>GitHub</h2>
+  <form method="post" action="/import/github">
+    <input type="text" name="username" placeholder="github-handle" required>
+    <button type="submit">Import repositories</button>
+  </form>
+</section>
+
+<section>
+  <h2>Coursework</h2>
+  <form method="post" action="/import/coursework">
+    <input type="text" name="institution" value="ISEP" required>
+    <textarea name="text" rows="8" placeholder="Paste your course list or transcript" required></textarea>
+    <button type="submit">Import coursework</button>
+  </form>
+</section>
+{% endblock %}
