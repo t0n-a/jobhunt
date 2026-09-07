@@ -115,3 +115,53 @@ def test_dates_roundtrip(store: AtomStore):
     atom = store.add(make_atom(started_on=date(2025, 9, 1), ended_on=date(2026, 6, 30)))
 
     assert store.get(atom.id).started_on == date(2025, 9, 1)
+
+
+def test_delete_unknown_id_is_a_noop(store: AtomStore):
+    a1 = store.add(make_atom(title="First"))
+    a2 = store.add(make_atom(title="Second"))
+
+    store.delete(999)
+
+    atoms = store.list()
+    assert len(atoms) == 2
+    assert {a.id for a in atoms} == {a1.id, a2.id}
+
+
+def test_skill_counts_counts_each_skill_once_per_atom(store: AtomStore):
+    store.add(make_atom(skills=["Python", "Python", "Docker"]))
+
+    counts = store.skill_counts()
+
+    assert counts["Python"] == 1
+    assert counts["Docker"] == 1
+
+
+def test_atoms_persist_across_sessions(tmp_path):
+    engine = create_engine_for(tmp_path / "test.db")
+    init_db(engine)
+
+    with Session(engine) as session1:
+        store1 = AtomStore(session1)
+        atom = store1.add(
+            EvidenceAtom(
+                kind=AtomKind.PROJECT,
+                title="Cross Session Project",
+                description="Testing persistence across separate sessions.",
+                skills=["Python", "Rust"],
+                provenance=Provenance.CV,
+                started_on=date(2025, 1, 1),
+                ended_on=date(2025, 6, 1),
+            )
+        )
+        atom_id = atom.id
+
+    with Session(engine) as session2:
+        store2 = AtomStore(session2)
+        atom = store2.get(atom_id)
+        assert atom is not None
+        assert atom.skills == ["Python", "Rust"]
+        assert atom.kind is AtomKind.PROJECT
+        assert atom.started_on == date(2025, 1, 1)
+        assert atom.ended_on == date(2025, 6, 1)
+

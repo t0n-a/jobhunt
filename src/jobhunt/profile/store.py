@@ -14,14 +14,22 @@ class AtomStore:
 
     def add(self, atom: EvidenceAtom) -> EvidenceAtom:
         self.session.add(atom)
-        self.session.commit()
+        try:
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            raise
         self.session.refresh(atom)
         return atom
 
     def add_many(self, atoms: Sequence[EvidenceAtom]) -> list[EvidenceAtom]:
         for atom in atoms:
             self.session.add(atom)
-        self.session.commit()
+        try:
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            raise
         for atom in atoms:
             self.session.refresh(atom)
         return list(atoms)
@@ -55,19 +63,28 @@ class AtomStore:
         for key, value in fields.items():
             setattr(atom, key, value)
         self.session.add(atom)
-        self.session.commit()
+        try:
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            raise
         self.session.refresh(atom)
         return atom
 
     def delete(self, atom_id: int) -> None:
+        """Delete an atom by id. Deleting an unknown id is a deliberate no-op, making the operation idempotent."""
         atom = self.get(atom_id)
         if atom is None:
             return
         self.session.delete(atom)
-        self.session.commit()
+        try:
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            raise
 
     def skill_counts(self) -> dict[str, int]:
         counter: Counter[str] = Counter()
         for atom in self.list():
-            counter.update(atom.skills)
+            counter.update(set(atom.skills))
         return dict(counter)
