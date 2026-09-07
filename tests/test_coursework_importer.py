@@ -38,6 +38,15 @@ def test_prompt_includes_institution_and_text():
     assert "Do not invent" in prompt
 
 
+def test_prompt_forbids_listing_courses_not_in_the_text():
+    llm = FakeProvider([{"atoms": []}])
+
+    import_coursework("Compilers; Operating Systems", "ISEP", llm)
+
+    prompt = llm.prompts[0]
+    assert "Only list courses that appear" in prompt
+
+
 def test_blank_input_short_circuits_without_calling_llm():
     llm = FakeProvider([])
 

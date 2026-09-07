@@ -21,18 +21,17 @@ COURSEWORK_SCHEMA = {
 }
 
 PROMPT = """\
-You are extracting structured education evidence atoms from coursework or transcript text.
-
-Institution: {institution}
+Convert this coursework listing from {institution} into CV evidence atoms.
 
 Rules:
-- Do not invent anything beyond what appears in the text below.
-- Group trivially related courses when appropriate.
-- Skip generic non-technical courses (e.g. Ethics, English) that carry no technical signal.
-- description: one factual sentence of what the course covered.
-- skills: a conservative list of technical competencies genuinely evidenced (a course is weaker evidence than a project).
+- Do not invent anything. Only list courses that appear in the text below.
+- Group trivially related courses; skip generic ones (e.g. "Ethics", "English")
+  that carry no technical signal.
+- "description" states what the course covered, in one factual sentence.
+- "skills" lists the technical competencies the course genuinely evidences.
+  Be conservative: a course is weaker evidence than a project.
 
-Coursework / Transcript:
+Coursework:
 ---
 {text}
 ---
