@@ -111,3 +111,106 @@ def test_harvest_non_dict_response_raises_llm_error():
 
     with pytest.raises(LLMError, match="Interview harvest expected a JSON object"):
         harvest(session, llm)
+
+
+def test_failed_harvest_leaves_session_open():
+    session = InterviewSession(
+        topic="T",
+        turns=[{"question": "Q1", "answer": "A1"}],
+    )
+    llm = FakeProvider(["not a dict"])
+
+    with pytest.raises(LLMError, match="Interview harvest expected a JSON object"):
+        harvest(session, llm)
+
+    assert session.status == "open"
+
+
+def test_harvest_is_idempotent():
+    session = InterviewSession(
+        topic="URL shortener",
+        turns=[{"question": "What did you build?", "answer": "A Flask URL shortener."}],
+    )
+    llm = FakeProvider(
+        [
+            {
+                "atoms": [
+                    {
+                        "kind": "project",
+                        "title": "URL shortener",
+                        "description": "Flask service that shortens URLs.",
+                        "skills": ["Python", "Flask"],
+                        "metrics": None,
+                    }
+                ]
+            }
+        ]
+    )
+
+    first_atoms = harvest(session, llm)
+    assert len(first_atoms) == 1
+    assert session.status == "harvested"
+    assert len(llm.prompts) == 1
+
+    second_atoms = harvest(session, llm)
+    assert second_atoms == []
+    assert len(llm.prompts) == 1
+
+
+def test_full_interview_sequence_end_to_end():
+    session = InterviewSession(topic="Distributed cache")
+    llm = FakeProvider(
+        [
+            "What architecture did you choose?",
+            "How did you handle invalidation?",
+            {
+                "atoms": [
+                    {
+                        "kind": "project",
+                        "title": "Distributed cache",
+                        "description": "Built distributed cache in Go.",
+                        "skills": ["Go", "Distributed Systems"],
+                        "metrics": "sub-millisecond latency",
+                    }
+                ]
+            },
+        ]
+    )
+
+    q1 = next_question(session, llm)
+    assert q1 == "What architecture did you choose?"
+    assert len(session.turns) == 1
+    assert session.turns[0]["question"] == q1
+    assert session.turns[0]["answer"] is None
+
+    a1 = "Consistent hashing with virtual nodes in Go."
+    record_answer(session, a1)
+    assert len(session.turns) == 1
+    assert session.turns[0]["question"] == q1
+    assert session.turns[0]["answer"] == a1
+
+    q2 = next_question(session, llm)
+    assert q2 == "How did you handle invalidation?"
+    assert len(session.turns) == 2
+    assert session.turns[1]["question"] == q2
+    assert session.turns[1]["answer"] is None
+
+    a2 = "Lease-based TTLs with invalidation broadcasts."
+    record_answer(session, a2)
+    assert len(session.turns) == 2
+    assert session.turns[1]["question"] == q2
+    assert session.turns[1]["answer"] == a2
+
+    atoms = harvest(session, llm)
+    assert len(atoms) == 1
+    assert atoms[0].title == "Distributed cache"
+    assert atoms[0].provenance is Provenance.INTERVIEW
+    assert atoms[0].source_ref == "Distributed cache"
+    assert atoms[0].confirmed is False
+    assert session.status == "harvested"
+
+    assert len(llm.prompts) == 3
+    harvest_prompt = llm.prompts[2]
+    assert "Partial interview: 2 of 8 questions answered." in harvest_prompt
+    assert f"Q: {q1}\nA: {a1}" in harvest_prompt
+    assert f"Q: {q2}\nA: {a2}" in harvest_prompt

@@ -105,17 +105,31 @@ def record_answer(session: InterviewSession, answer: str) -> None:
 
 
 def harvest(session: InterviewSession, llm: LLMProvider) -> list[EvidenceAtom]:
-    """Turn the answered transcript into unconfirmed evidence atoms."""
+    """Turn the answered transcript into unconfirmed evidence atoms.
+
+    Harvesting an already-harvested session is a deliberate no-op returning
+    no atoms, making the operation idempotent.
+    """
+    if session.status == "harvested":
+        return []
+
     answered = [t for t in session.turns if t["answer"]]
     if not answered:
         return []
 
-    transcript = "\n".join(f"Q: {t['question']}\nA: {t['answer']}" for t in answered)
-    response = llm.complete(HARVEST_PROMPT.format(transcript=transcript), schema=ATOM_SCHEMA)
-    session.status = "harvested"
+    body = "\n".join(f"Q: {t['question']}\nA: {t['answer']}" for t in answered)
+    if len(answered) < MAX_TURNS:
+        transcript = (
+            f"Partial interview: {len(answered)} of {MAX_TURNS} questions answered.\n{body}"
+        )
+    else:
+        transcript = body
 
+    response = llm.complete(HARVEST_PROMPT.format(transcript=transcript), schema=ATOM_SCHEMA)
     if not isinstance(response, dict):
         raise LLMError("Interview harvest expected a JSON object")
+
+    session.status = "harvested"
 
     atoms: list[EvidenceAtom] = []
     for item in response.get("atoms", []):
