@@ -60,6 +60,10 @@ class AgyProvider:
                 raise LLMError(f"agy returned non-JSON output: {output[:200]}") from exc
         except subprocess.TimeoutExpired as exc:
             raise LLMError(f"agy timed out after {self.timeout_seconds}s") from exc
+        except OSError as exc:
+            raise LLMError(
+                f"agy binary '{self.binary}' failed to execute: {exc}"
+            ) from exc
         finally:
             if schema_file is not None:
                 schema_file.unlink(missing_ok=True)

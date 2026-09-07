@@ -82,3 +82,46 @@ def test_agy_provider_raises_llm_error_on_nonzero_exit(monkeypatch):
 
     with pytest.raises(LLMError, match="boom"):
         provider.complete("hello")
+
+
+def test_agy_provider_raises_llm_error_on_missing_binary(monkeypatch):
+    def fake_run(cmd, **kwargs):
+        raise FileNotFoundError("[Errno 2] No such file or directory: 'nonexistent-agy.exe'")
+
+    monkeypatch.setattr("jobhunt.llm.agy.subprocess.run", fake_run)
+
+    provider = AgyProvider(model="m", binary="nonexistent-agy.exe", retries=0)
+
+    with pytest.raises(LLMError, match="nonexistent-agy.exe"):
+        provider.complete("hello")
+
+
+def test_caching_provider_falls_back_to_inner_on_corrupt_cache(tmp_path: Path):
+    inner = FakeProvider(["first", "second"])
+    llm = CachingProvider(inner, cache_dir=tmp_path)
+
+    assert llm.complete("prompt") == "first"
+
+    cache_files = list(tmp_path.glob("*.json"))
+    assert len(cache_files) == 1
+    cache_files[0].write_bytes(b"not-valid-json-{{{")
+
+    result = llm.complete("prompt")
+    assert result == "second"
+    assert len(inner.prompts) == 2
+
+
+def test_caching_provider_falls_back_to_inner_on_missing_response_key(tmp_path: Path):
+    inner = FakeProvider(["first", "second"])
+    llm = CachingProvider(inner, cache_dir=tmp_path)
+
+    assert llm.complete("prompt") == "first"
+
+    cache_files = list(tmp_path.glob("*.json"))
+    assert len(cache_files) == 1
+    cache_files[0].write_text(json.dumps({"unexpected": "shape"}), encoding="utf-8")
+
+    result = llm.complete("prompt")
+    assert result == "second"
+    assert len(inner.prompts) == 2
+
