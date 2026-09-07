@@ -2,6 +2,7 @@ import pytest
 
 from jobhunt.llm import FakeProvider, LLMError
 from jobhunt.profile.interview import (
+    HARVEST_PROMPT,
     MAX_TURNS,
     InterviewSession,
     harvest,
@@ -214,3 +215,7 @@ def test_full_interview_sequence_end_to_end():
     assert "Partial interview: 2 of 8 questions answered." in harvest_prompt
     assert f"Q: {q1}\nA: {a1}" in harvest_prompt
     assert f"Q: {q2}\nA: {a2}" in harvest_prompt
+
+
+def test_harvest_prompt_constrains_skills():
+    assert "leave it out rather than inferring it" in HARVEST_PROMPT

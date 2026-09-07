@@ -36,6 +36,8 @@ class EvidenceAtom(SQLModel, table=True):
     kind: AtomKind
     title: str
     description: str
+    # Column is not mutation-tracked; any change must assign a new list rather
+    # than mutate in place, as in-place mutation silently fails to persist.
     skills: list[str] = Field(default_factory=list, sa_column=Column(JSON))
     metrics: str | None = None
     provenance: Provenance

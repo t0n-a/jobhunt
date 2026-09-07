@@ -375,3 +375,55 @@ def test_caching_provider_falls_back_to_inner_on_non_dict_cache(tmp_path: Path):
     result = llm.complete("prompt")
     assert result == "second"
     assert len(inner.prompts) == 2
+
+
+def test_agy_provider_retries_then_succeeds(monkeypatch):
+    call_count = 0
+
+    class FailResult:
+        returncode = 1
+        stdout = ""
+        stderr = "temporary glitch"
+
+    class SuccessResult:
+        returncode = 0
+        stdout = "success response"
+        stderr = ""
+
+    def fake_run(cmd, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count < 3:
+            return FailResult()
+        return SuccessResult()
+
+    monkeypatch.setattr("jobhunt.llm.agy.subprocess.run", fake_run)
+
+    provider = AgyProvider(model="m", binary="agy")
+    result = provider.complete("hello")
+
+    assert result == "success response"
+    assert call_count == 3
+
+
+def test_agy_provider_exhausts_retries_and_raises(monkeypatch):
+    call_count = 0
+
+    class FailResult:
+        returncode = 1
+        stdout = ""
+        stderr = "permanent error"
+
+    def fake_run(cmd, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        return FailResult()
+
+    monkeypatch.setattr("jobhunt.llm.agy.subprocess.run", fake_run)
+
+    provider = AgyProvider(model="m", binary="agy")
+
+    with pytest.raises(LLMError, match="permanent error"):
+        provider.complete("hello")
+
+    assert call_count == 3

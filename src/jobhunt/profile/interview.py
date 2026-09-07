@@ -28,7 +28,9 @@ Convert this interview transcript into CV evidence atoms.
 
 Rules:
 - Do not invent anything. Every atom must be traceable to an answer below.
-- Prefer specifics the candidate actually stated over general claims.
+- Use only specifics the candidate actually stated. If a detail is not stated, leave it out rather than guessing.
+- skills lists only technical competencies the candidate explicitly evidenced in an answer.
+  If a skill is not stated, leave it out rather than inferring it from context.
 - "metrics" is null unless the candidate stated a real number.
 
 Transcript:
@@ -73,6 +75,8 @@ class InterviewSession(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     topic: str
+    # Column is not mutation-tracked; any change must assign a new list rather
+    # than mutate in place, as in-place mutation silently fails to persist.
     turns: list[dict] = Field(default_factory=list, sa_column=Column(JSON))
     status: str = "open"
     created_at: datetime = Field(default_factory=_now)

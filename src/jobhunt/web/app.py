@@ -80,9 +80,19 @@ def create_app(config: Config) -> FastAPI:
         store: AtomStore = Depends(get_store),
         llm: LLMProvider = Depends(get_llm),
     ):
+        raw_filename = file.filename or ""
+        suffix = Path(raw_filename).suffix.lower()
+        if suffix not in (".pdf", ".docx", ".txt"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported CV format: {suffix or '(no extension)'}",
+            )
+
+        sanitized_name = Path(raw_filename).name
+        filename = sanitized_name if sanitized_name else f"upload{suffix}"
+
         uploads = config.data_dir / "uploads"
         uploads.mkdir(parents=True, exist_ok=True)
-        filename = Path(file.filename).name if file.filename else "upload"
         target = uploads / filename
         with target.open("wb") as out:
             shutil.copyfileobj(file.file, out)
@@ -137,7 +147,8 @@ def create_app(config: Config) -> FastAPI:
     ):
         with Session(app.state.engine) as db:
             interview = InterviewSession(topic=topic)
-            next_question(interview, llm)
+            with _importer_errors():
+                next_question(interview, llm)
             db.add(interview)
             db.commit()
             db.refresh(interview)
@@ -168,9 +179,14 @@ def create_app(config: Config) -> FastAPI:
                 raise HTTPException(status_code=404, detail="No such interview")
             try:
                 record_answer(interview, answer)
-                next_question(interview, llm)
             except ValueError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
+            db.add(interview)
+            db.commit()
+            db.refresh(interview)
+
+            with _importer_errors():
+                next_question(interview, llm)
             db.add(interview)
             db.commit()
             db.refresh(interview)
@@ -190,9 +206,9 @@ def create_app(config: Config) -> FastAPI:
                 raise HTTPException(status_code=404, detail="No such interview")
             with _importer_errors():
                 atoms = harvest(interview, llm)
+            AtomStore(db).add_many(atoms)
             db.add(interview)
             db.commit()
-        store.add_many(atoms)
         return RedirectResponse("/atoms", status_code=303)
 
     @app.post("/atoms/{atom_id}/confirm")

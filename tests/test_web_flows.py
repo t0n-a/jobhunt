@@ -10,6 +10,7 @@ from jobhunt.config import Config, LLMConfig, ProfileConfig
 from jobhunt.db import create_engine_for, init_db
 from jobhunt.llm import FakeProvider
 from jobhunt.profile.importers import cv as cv_mod
+from jobhunt.profile.interview import InterviewSession
 from jobhunt.profile.models import AtomKind, EvidenceAtom, Provenance
 from jobhunt.profile.store import AtomStore
 from jobhunt.web.app import create_app
@@ -59,10 +60,10 @@ def test_interview_page_renders(make_client):
 
     assert client.get("/interview").status_code == 200
 
-    client.post("/interview", data={"topic": "T"}, follow_redirects=True)
+    client.post("/interview", data={"topic": "Zephyr URL shortener"}, follow_redirects=True)
     response = client.get("/interview")
     assert response.status_code == 200
-    assert "T" in response.text
+    assert "Zephyr URL shortener" in response.text
 
 
 def test_cv_upload_creates_atoms(make_client):
@@ -99,6 +100,14 @@ def test_cv_upload_rejects_unsupported_format(make_client):
 
     assert response.status_code == 400
     assert "Unsupported CV format" in response.json()["detail"]
+
+
+def test_upload_with_dot_filename_returns_400_not_500(make_client):
+    client = make_client([])
+
+    response = client.post("/import/cv", files={"file": (".", b"x", "text/plain")})
+
+    assert response.status_code == 400
 
 
 def test_cv_upload_llm_error_returns_502(make_client):
@@ -200,6 +209,12 @@ def test_starting_an_interview_shows_the_first_question(make_client):
     assert "What did you build?" in response.text
 
 
+def test_interview_start_maps_llm_error_to_502(make_client):
+    client = make_client([])
+    response = client.post("/interview", data={"topic": "T"})
+    assert response.status_code == 502
+
+
 def test_answering_advances_to_the_next_question(make_client):
     client = make_client(["Q1", "Q2"])
     client.post("/interview", data={"topic": "T"}, follow_redirects=True)
@@ -208,6 +223,20 @@ def test_answering_advances_to_the_next_question(make_client):
 
     assert response.status_code == 200
     assert "Q2" in response.text
+
+
+def test_answer_is_saved_even_if_next_question_fails(make_client):
+    client = make_client(["Q1"])
+    client.post("/interview", data={"topic": "T"}, follow_redirects=True)
+
+    response = client.post("/interview/1/answer", data={"answer": "Saved answer"})
+    assert response.status_code == 502
+
+    with Session(client.engine) as session:
+        stored = session.get(InterviewSession, 1)
+        assert stored is not None
+        assert len(stored.turns) == 1
+        assert stored.turns[0]["answer"] == "Saved answer"
 
 
 def test_harvest_creates_atoms_and_redirects(make_client):
@@ -269,6 +298,41 @@ def test_harvest_twice_does_not_create_duplicate_atoms(make_client):
         atoms = AtomStore(session).list()
         assert len(atoms) == 1
         assert atoms[0].title == "Harvested"
+
+
+def test_harvest_failure_leaves_interview_retryable(make_client, monkeypatch):
+    client = make_client(
+        [
+            "Q1",
+            "Q2",
+            {
+                "atoms": [
+                    {
+                        "kind": "project",
+                        "title": "Harvested",
+                        "description": "D",
+                        "skills": [],
+                        "metrics": None,
+                    }
+                ]
+            },
+        ]
+    )
+    client.post("/interview", data={"topic": "T"}, follow_redirects=True)
+    client.post("/interview/1/answer", data={"answer": "A1"})
+
+    def _fail_add_many(self, atoms):
+        raise RuntimeError("store failed")
+
+    monkeypatch.setattr(AtomStore, "add_many", _fail_add_many)
+
+    with pytest.raises(RuntimeError, match="store failed"):
+        client.post("/interview/1/harvest")
+
+    with Session(client.engine) as session:
+        interview = session.get(InterviewSession, 1)
+        assert interview is not None
+        assert interview.status == "open"
 
 
 def test_confirm_marks_atom_confirmed(make_client):

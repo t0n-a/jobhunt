@@ -1,7 +1,9 @@
+import os
 from pathlib import Path
 
 import pytest
 
+from jobhunt.cli import load_env
 from jobhunt.config import load_config
 
 
@@ -51,3 +53,15 @@ llm: {}
 
     assert cfg.profile.github_username is None
     assert cfg.llm.provider == "agy"
+
+
+def test_env_file_is_loaded(tmp_path: Path, monkeypatch):
+    dotenv_file = tmp_path / ".env"
+    dotenv_file.write_text("TEST_NEW_VAR=hello\nTEST_EXISTING_VAR=from_file\n", encoding="utf-8")
+    monkeypatch.setenv("TEST_EXISTING_VAR", "pre_existing")
+    monkeypatch.chdir(tmp_path)
+
+    load_env()
+
+    assert os.environ.get("TEST_NEW_VAR") == "hello"
+    assert os.environ.get("TEST_EXISTING_VAR") == "pre_existing"
