@@ -1,4 +1,6 @@
-from jobhunt.llm import FakeProvider
+import pytest
+
+from jobhunt.llm import FakeProvider, LLMError
 from jobhunt.profile.importers.coursework import import_coursework
 from jobhunt.profile.models import AtomKind, Provenance
 
@@ -52,3 +54,36 @@ def test_blank_input_short_circuits_without_calling_llm():
 
     assert import_coursework("   ", "ISEP", llm) == []
     assert llm.prompts == []
+
+
+def test_malformed_atom_is_skipped_and_others_survive():
+    llm = FakeProvider(
+        [
+            {
+                "atoms": [
+                    {
+                        "description": "Missing title",
+                        "skills": ["Python"],
+                    },
+                    {
+                        "title": "Good Atom",
+                        "description": "Valid description",
+                        "skills": ["Python"],
+                    },
+                ]
+            }
+        ]
+    )
+
+    atoms = import_coursework("Distributed Systems, 2025", "ISEP", llm)
+
+    assert len(atoms) == 1
+    assert atoms[0].title == "Good Atom"
+    assert atoms[0].description == "Valid description"
+
+
+def test_non_dict_response_raises_llm_error():
+    llm = FakeProvider(["not a dict"])
+
+    with pytest.raises(LLMError, match="expected a JSON object"):
+        import_coursework("Distributed Systems, 2025", "ISEP", llm)

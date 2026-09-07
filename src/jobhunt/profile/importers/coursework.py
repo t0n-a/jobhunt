@@ -1,4 +1,4 @@
-from jobhunt.llm import LLMProvider
+from jobhunt.llm import LLMError, LLMProvider
 from jobhunt.profile.models import AtomKind, EvidenceAtom, Provenance
 
 COURSEWORK_SCHEMA = {
@@ -49,7 +49,7 @@ def import_coursework(text: str, institution: str, llm: LLMProvider) -> list[Evi
         schema=COURSEWORK_SCHEMA,
     )
     if not isinstance(response, dict):
-        return []
+        raise LLMError("Coursework extraction expected a JSON object")
 
     atoms: list[EvidenceAtom] = []
     for item in response.get("atoms", []):
