@@ -1,0 +1,7 @@
+<form hx-post="/atoms/{{ atom.id }}/edit"
+      hx-target="#atom-{{ atom.id }}" hx-swap="outerHTML">
+  <input type="text" name="title" value="{{ atom.title }}" required>
+  <textarea name="description" rows="3" required>{{ atom.description }}</textarea>
+  <input type="text" name="skills" value="{{ atom.skills | join(', ') }}">
+  <button type="submit">Save</button>
+</form>

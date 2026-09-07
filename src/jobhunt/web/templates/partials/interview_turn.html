@@ -1,0 +1,14 @@
+{% set open_turn = current.turns[-1] if current.turns else None %}
+{% if open_turn and open_turn.answer is none %}
+  <p class="question">{{ open_turn.question }}</p>
+  <form hx-post="/interview/{{ current.id }}/answer"
+        hx-target="#interview-turn" hx-swap="innerHTML">
+    <textarea name="answer" rows="4" required></textarea>
+    <button type="submit">Answer</button>
+  </form>
+{% else %}
+  <p>That's enough for this topic.</p>
+{% endif %}
+<form method="post" action="/interview/{{ current.id }}/harvest">
+  <button type="submit">Finish and extract evidence</button>
+</form>
