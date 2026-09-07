@@ -32,6 +32,8 @@ packages = ["src/jobhunt"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+markers = ["live: hits the real agy CLI; requires auth and network"]
+addopts = "-m 'not live'"
 
 [tool.ruff]
 line-length = 100

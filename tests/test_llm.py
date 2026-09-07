@@ -96,6 +96,143 @@ def test_agy_provider_raises_llm_error_on_missing_binary(monkeypatch):
         provider.complete("hello")
 
 
+def test_agy_provider_unwraps_envelope_and_code_fence(monkeypatch):
+    envelope = {
+        "conversation_id": "conv-123",
+        "status": "SUCCESS",
+        "response": '```json\n{"atoms": []}\n```',
+    }
+
+    class Result:
+        returncode = 0
+        stdout = json.dumps(envelope)
+        stderr = ""
+
+    monkeypatch.setattr("jobhunt.llm.agy.subprocess.run", lambda *args, **kwargs: Result())
+
+    provider = AgyProvider(model="m", binary="agy")
+    res = provider.complete("extract", schema={"type": "object"})
+    assert res == {"atoms": []}
+
+
+def test_agy_provider_unwraps_envelope_without_fence(monkeypatch):
+    envelope = {
+        "conversation_id": "conv-123",
+        "status": "SUCCESS",
+        "response": '{"ok": true}',
+    }
+
+    class Result:
+        returncode = 0
+        stdout = json.dumps(envelope)
+        stderr = ""
+
+    monkeypatch.setattr("jobhunt.llm.agy.subprocess.run", lambda *args, **kwargs: Result())
+
+    provider = AgyProvider(model="m", binary="agy")
+    res = provider.complete("extract", schema={"type": "object"})
+    assert res == {"ok": True}
+
+
+def test_agy_provider_raises_on_envelope_error_status(monkeypatch):
+    envelope = {
+        "conversation_id": "conv-123",
+        "status": "ERROR",
+        "error": "authentication failed",
+    }
+
+    class Result:
+        returncode = 0
+        stdout = json.dumps(envelope)
+        stderr = ""
+
+    monkeypatch.setattr("jobhunt.llm.agy.subprocess.run", lambda *args, **kwargs: Result())
+
+    provider = AgyProvider(model="m", binary="agy", retries=0)
+    with pytest.raises(LLMError, match="authentication failed"):
+        provider.complete("extract", schema={"type": "object"})
+
+
+def test_agy_provider_raises_on_empty_envelope_response(monkeypatch):
+    envelope = {
+        "conversation_id": "conv-123",
+        "status": "SUCCESS",
+        "response": "",
+    }
+
+    class Result:
+        returncode = 0
+        stdout = json.dumps(envelope)
+        stderr = ""
+
+    monkeypatch.setattr("jobhunt.llm.agy.subprocess.run", lambda *args, **kwargs: Result())
+
+    provider = AgyProvider(model="m", binary="agy", retries=0)
+    with pytest.raises(LLMError):
+        provider.complete("extract", schema={"type": "object"})
+
+
+def test_agy_provider_translates_schema_path_on_wsl(monkeypatch):
+    monkeypatch.setattr("sys.platform", "linux")
+    fake_win_path = r"\\wsl.localhost\Ubuntu\tmp\translated_schema.json"
+    captured_argv = []
+
+    class Result:
+        def __init__(self, returncode=0, stdout="", stderr=""):
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = stderr
+
+    def fake_run(cmd, **kwargs):
+        captured_argv.append(cmd)
+        if cmd[0] == "wslpath":
+            return Result(stdout=f"{fake_win_path}\n")
+        return Result(stdout=json.dumps({"ok": True}))
+
+    monkeypatch.setattr("jobhunt.llm.agy.subprocess.run", fake_run)
+
+    provider = AgyProvider(model="m", binary="agy.exe", retries=0)
+    out = provider.complete("prompt", schema={"type": "object"})
+
+    assert out == {"ok": True}
+    assert len(captured_argv) == 2
+    assert captured_argv[0] == ["wslpath", "-w", str(captured_argv[0][2])]
+    agy_cmd = captured_argv[1]
+    assert "--json-schema" in agy_cmd
+    idx = agy_cmd.index("--json-schema")
+    posix_path = captured_argv[0][2]
+    assert agy_cmd[idx + 1] == fake_win_path
+    assert agy_cmd[idx + 1] != posix_path
+
+
+def test_agy_provider_does_not_translate_path_for_non_exe_binary(monkeypatch):
+    monkeypatch.setattr("sys.platform", "linux")
+    captured_argv = []
+
+    class Result:
+        returncode = 0
+        stdout = json.dumps({"ok": True})
+        stderr = ""
+
+    def fake_run(cmd, **kwargs):
+        captured_argv.append(cmd)
+        return Result()
+
+    monkeypatch.setattr("jobhunt.llm.agy.subprocess.run", fake_run)
+
+    provider = AgyProvider(model="m", binary="agy", retries=0)
+    out = provider.complete("prompt", schema={"type": "object"})
+
+    assert out == {"ok": True}
+    assert len(captured_argv) == 1
+    assert not any(cmd[0] == "wslpath" for cmd in captured_argv)
+    agy_cmd = captured_argv[0]
+    idx = agy_cmd.index("--json-schema")
+    schema_arg = agy_cmd[idx + 1]
+    assert not schema_arg.startswith(r"\\wsl.localhost")
+    assert not schema_arg.startswith("C:")
+
+
 def test_caching_provider_falls_back_to_inner_on_corrupt_cache(tmp_path: Path):
     inner = FakeProvider(["first", "second"])
     llm = CachingProvider(inner, cache_dir=tmp_path)
