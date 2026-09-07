@@ -1,0 +1,16 @@
+:root { --fg: #1b1b1f; --bg: #fbfbfd; --muted: #6b6b76; --line: #e3e3e8; }
+* { box-sizing: border-box; }
+body { margin: 0; font: 15px/1.55 system-ui, sans-serif; color: var(--fg); background: var(--bg); }
+header { display: flex; gap: 1.5rem; align-items: center; padding: 1rem 1.5rem; border-bottom: 1px solid var(--line); }
+header nav { display: flex; gap: 1rem; }
+header .who { margin-left: auto; color: var(--muted); }
+a { color: inherit; }
+main { max-width: 62rem; margin: 0 auto; padding: 2rem 1.5rem; }
+.empty { color: var(--muted); }
+.atoms { list-style: none; padding: 0; display: grid; gap: 1rem; }
+.atom { border: 1px solid var(--line); border-radius: 8px; padding: 1rem; background: #fff; }
+.atom.unconfirmed { border-left: 3px solid #d9a441; }
+.atom h3 { margin: 0 0 .35rem; font-size: 1rem; }
+.atom p { margin: .25rem 0; }
+.skill { display: inline-block; padding: .1rem .5rem; margin-right: .3rem; border: 1px solid var(--line); border-radius: 99px; font-size: .8rem; }
+.meta { color: var(--muted); font-size: .85rem; }

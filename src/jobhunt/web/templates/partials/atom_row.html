@@ -1,0 +1,9 @@
+<li class="atom {% if not atom.confirmed %}unconfirmed{% endif %}" id="atom-{{ atom.id }}">
+  <h3>{{ atom.title }}</h3>
+  <p>{{ atom.description }}</p>
+  <p class="skills">
+    {% for skill in atom.skills %}<span class="skill">{{ skill }}</span>{% endfor %}
+  </p>
+  <p class="meta">{{ atom.kind.value }} · from {{ atom.provenance.value }}
+    {% if not atom.confirmed %}· <em>unconfirmed</em>{% endif %}</p>
+</li>
