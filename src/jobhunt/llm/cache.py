@@ -20,18 +20,26 @@ class CachingProvider:
         path = self._dir / f"{key}.json"
         if path.exists():
             try:
-                return json.loads(path.read_text(encoding="utf-8"))["response"]
-            except (OSError, ValueError, KeyError):
-                pass
+                cached = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                cached = None
+            if isinstance(cached, dict) and "response" in cached:
+                return cached["response"]
 
         response = self._inner.complete(prompt, schema)
         payload = json.dumps({"response": response})
-        with tempfile.NamedTemporaryFile(
-            mode="w", dir=self._dir, delete=False, suffix=".tmp", encoding="utf-8"
-        ) as tmp:
-            tmp.write(payload)
-            tmp_path = Path(tmp.name)
-        os.replace(tmp_path, path)
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w", dir=self._dir, delete=False, suffix=".tmp", encoding="utf-8"
+            ) as tmp:
+                tmp_path = Path(tmp.name)
+                tmp.write(payload)
+            os.replace(tmp_path, path)
+        except Exception:
+            if tmp_path is not None:
+                tmp_path.unlink(missing_ok=True)
+            raise
         return response
 
     def _key(self, prompt: str, schema: dict | None) -> str:

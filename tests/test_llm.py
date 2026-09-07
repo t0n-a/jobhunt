@@ -125,3 +125,19 @@ def test_caching_provider_falls_back_to_inner_on_missing_response_key(tmp_path: 
     assert result == "second"
     assert len(inner.prompts) == 2
 
+
+def test_caching_provider_falls_back_to_inner_on_non_dict_cache(tmp_path: Path):
+    inner = FakeProvider(["first", "second"])
+    llm = CachingProvider(inner, cache_dir=tmp_path)
+
+    assert llm.complete("prompt") == "first"
+
+    cache_files = list(tmp_path.glob("*.json"))
+    assert len(cache_files) == 1
+    cache_files[0].write_text(json.dumps([1, 2, 3]), encoding="utf-8")
+
+    result = llm.complete("prompt")
+    assert result == "second"
+    assert len(inner.prompts) == 2
+
+
