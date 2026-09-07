@@ -56,11 +56,12 @@ Configured in `.env`:
 
 ## Using It
 
-Three ways to populate the profile, all reachable from the web UI:
+Four ways to populate the profile, all reachable from the web UI:
 
 1. **Guided Interview (`/interview`):** Asks follow-up questions to mine specifics (architecture decisions, bottlenecks, metrics) you have not written down. This is the highest-value path when your CV is thin.
 2. **CV Import (`/import`):** Parses `.pdf`, `.docx`, or `.txt` resumes into structured atoms.
-3. **GitHub Import (`/import`):** Scans non-fork public repositories (forks are ignored since a fork is not evidence of your own work) and extracts project atoms. Pasted coursework or transcripts can also be imported here.
+3. **GitHub Import (`/import`):** Scans non-fork public repositories (forks are ignored since a fork is not evidence of your own work) and extracts project atoms.
+4. **Coursework Import (`/import`):** Turns a pasted course list or transcript into education atoms. The prompt is deliberately conservative — a course is weaker evidence than a project, and generic non-technical courses are skipped.
 
 All imported items land on `/atoms`, where you can confirm, edit, or delete each atom.
 
