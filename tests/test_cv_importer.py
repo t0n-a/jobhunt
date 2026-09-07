@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -109,3 +110,69 @@ def test_empty_atom_list_returns_empty():
     llm = FakeProvider([{"atoms": []}])
 
     assert import_cv(FIXTURES / "sample_cv.txt", llm) == []
+
+
+def test_malformed_atom_is_skipped_and_others_survive():
+    llm = FakeProvider(
+        [
+            {
+                "atoms": [
+                    {
+                        "kind": "project",
+                        "description": "Missing title",
+                        "skills": ["Python"],
+                        "metrics": None,
+                    },
+                    {
+                        "kind": "project",
+                        "title": "Good Atom",
+                        "description": "Valid description",
+                        "skills": ["Python"],
+                        "metrics": None,
+                    },
+                ]
+            }
+        ]
+    )
+
+    atoms = import_cv(FIXTURES / "sample_cv.txt", llm)
+
+    assert len(atoms) == 1
+    assert atoms[0].title == "Good Atom"
+    assert atoms[0].description == "Valid description"
+
+
+def test_empty_pdf_text_raises_value_error(monkeypatch, tmp_path):
+    pdf = tmp_path / "empty.pdf"
+    pdf.write_bytes(b"%PDF-fake")
+
+    monkeypatch.setattr(
+        "subprocess.run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args=args, returncode=0, stdout="", stderr=""
+        ),
+    )
+
+    with pytest.raises(ValueError, match="extractable text"):
+        extract_text(pdf)
+
+
+def test_missing_pdftotext_raises_runtime_error(monkeypatch, tmp_path):
+    pdf = tmp_path / "sample.pdf"
+    pdf.write_bytes(b"%PDF-fake")
+
+    def mock_run(*args, **kwargs):
+        raise FileNotFoundError("pdftotext not found")
+
+    monkeypatch.setattr("subprocess.run", mock_run)
+
+    with pytest.raises(RuntimeError, match="poppler"):
+        extract_text(pdf)
+
+
+def test_corrupt_docx_raises_value_error(tmp_path):
+    bad = tmp_path / "corrupt.docx"
+    bad.write_text("not an ooxml file", encoding="utf-8")
+
+    with pytest.raises(ValueError):
+        extract_text(bad)
