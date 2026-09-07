@@ -17,13 +17,13 @@ def store(tmp_path):
 
 
 def make_atom(**overrides) -> EvidenceAtom:
-    defaults = dict(
-        kind=AtomKind.PROJECT,
-        title="Built a URL shortener",
-        description="Flask service with Redis caching, deployed on a VPS.",
-        skills=["Python", "Flask", "Redis"],
-        provenance=Provenance.INTERVIEW,
-    )
+    defaults = {
+        "kind": AtomKind.PROJECT,
+        "title": "Built a URL shortener",
+        "description": "Flask service with Redis caching, deployed on a VPS.",
+        "skills": ["Python", "Flask", "Redis"],
+        "provenance": Provenance.INTERVIEW,
+    }
     defaults.update(overrides)
     return EvidenceAtom(**defaults)
 
@@ -164,4 +164,3 @@ def test_atoms_persist_across_sessions(tmp_path):
         assert atom.kind is AtomKind.PROJECT
         assert atom.started_on == date(2025, 1, 1)
         assert atom.ended_on == date(2025, 6, 1)
-

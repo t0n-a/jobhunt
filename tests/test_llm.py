@@ -139,5 +139,3 @@ def test_caching_provider_falls_back_to_inner_on_non_dict_cache(tmp_path: Path):
     result = llm.complete("prompt")
     assert result == "second"
     assert len(inner.prompts) == 2
-
-

@@ -44,7 +44,5 @@ class CachingProvider:
 
     def _key(self, prompt: str, schema: dict | None) -> str:
         model = getattr(self._inner, "model", "unknown")
-        payload = json.dumps(
-            {"model": model, "prompt": prompt, "schema": schema}, sort_keys=True
-        )
+        payload = json.dumps({"model": model, "prompt": prompt, "schema": schema}, sort_keys=True)
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()

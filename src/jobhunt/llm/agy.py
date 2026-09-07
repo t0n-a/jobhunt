@@ -35,18 +35,21 @@ class AgyProvider:
         try:
             cmd = [self.binary, "-p", prompt, "--model", self.model, "--output-format"]
             if schema is not None:
-                fd = tempfile.NamedTemporaryFile(
-                    "w", suffix=".json", delete=False, encoding="utf-8"
-                )
-                json.dump(schema, fd)
-                fd.close()
-                schema_file = Path(fd.name)
+                with tempfile.NamedTemporaryFile(
+                    mode="w", suffix=".json", delete=False, encoding="utf-8"
+                ) as fd:
+                    schema_file = Path(fd.name)
+                    json.dump(schema, fd)
                 cmd += ["json", "--json-schema", str(schema_file)]
             else:
                 cmd += ["text"]
 
             result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=self.timeout_seconds
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=self.timeout_seconds,
+                check=False,
             )
             if result.returncode != 0:
                 raise LLMError(f"agy exited {result.returncode}: {result.stderr.strip()}")
@@ -61,9 +64,7 @@ class AgyProvider:
         except subprocess.TimeoutExpired as exc:
             raise LLMError(f"agy timed out after {self.timeout_seconds}s") from exc
         except OSError as exc:
-            raise LLMError(
-                f"agy binary '{self.binary}' failed to execute: {exc}"
-            ) from exc
+            raise LLMError(f"agy binary '{self.binary}' failed to execute: {exc}") from exc
         finally:
             if schema_file is not None:
                 schema_file.unlink(missing_ok=True)

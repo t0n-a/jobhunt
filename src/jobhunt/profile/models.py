@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from enum import StrEnum
 
 from sqlalchemy import JSON, Column
@@ -23,7 +23,7 @@ class Provenance(StrEnum):
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class EvidenceAtom(SQLModel, table=True):

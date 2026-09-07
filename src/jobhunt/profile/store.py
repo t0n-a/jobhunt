@@ -1,5 +1,5 @@
 from collections import Counter
-from typing import Sequence
+from collections.abc import Sequence
 
 from sqlmodel import Session, select
 
@@ -72,7 +72,10 @@ class AtomStore:
         return atom
 
     def delete(self, atom_id: int) -> None:
-        """Delete an atom by id. Deleting an unknown id is a deliberate no-op, making the operation idempotent."""
+        """Delete an atom by id.
+
+        Deleting an unknown id is a deliberate no-op, making the operation idempotent.
+        """
         atom = self.get(atom_id)
         if atom is None:
             return
