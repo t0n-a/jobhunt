@@ -1,0 +1,60 @@
+\documentclass[11pt,a4paper]{article}
+
+% ATS-parseable by construction: one column, no tables, no graphics, and
+% nothing in the header or footer. Parsers flatten a PDF top-to-bottom and
+% left-to-right, so a second column interleaves into gibberish, and many strip
+% headers and footers outright -- which would delete the contact details.
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1.5cm]{geometry}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\usepackage{titlesec}
+
+\pagestyle{empty}
+\setlist[itemize]{leftmargin=1.2em,topsep=2pt,itemsep=1pt,parsep=0pt}
+\titleformat{\section}{\large\bfseries}{}{0em}{}[\titlerule]
+\titlespacing{\section}{0pt}{10pt}{4pt}
+\setlength{\parindent}{0pt}
+
+\begin{document}
+
+{\LARGE \textbf{\VAR{profile.name}}}
+
+\vspace{2pt}
+
+\VAR{profile.email} \textbar{} \VAR{profile.location}\BLOCK{if profile.phone} \textbar{} \VAR{profile.phone}\BLOCK{endif}\BLOCK{if profile.linkedin} \textbar{} \VAR{profile.linkedin}\BLOCK{endif}\BLOCK{if profile.website} \textbar{} \VAR{profile.website}\BLOCK{endif}
+
+\BLOCK{if headline}
+\vspace{4pt}
+
+\textbf{\VAR{headline}}
+
+\BLOCK{endif}
+\BLOCK{if summary}
+\vspace{2pt}
+
+\VAR{summary}
+
+\BLOCK{endif}
+\BLOCK{for section in sections}
+\section*{\VAR{section.name}}
+\BLOCK{for entry in section.entries}
+\textbf{\VAR{entry.title}}\BLOCK{if entry.org}, \VAR{entry.org}\BLOCK{endif}\BLOCK{if entry.dates} \hfill \VAR{entry.dates}\BLOCK{endif}
+\BLOCK{if entry.bullets}
+\begin{itemize}
+\BLOCK{for bullet in entry.bullets}
+  \item \VAR{bullet.text}
+\BLOCK{endfor}
+\end{itemize}
+\BLOCK{endif}
+\vspace{3pt}
+
+\BLOCK{endfor}
+\BLOCK{endfor}
+\BLOCK{if skills}
+\section*{Skills}
+\VAR{skills_line}
+\BLOCK{endif}
+
+\end{document}

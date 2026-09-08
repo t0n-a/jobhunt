@@ -34,7 +34,10 @@ packages = ["src/jobhunt"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
-markers = ["live: hits the real agy CLI; requires auth and network"]
+markers = [
+    "live: hits the real agy CLI; requires auth and network",
+    "latex: shells out to latexmk and pdftotext; skipped when they are absent",
+]
 addopts = "-m 'not live'"
 
 [tool.ruff]
