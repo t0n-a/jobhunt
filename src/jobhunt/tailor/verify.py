@@ -5,13 +5,20 @@ from jobhunt.matching.skills import SKILL_ALIASES, canonical_skill, mentions_ter
 from jobhunt.profile.models import EvidenceAtom
 from jobhunt.tailor.models import iter_bullets, keep_bullets
 
-NUMBER = re.compile(r"\d+(?:[.,]\d+)?")
+# Bounded the same way the evidence side is matched. Without the lookarounds
+# this pulls "95" out of "p95" and then demands the evidence carry a bare 95,
+# dropping a bullet whose percentile the atom states in full.
+NUMBER = re.compile(r"(?<![A-Za-z0-9+#.])\d+(?:[.,]\d+)?(?![A-Za-z0-9+#])")
 
 # SKILL_ALIASES contains ordinary English words. Matching these case-insensitively
 # would read "the rest of the pipeline" as a REST claim and drop a true bullet, so
-# for this set the canonical spelling must appear exactly, which is how a resume
-# writes a technology anyway.
-AMBIGUOUS = {"go", "rest", "node", "react", "js", "r"}
+# for this set the canonical spelling must appear exactly — on BOTH sides of the
+# check, bullet and evidence alike.
+#
+# Only genuine English homographs belong here, because an exempt alias is a
+# weaker check: "js" is not a homograph and was removed, which is what makes
+# "Wrote JS helpers" checkable at all.
+AMBIGUOUS = {"go", "rest", "node", "react"}
 
 
 @dataclass
@@ -71,7 +78,10 @@ def verify_document(
     kept: set[int] = set()
     dropped: list[dict] = []
     for index, bullet in iter_bullets(resume_json):
-        atom = atoms.get(bullet.get("atom_id"))
+        atom_id = bullet.get("atom_id")
+        # A model can emit a list or a dict here, and dict.get would raise on an
+        # unhashable key — taking the whole document down over one bad bullet.
+        atom = atoms.get(atom_id) if isinstance(atom_id, int) else None
         result = verify_bullet(bullet, atom, shortlist_ids)
         if result.passed:
             kept.add(index)
@@ -87,10 +97,21 @@ def verify_document(
 
 
 def _invented_number(text: str, haystack: str) -> str | None:
-    """Return the first number in the bullet that the evidence never states."""
+    """Return the first number in the bullet the evidence does not carry.
+
+    Matched on word boundaries rather than as a substring. A raw `in` test reads
+    "3" inside "1.3 million" and "9" inside "2019", so any atom carrying a year
+    would silently authorise a fabricated headcount — the exact failure this
+    module exists to prevent, reachable from entirely ordinary evidence.
+
+    Extraction is bounded the same way, so a number embedded in a label is never
+    pulled out and demanded on its own: "p95" yields nothing to check, and the
+    reported number is the one actually fabricated rather than the first digits
+    in the line.
+    """
     for match in NUMBER.finditer(text):
         number = match.group(0)
-        if number not in haystack:
+        if not mentions_term(haystack, number):
             return number
     return None
 
@@ -104,10 +125,10 @@ def _invented_technology(text: str, atom: EvidenceAtom, haystack: str) -> str | 
     for naming a company.
     """
     claimed = {canonical_skill(skill).casefold() for skill in atom.skills}
-    evidence = haystack.casefold()
 
     for alias, canonical in SKILL_ALIASES.items():
-        if alias in AMBIGUOUS:
+        ambiguous = alias in AMBIGUOUS
+        if ambiguous:
             if not mentions_term(text, canonical, case_sensitive=True):
                 continue
         elif not mentions_term(text, alias):
@@ -115,7 +136,14 @@ def _invented_technology(text: str, atom: EvidenceAtom, haystack: str) -> str | 
 
         if canonical.casefold() in claimed:
             continue
-        if mentions_term(evidence, alias) or mentions_term(evidence, canonical):
+        # The homograph exemption has to hold on the evidence side too. Matched
+        # loosely, an atom reading "cleaned the rest of the data" would stand as
+        # evidence for "Designed the REST API", laundering the claim through a
+        # word the atom used in its ordinary English sense.
+        if ambiguous:
+            if mentions_term(haystack, canonical, case_sensitive=True):
+                continue
+        elif mentions_term(haystack, alias) or mentions_term(haystack, canonical):
             continue
         return canonical
     return None

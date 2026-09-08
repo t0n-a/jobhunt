@@ -38,6 +38,7 @@ def test_a_bullet_with_no_atom_id_is_rejected():
     result = verify_bullet({"text": "Led the company.", "source": "model"}, atom(), {1})
 
     assert result.passed is False
+    assert "source atom" in result.reason.casefold()
 
 
 def test_a_bullet_whose_atom_is_missing_is_rejected():
@@ -87,6 +88,26 @@ def test_a_metric_stated_only_in_the_metrics_field_is_kept():
     assert verify_bullet(bullet("Cut p95 by 40%."), source, {1}).passed is True
 
 
+def test_a_number_inside_a_longer_number_is_not_evidence():
+    """ "3" appears inside "1.3 million". A substring test would let a fabricated
+    headcount through on the strength of an unrelated figure."""
+    source = atom(description="Handled 1.3 million requests.", metrics=None)
+
+    result = verify_bullet(bullet("Built 3 services."), source, {1})
+
+    assert result.passed is False
+
+
+def test_a_year_in_the_evidence_does_not_authorise_a_headcount():
+    """This is the ugly case: every atom carrying a four-digit year would
+    otherwise authorise several single- and double-digit fabrications."""
+    source = atom(description="Ran the service from 2019.", skills=["Python"])
+
+    result = verify_bullet(bullet("Led 9 engineers."), source, {1})
+
+    assert result.passed is False
+
+
 def test_an_invented_technology_is_rejected():
     """Models add adjacent tools: Docker because Kubernetes was mentioned."""
     source = atom(skills=["Kubernetes"], description="Ran workloads on a cluster.")
@@ -134,12 +155,116 @@ def test_a_capitalised_rest_claim_is_still_checked():
     assert result.passed is False
 
 
+def test_a_js_claim_is_checked_like_any_other():
+    """ "JS" is not an English homograph, so it gets no exemption. Exempting it
+    would mean a JavaScript claim is never checked at all."""
+    source = atom(skills=["Python"], description="Wrote the backend.")
+
+    result = verify_bullet(bullet("Wrote JS helpers."), source, {1})
+
+    assert result.passed is False
+
+
+def test_ordinary_prose_in_the_evidence_is_not_a_technology_claim():
+    """The homograph exemption applies to the evidence too. An atom that used
+    "rest" in its ordinary sense must not stand as evidence of a REST API."""
+    source = atom(skills=["Python"], description="Cleaned the rest of the data.")
+
+    result = verify_bullet(bullet("Designed the REST API."), source, {1})
+
+    assert result.passed is False
+
+
+def test_a_tagged_alias_supports_its_canonical_spelling():
+    """The atom tags k8s, the bullet says Kubernetes. This passes only through
+    the canonicalised skills set, so it is the one test pinning that branch."""
+    source = atom(skills=["k8s"], description="Ran workloads on a cluster.")
+
+    assert verify_bullet(bullet("Ran the service on Kubernetes."), source, {1}).passed is True
+
+
 def test_a_user_written_bullet_skips_every_check():
     """These are the user's own words. They are responsible for them, and the
     verifier must not fight them when they correct something by hand."""
     result = verify_bullet(bullet("Cut latency by 40% using Docker.", source="user"), atom(), {1})
 
     assert result.passed is True
+
+
+def test_a_user_bullet_passes_even_with_no_usable_atom():
+    """The exemption is checked FIRST, before the atom is looked up: a bullet the
+    user typed is theirs regardless of what it claims to come from."""
+    junk = {"atom_id": "nonsense", "text": "Cut latency by 99% with Docker.", "source": "user"}
+
+    assert verify_bullet(junk, None, set()).passed is True
+
+
+def test_an_unhashable_atom_id_does_not_take_down_the_document():
+    """Model JSON is exactly where a list-valued field turns up. One bad bullet
+    must cost one bullet, not the whole resume."""
+    document = {
+        "sections": [
+            {
+                "name": "Projects",
+                "entries": [
+                    {
+                        "atom_id": 1,
+                        "title": "t",
+                        "org": "",
+                        "dates": "",
+                        "bullets": [
+                            {"atom_id": [1], "text": "Unusable.", "source": "model"},
+                            bullet("Built a link shortener in Flask."),
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+    kept, dropped = verify_document(document, {1: atom()}, {1})
+
+    texts = [b["text"] for entry in kept["sections"][0]["entries"] for b in entry["bullets"]]
+    assert texts == ["Built a link shortener in Flask."]
+    assert len(dropped) == 1
+
+
+def test_verify_document_keeps_ordinals_aligned_across_entries():
+    """Dropping the first entry's first bullet must not pull the second entry's
+    bullet forward. keep_bullets selects by ordinal precisely to prevent this."""
+    document = {
+        "sections": [
+            {
+                "name": "Projects",
+                "entries": [
+                    {
+                        "atom_id": 1,
+                        "title": "One",
+                        "org": "",
+                        "dates": "",
+                        "bullets": [
+                            bullet("Cut latency by 40%."),
+                            bullet("Built a link shortener in Flask."),
+                        ],
+                    },
+                    {
+                        "atom_id": 1,
+                        "title": "Two",
+                        "org": "",
+                        "dates": "",
+                        "bullets": [bullet("Cached responses in Redis.")],
+                    },
+                ],
+            }
+        ]
+    }
+
+    kept, dropped = verify_document(document, {1: atom()}, {1})
+
+    entries = kept["sections"][0]["entries"]
+    assert [b["text"] for b in entries[0]["bullets"]] == ["Built a link shortener in Flask."]
+    assert [b["text"] for b in entries[1]["bullets"]] == ["Cached responses in Redis."]
+    assert len(dropped) == 1
 
 
 def test_verify_document_keeps_survivors_and_reports_the_rest():
