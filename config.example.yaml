@@ -13,3 +13,30 @@ llm:
   cache_dir: ./data/llm_cache
 
 data_dir: ./data
+
+# Job sources. Company boards are where most real postings originate — the large
+# aggregators mostly re-host them — so filling in the three ATS lists below
+# matters more than anything else here. A company's board slug is usually the
+# last path segment of its careers URL.
+sources:
+  enabled:
+    - greenhouse
+    - lever
+    - ashby
+    - remotive
+    - landingjobs
+    - hackernews
+    # - remoteok
+    # - weworkremotely
+    # - itjobs        # needs ITJOBS_API_KEY in .env
+
+  # e.g. boards-api.greenhouse.io/v1/boards/<slug>/jobs
+  greenhouse: []
+  # e.g. api.lever.co/v0/postings/<slug>
+  lever: []
+  # e.g. api.ashbyhq.com/posting-api/job-board/<slug>
+  ashby: []
+
+  # Hacker News "Who is hiring?" comments must match a location keyword AND a
+  # role keyword. Location alone matches every remote listing of any discipline.
+  location_keywords: [porto, portugal, remote]

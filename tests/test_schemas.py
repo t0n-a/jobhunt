@@ -1,6 +1,7 @@
 import pytest
 from jsonschema import Draft202012Validator
 
+from jobhunt.matching.score import SCORE_SCHEMA
 from jobhunt.profile.importers.coursework import COURSEWORK_SCHEMA
 from jobhunt.profile.importers.cv import CV_ATOM_SCHEMA
 from jobhunt.profile.importers.github import REPO_ATOM_SCHEMA
@@ -73,3 +74,22 @@ def test_schema_is_valid_json_schema(name, schema, example):
 def test_schema_validates_representative_example(name, schema, example):
     validator = Draft202012Validator(schema)
     validator.validate(example)
+
+
+def test_score_schema_is_valid_and_a_representative_response_conforms():
+    """Phase 2's most important schema, and the one the suite omitted. It matters
+    more than the others because openai_compat downgrades any schema to
+    {"type": "json_object"}, so these enum constraints are the only thing pinning
+    track and seniority_fit on that provider."""
+    Draft202012Validator.check_schema(SCORE_SCHEMA)
+    Draft202012Validator(SCORE_SCHEMA).validate(
+        {
+            "fit_score": 72,
+            "matched_skills": ["Python"],
+            "missing_skills": ["Kubernetes"],
+            "red_flags": [],
+            "seniority_fit": "under",
+            "track": "backend",
+            "rationale": "Good overlap.",
+        }
+    )

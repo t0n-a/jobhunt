@@ -66,7 +66,6 @@ class SourcesConfig(BaseModel):
             "typescript",
         ]
     )
-    itjobs_enabled: bool = False
 
 
 class Config(BaseModel):

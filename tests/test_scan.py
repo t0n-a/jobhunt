@@ -206,7 +206,7 @@ def test_build_sources_respects_the_enabled_list():
 
 
 def test_build_sources_omits_itjobs_without_a_key():
-    cfg = SourcesConfig(enabled=["itjobs"], itjobs_enabled=True)
+    cfg = SourcesConfig(enabled=["itjobs"])
 
     assert build_sources(cfg, None) == []
 
