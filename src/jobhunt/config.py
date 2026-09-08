@@ -22,9 +22,30 @@ class LLMConfig(BaseModel):
     cache_dir: Path = Path("./data/llm_cache")
 
 
+class SourcesConfig(BaseModel):
+    enabled: list[str] = Field(
+        default_factory=lambda: [
+            "greenhouse",
+            "lever",
+            "ashby",
+            "remotive",
+            "remoteok",
+            "weworkremotely",
+            "landingjobs",
+            "hackernews",
+        ]
+    )
+    greenhouse: list[str] = Field(default_factory=list)
+    lever: list[str] = Field(default_factory=list)
+    ashby: list[str] = Field(default_factory=list)
+    location_keywords: list[str] = Field(default_factory=lambda: ["porto", "portugal", "remote"])
+    itjobs_enabled: bool = False
+
+
 class Config(BaseModel):
     profile: ProfileConfig
     llm: LLMConfig = Field(default_factory=LLMConfig)
+    sources: SourcesConfig = Field(default_factory=SourcesConfig)
     data_dir: Path = Path("./data")
 
 
