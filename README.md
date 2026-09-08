@@ -2,12 +2,13 @@
 
 jobhunt is a local-first job-search agent. It finds and scores job postings, tailors an ATS-parseable resume per application, and converts aggregate skill gaps into one concrete, auto-verified daily task that earns a real resume line. Existing open-source tools (such as career-ops, autopilot-jobhunt, and Resume Matcher) handle discovery and tailoring, but none close the loop from skill gap to daily task to verified evidence.
 
-Only Phase 1 (the profile subsystem) is built today.
+Phases 1 and 2 are built today: the profile subsystem, and job discovery with scoring.
 
 ## Status
 
 - **Phase 1 (Complete):** Evidence-atom store, guided LLM interview, CV/GitHub/coursework importers, and local web UI.
-- **Phases 2–5 (Designed, not built):** Job discovery and scoring, the skill-gap coach, resume tailoring, and LinkedIn integration.
+- **Phase 2 (Complete):** Nine job sources, dedupe into canonical jobs, LLM scoring with track tagging, and a ranked inbox.
+- **Phases 3–5 (Designed, not built):** The skill-gap coach, resume tailoring, and LinkedIn integration.
 
 ## Core Concept: Evidence Atoms
 
@@ -44,7 +45,7 @@ Then open http://localhost:8000. Both `config.yaml` and `.env` are gitignored.
 The default provider is `agy`, running Google Gemini models via the Antigravity CLI. Configure `llm.provider`, `llm.model`, and `llm.binary` in `config.yaml`.
 
 - **WSL Path Translation:** When jobhunt runs inside WSL and uses the Windows binary (`agy.exe`), the provider automatically translates temporary JSON-schema paths using `wslpath -w` so the Windows binary can read them.
-- **OpenAI Compatible API:** The `openai_compat` provider option is declared in configuration but not yet implemented (raises `NotImplementedError`; arrives in Phase 2).
+- **OpenAI Compatible API:** Set `llm.provider: openai_compat` with `OPENAI_BASE_URL` and `OPENAI_API_KEY` in `.env` to use any OpenAI-compatible endpoint (OpenRouter, Gemini, a local server) instead of the Antigravity CLI.
 - **Disk Cache:** All LLM responses are cached on disk under `llm.cache_dir` (default: `./data/llm_cache`), keyed by model, prompt, and schema. Re-runs are free.
 
 ## Environment Variables
@@ -52,7 +53,8 @@ The default provider is `agy`, running Google Gemini models via the Antigravity 
 Configured in `.env`:
 
 - `GITHUB_TOKEN`: Optional but recommended. The GitHub importer makes `1 + N` API calls (one for repo metadata plus one per README). Unauthenticated requests allow only 60 requests per hour, hitting the limit for profiles with ~30 repositories. Setting a token raises the rate limit to 5,000 requests per hour.
-- `OPENAI_BASE_URL` and `OPENAI_API_KEY`: Placeholders for the not-yet-implemented provider.
+- `OPENAI_BASE_URL` and `OPENAI_API_KEY`: required when `llm.provider` is `openai_compat`.
+- `ITJOBS_API_KEY`: optional. A free key from itjobs.pt/api enables ITJobs.pt, Portugal's largest IT board. Without it that source is skipped.
 
 ## Using It
 
@@ -65,12 +67,39 @@ Four ways to populate the profile, all reachable from the web UI:
 
 All imported items land on `/atoms`, where you can confirm, edit, or delete each atom.
 
+## Finding Jobs
+
+```bash
+uv run jobhunt scan
+```
+
+Fetches from every enabled source, deduplicates postings that describe the same
+opening, and scores each one against your **confirmed** atoms. Results appear at
+`/jobs`, ranked by fit, with a track breakdown ("backend · 12, ai · 6") so the
+data can tell you what kind of role you actually match.
+
+Scoring refuses to run against an empty profile: with nothing to match, the
+model rates whichever job demands least, which is a confidently wrong ranking.
+Build the profile first.
+
+The scan reports which sources failed or timed out rather than only a total, and
+one slow or broken source never aborts the rest. Scoring is cached per job, so a
+re-scan only pays for genuinely new postings — but the first run scores every
+job sequentially at roughly ten seconds each, so start it and walk away.
+
+You can also paste any job you found elsewhere into the box on `/jobs`; it enters
+the same scoring pipeline.
+
 ## Repository Layout
 
 - `src/jobhunt/config.py`: Configuration models and YAML loading.
 - `src/jobhunt/db.py`: SQLite engine and session lifecycle.
 - `src/jobhunt/llm/`: Provider abstraction (`agy`, fake) and disk cache.
 - `src/jobhunt/profile/`: Models, atom store, importers (CV, GitHub, coursework), and interview engine.
+- `src/jobhunt/sources/`: One adapter per job board, plus ATS board discovery.
+- `src/jobhunt/jobs/`: Raw postings, canonical jobs, dedupe, and the job store.
+- `src/jobhunt/matching/`: LLM scoring, track tagging, and skill-name canonicalisation.
+- `src/jobhunt/scan.py`: Scan orchestration with per-source isolation and deadlines.
 - `src/jobhunt/web/`: FastAPI app, Jinja2 templates, HTMX partials.
 
 ## Development

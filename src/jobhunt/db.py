@@ -13,6 +13,7 @@ def create_engine_for(path: Path):
 
 def init_db(engine) -> None:
     """Create all tables. Importing models registers them on SQLModel.metadata."""
+    import jobhunt.jobs.models
     import jobhunt.profile.interview
     import jobhunt.profile.models  # noqa: F401  (registers tables)
 

@@ -164,3 +164,13 @@ def test_atoms_persist_across_sessions(tmp_path):
         assert atom.kind is AtomKind.PROJECT
         assert atom.started_on == date(2025, 1, 1)
         assert atom.ended_on == date(2025, 6, 1)
+
+
+def test_confirmed_only_excludes_unconfirmed(store: AtomStore):
+    a = store.add(make_atom(title="Reviewed"))
+    store.add(make_atom(title="Unreviewed"))
+    store.update(a.id, confirmed=True)
+
+    confirmed = store.confirmed_only()
+
+    assert [atom.title for atom in confirmed] == ["Reviewed"]

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections import Counter
 from collections.abc import Sequence
 
@@ -55,6 +57,14 @@ class AtomStore:
             needle = skill.casefold()
             atoms = [a for a in atoms if any(s.casefold() == needle for s in a.skills)]
         return atoms
+
+    def confirmed_only(self) -> list[EvidenceAtom]:
+        """Atoms the user has reviewed.
+
+        Anything that reaches a scoring prompt or a generated document must come
+        from here — unconfirmed atoms are unreviewed model output.
+        """
+        return self.list(confirmed=True)
 
     def update(self, atom_id: int, **fields) -> EvidenceAtom:
         atom = self.get(atom_id)

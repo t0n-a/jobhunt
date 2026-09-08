@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}{{ job.title }} — jobhunt{% endblock %}
+{% block content %}
+<h1>{{ job.title }}</h1>
+<p class="meta">{{ job.company }}{% if job.location %} · {{ job.location }}{% endif %}
+  {% if job.remote %} · remote{% endif %}
+  {% if job.url %} · <a href="{{ job.url }}">original posting</a>{% endif %}</p>
+
+{% if score %}
+  <p class="meta">Fit {{ score.fit_score }}/100 · {{ score.track }} · seniority {{ score.seniority_fit }}</p>
+  <p>{{ score.rationale }}</p>
+  <h2>Matched</h2>
+  <p>{% for s in score.matched_skills %}<span class="skill">{{ s }}</span>{% endfor %}</p>
+  <h2>Missing</h2>
+  <p>{% for s in score.missing_skills %}<span class="skill">{{ s }}</span>{% endfor %}</p>
+  {% if score.red_flags %}
+    <h2>Red flags</h2>
+    <ul>{% for f in score.red_flags %}<li>{{ f }}</li>{% endfor %}</ul>
+  {% endif %}
+{% else %}
+  <p class="empty">Not scored yet.</p>
+{% endif %}
+
+<form method="post" action="/jobs/{{ job.id }}/rescore">
+  <button type="submit">Re-score</button>
+</form>
+
+<h2>Posting</h2>
+<p>{{ job.description }}</p>
+{% endblock %}

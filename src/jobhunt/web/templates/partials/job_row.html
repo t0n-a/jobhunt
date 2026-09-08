@@ -1,0 +1,10 @@
+{% set score = scores.get(job.id) %}
+<li class="atom">
+  <h3><a href="/jobs/{{ job.id }}">{{ job.title }}</a> — {{ job.company }}</h3>
+  <p class="meta">
+    {% if score %}fit {{ score.fit_score }} · {{ score.track }} · seniority {{ score.seniority_fit }}
+    {% else %}<em>unscored</em>{% endif %}
+    {% if job.remote %}· remote{% elif job.location %}· {{ job.location }}{% endif %}
+  </p>
+  {% if score %}<p>{{ score.rationale }}</p>{% endif %}
+</li>

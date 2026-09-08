@@ -1,5 +1,6 @@
 import os
 import shutil
+from collections import Counter
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -12,7 +13,10 @@ from sqlmodel import Session, select
 
 from jobhunt.config import Config
 from jobhunt.db import create_engine_for, init_db
+from jobhunt.jobs.models import Job, Score
+from jobhunt.jobs.store import JobStore
 from jobhunt.llm import LLMError, LLMProvider
+from jobhunt.matching.score import score_job
 from jobhunt.profile.importers.coursework import import_coursework
 from jobhunt.profile.importers.cv import import_cv
 from jobhunt.profile.importers.github import import_github
@@ -239,5 +243,76 @@ def create_app(config: Config) -> FastAPI:
     def atom_delete(atom_id: int, store: AtomStore = Depends(get_store)):
         store.delete(atom_id)
         return HTMLResponse("")
+
+    def _latest_scores(db: Session) -> dict[int, Score]:
+        """Newest score per job, but only if it still describes the CURRENT text.
+
+        upsert_posting recomputes content_hash when a longer description arrives,
+        and a rescore can then fail. Without this filter the inbox keeps showing
+        the old fit for a description the job no longer has.
+        """
+        rows = db.exec(select(Score).order_by(Score.scored_at)).all()
+        current = {job.id: job.content_hash for job in db.exec(select(Job)).all()}
+        return {row.job_id: row for row in rows if current.get(row.job_id) == row.content_hash}
+
+    @app.get("/jobs")
+    def jobs_inbox(request: Request):
+        with Session(app.state.engine) as db:
+            jobs = JobStore(db).list_jobs()
+            scores = _latest_scores(db)
+            ranked = sorted(
+                jobs,
+                key=lambda j: scores[j.id].fit_score if j.id in scores else -1,
+                reverse=True,
+            )
+            tracks = Counter(scores[j.id].track for j in ranked if j.id in scores).most_common()
+            return templates.TemplateResponse(
+                request,
+                "inbox.html",
+                {"jobs": ranked, "scores": scores, "tracks": tracks},
+            )
+
+    @app.get("/jobs/{job_id}")
+    def job_detail(request: Request, job_id: int):
+        with Session(app.state.engine) as db:
+            job = JobStore(db).get(job_id)
+            if job is None:
+                raise HTTPException(status_code=404, detail="No such job")
+            score = _latest_scores(db).get(job_id)
+            return templates.TemplateResponse(
+                request, "job_detail.html", {"job": job, "score": score}
+            )
+
+    @app.post("/jobs/paste")
+    def job_paste(
+        title: str = Form(...),
+        company: str = Form(...),
+        url: str = Form(""),
+        description: str = Form(...),
+        llm: LLMProvider = Depends(get_llm),
+    ):
+        with Session(app.state.engine) as db:
+            job = JobStore(db).add_manual(title, company, description, url)
+            atoms = AtomStore(db).confirmed_only()
+            with _importer_errors():
+                score = score_job(job, atoms, llm)
+            db.add(score)
+            db.commit()
+        return RedirectResponse("/jobs", status_code=303)
+
+    @app.post("/jobs/{job_id}/rescore")
+    def job_rescore(job_id: int, llm: LLMProvider = Depends(get_llm)):
+        with Session(app.state.engine) as db:
+            job = JobStore(db).get(job_id)
+            if job is None:
+                raise HTTPException(status_code=404, detail="No such job")
+            atoms = AtomStore(db).confirmed_only()
+            with _importer_errors():
+                score = score_job(job, atoms, llm)
+            for old in db.exec(select(Score).where(Score.job_id == job_id)).all():
+                db.delete(old)
+            db.add(score)
+            db.commit()
+        return RedirectResponse(f"/jobs/{job_id}", status_code=303)
 
     return app
