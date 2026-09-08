@@ -6,3 +6,4 @@ data/
 *.db
 output/
 config.yaml
+.superpowers/
