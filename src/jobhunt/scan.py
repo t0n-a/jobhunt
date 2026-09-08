@@ -35,6 +35,7 @@ class ScanResult:
     scored: int = 0
     failed_sources: list[str] = field(default_factory=list)
     timed_out_sources: list[str] = field(default_factory=list)
+    scoring_skipped: str | None = None
 
 
 def build_sources(cfg: SourcesConfig, itjobs_key: str | None) -> list:
@@ -119,6 +120,12 @@ def run_scan(
         # rank the candidate on claims they never checked.
         atoms = AtomStore(session).confirmed_only()
 
+        if not atoms:
+            # Every job would fail identically; say it once, clearly, instead of
+            # logging the same error hundreds of times.
+            result.scoring_skipped = "no confirmed evidence atoms — jobs were stored but not scored"
+            logger.warning("scan: %s", result.scoring_skipped)
+
         seen_job_ids: set[int] = set()
         for posting in postings:
             try:
@@ -129,7 +136,7 @@ def run_scan(
 
         result.jobs = len(seen_job_ids)
 
-        for job_id in seen_job_ids:
+        for job_id in seen_job_ids if atoms else []:
             job = job_store.get(job_id)
             already = session.exec(
                 select(Score).where(Score.job_id == job_id, Score.content_hash == job.content_hash)

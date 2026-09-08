@@ -6,6 +6,8 @@ from jobhunt.config import Config, LLMConfig, ProfileConfig
 from jobhunt.db import create_engine_for, init_db
 from jobhunt.jobs.models import Job, Score, posting_hash
 from jobhunt.llm import FakeProvider
+from jobhunt.profile.models import AtomKind, EvidenceAtom, Provenance
+from jobhunt.profile.store import AtomStore
 from jobhunt.web.app import create_app
 from jobhunt.web.deps import get_llm
 
@@ -26,6 +28,21 @@ def make_client(tmp_path):
         return client
 
     return _make
+
+
+def seed_profile(client) -> None:
+    """Scoring refuses an empty profile, so any test that scores needs one."""
+    with Session(client.engine) as session:
+        AtomStore(session).add(
+            EvidenceAtom(
+                kind=AtomKind.PROJECT,
+                title="URL shortener",
+                description="Flask and Redis.",
+                skills=["Python", "Redis"],
+                provenance=Provenance.INTERVIEW,
+                confirmed=True,
+            )
+        )
 
 
 def seed(client, title="Backend Engineer", fit=80, track="backend") -> int:
@@ -118,6 +135,7 @@ def test_job_detail_unknown_id_returns_404(make_client):
 
 def test_paste_creates_and_scores_a_job(make_client):
     client = make_client([score_payload()])
+    seed_profile(client)
 
     response = client.post(
         "/jobs/paste",
@@ -152,6 +170,7 @@ def test_paste_maps_llm_failure_to_502(make_client):
 
 def test_rescore_replaces_the_existing_score(make_client):
     client = make_client([score_payload(fit_score=95)])
+    seed_profile(client)
     job_id = seed(client, fit=10)
 
     client.post(f"/jobs/{job_id}/rescore", follow_redirects=True)
@@ -220,3 +239,21 @@ def test_inbox_with_only_unscored_jobs_shows_no_track_breakdown(make_client):
 
     assert "Zephyr unscored role" in text
     assert "best matches look like" not in text
+
+
+def test_paste_without_a_confirmed_profile_returns_502_not_a_bogus_score(make_client):
+    """Against an empty profile the scorer rates whichever job demands least — a
+    live scan gave a face-photo collection gig 100. Refuse instead."""
+    client = make_client([score_payload()])
+
+    response = client.post(
+        "/jobs/paste",
+        data={
+            "title": "Platform Engineer",
+            "company": "Acme",
+            "url": "https://example.com/9",
+            "description": "Kubernetes and Terraform.",
+        },
+    )
+
+    assert response.status_code == 502

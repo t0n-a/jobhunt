@@ -24,8 +24,12 @@ class HackerNewsSource:
 
     name = "hackernews"
 
-    def __init__(self, keywords: list[str]):
+    def __init__(self, keywords: list[str], role_keywords: list[str] | None = None):
         self.keywords = [k.casefold() for k in keywords]
+        # A live scan showed a location keyword alone matches every remote job of
+        # any kind — Sales, Copywriting and Freelance Writing all came through on
+        # "remote". A posting must also read as engineering work.
+        self.role_keywords = [k.casefold() for k in (role_keywords or [])]
 
     def fetch(self) -> Iterable[RawPosting]:
         with httpx.Client(timeout=TIMEOUT, headers={"User-Agent": "jobhunt"}) as client:
@@ -69,8 +73,17 @@ class HackerNewsSource:
         return None
 
     def _matches(self, text: str) -> bool:
+        """A posting must match a location keyword AND look like engineering work.
+
+        Location alone is far too loose on free prose: "remote" appears in every
+        remote listing regardless of discipline.
+        """
         lowered = text.casefold()
-        return any(k in lowered for k in self.keywords)
+        if not any(k in lowered for k in self.keywords):
+            return False
+        if not self.role_keywords:
+            return True
+        return any(k in lowered for k in self.role_keywords)
 
     def _json(self, client: httpx.Client, url: str):
         try:

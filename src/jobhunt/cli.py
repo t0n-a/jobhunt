@@ -41,7 +41,11 @@ def run_scan_command(config) -> str:
         parts.append(f"failed={','.join(result.failed_sources)}")
     if result.timed_out_sources:
         parts.append(f"timed_out={','.join(result.timed_out_sources)}")
-    return " ".join(parts)
+    line = " ".join(parts)
+    if result.scoring_skipped:
+        line += f"\n  Scoring skipped: {result.scoring_skipped}."
+        line += "\n  Build your profile first: run `jobhunt serve` and use /interview."
+    return line
 
 
 def main() -> None:

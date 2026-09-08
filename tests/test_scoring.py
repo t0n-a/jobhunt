@@ -2,7 +2,12 @@ import pytest
 
 from jobhunt.jobs.models import Job
 from jobhunt.llm import FakeProvider, LLMError
-from jobhunt.matching.score import TRACKS, profile_summary, score_job
+from jobhunt.matching.score import (
+    TRACKS,
+    EmptyProfileError,
+    profile_summary,
+    score_job,
+)
 from jobhunt.profile.models import AtomKind, EvidenceAtom, Provenance
 
 
@@ -151,14 +156,17 @@ def test_missing_required_field_raises_llm_error():
         score_job(job(), [atom()], FakeProvider([{"matched_skills": []}]))
 
 
-def test_scoring_an_empty_profile_still_works():
-    """A brand-new user has no confirmed atoms yet; scoring must not crash."""
-    llm = FakeProvider([good_response(fit_score=10, matched_skills=[])])
+def test_scoring_an_empty_profile_is_refused():
+    """A live scan against an empty profile gave a face-photo collection gig a
+    fit_score of 100: with nothing to match, the model rates whichever job
+    demands least. A confident wrong ranking is worse than no ranking."""
+    llm = FakeProvider([good_response()])
 
-    score = score_job(job(), [], llm)
+    with pytest.raises(EmptyProfileError) as excinfo:
+        score_job(job(), [], llm)
 
-    assert score.fit_score == 10
-    assert "no confirmed" in llm.prompts[0].casefold()
+    assert "confirm" in str(excinfo.value).casefold()
+    assert llm.prompts == []  # refused before spending an LLM call
 
 
 GOLDEN = [
@@ -190,3 +198,21 @@ def test_golden_set_entries_all_carry_a_track_and_rationale():
 
         assert score.track in TRACKS
         assert score.rationale
+
+
+def test_skill_aliases_are_canonicalised():
+    """A live scan produced "Amazon Web Services" and "AWS" as separate gaps,
+    splitting the top skill across two entries and under-ranking it."""
+    llm = FakeProvider(
+        [good_response(missing_skills=["Amazon Web Services", "AWS", "k8s", "Kubernetes"])]
+    )
+
+    assert score_job(job(), [atom()], llm).missing_skills == ["AWS", "Kubernetes"]
+
+
+def test_unknown_skills_pass_through_unchanged():
+    """The alias map is a curated allowlist, not a guesser — a wrong merge would
+    send the user to study the wrong thing."""
+    llm = FakeProvider([good_response(missing_skills=["Elixir", "Zig"])])
+
+    assert score_job(job(), [atom()], llm).missing_skills == ["Elixir", "Zig"]

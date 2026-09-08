@@ -39,6 +39,33 @@ class SourcesConfig(BaseModel):
     lever: list[str] = Field(default_factory=list)
     ashby: list[str] = Field(default_factory=list)
     location_keywords: list[str] = Field(default_factory=lambda: ["porto", "portugal", "remote"])
+    # Hacker News comments are free prose, so a location keyword alone matches
+    # every remote job of any kind — a live scan pulled in Sales, Copywriting and
+    # Freelance Writing roles. A posting must look like engineering work too.
+    role_keywords: list[str] = Field(
+        default_factory=lambda: [
+            "engineer",
+            "developer",
+            "programmer",
+            "software",
+            "backend",
+            "back-end",
+            "frontend",
+            "front-end",
+            "fullstack",
+            "full-stack",
+            "devops",
+            "platform",
+            "sre",
+            "data",
+            "machine learning",
+            "ml ",
+            "python",
+            "java",
+            "golang",
+            "typescript",
+        ]
+    )
     itjobs_enabled: bool = False
 
 

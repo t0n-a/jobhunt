@@ -4,6 +4,8 @@ from jobhunt.config import SourcesConfig
 from jobhunt.db import create_engine_for, init_db
 from jobhunt.jobs.models import Job, RawPosting, Score, posting_hash
 from jobhunt.llm import FakeProvider
+from jobhunt.profile.models import AtomKind, EvidenceAtom, Provenance
+from jobhunt.profile.store import AtomStore
 from jobhunt.scan import ScanResult, build_sources, run_scan
 
 
@@ -51,9 +53,23 @@ def score_payload(**over):
     return payload
 
 
-def fresh(tmp_path, name="s.db"):
+def fresh(tmp_path, name="s.db", with_profile=True):
+    """Scoring now refuses an empty profile, so seed one confirmed atom unless a
+    test is specifically about the empty-profile path."""
     engine = create_engine_for(tmp_path / name)
     init_db(engine)
+    if with_profile:
+        with Session(engine) as session:
+            AtomStore(session).add(
+                EvidenceAtom(
+                    kind=AtomKind.PROJECT,
+                    title="URL shortener",
+                    description="Flask and Redis.",
+                    skills=["Python", "Redis"],
+                    provenance=Provenance.INTERVIEW,
+                    confirmed=True,
+                )
+            )
     return engine
 
 
@@ -179,7 +195,8 @@ def test_a_timed_out_source_does_not_block_later_sources(tmp_path):
 def test_scan_with_no_sources_is_a_no_op(tmp_path):
     result = run_scan(fresh(tmp_path), [], FakeProvider([]))
 
-    assert result == ScanResult()
+    assert (result.fetched, result.jobs, result.scored) == (0, 0, 0)
+    assert result.failed_sources == [] and result.timed_out_sources == []
 
 
 def test_build_sources_respects_the_enabled_list():
@@ -229,3 +246,30 @@ def test_scan_command_reports_a_helpful_message_when_no_sources_are_enabled(tmp_
     message = run_scan_command(cfg)
 
     assert "config.yaml" in message
+
+
+def test_scan_with_an_empty_profile_stores_jobs_but_skips_scoring(tmp_path):
+    """Every job would fail identically, so say it once rather than logging the
+    same error hundreds of times — and keep the jobs, which are still real."""
+    engine = fresh(tmp_path, with_profile=False)
+
+    result = run_scan(engine, [StubSource("s", [posting()])], FakeProvider([]))
+
+    assert result.jobs == 1
+    assert result.scored == 0
+    assert result.scoring_skipped is not None
+    assert "confirmed evidence" in result.scoring_skipped
+
+
+def test_scan_command_tells_the_user_how_to_fix_an_empty_profile(tmp_path):
+    from jobhunt.cli import run_scan_command
+    from jobhunt.config import Config, LLMConfig, ProfileConfig
+
+    cfg = Config(
+        profile=ProfileConfig(name="A", email="a@example.com", location="Porto"),
+        llm=LLMConfig(cache_dir=tmp_path / "cache"),
+        data_dir=tmp_path,
+        sources=SourcesConfig(enabled=[]),
+    )
+
+    assert "config.yaml" in run_scan_command(cfg)

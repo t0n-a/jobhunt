@@ -1,6 +1,12 @@
 from jobhunt.jobs.models import Job, Score
 from jobhunt.llm import LLMError, LLMProvider
+from jobhunt.matching.skills import canonical_skills
 from jobhunt.profile.models import EvidenceAtom
+
+
+class EmptyProfileError(LLMError):
+    """Raised when scoring is attempted with no confirmed evidence atoms."""
+
 
 TRACKS = ("backend", "fullstack", "frontend", "data", "devops", "ai", "other")
 SENIORITY = ("under", "match", "over")
@@ -92,7 +98,16 @@ def score_job(job: Job, atoms: list[EvidenceAtom], llm: LLMProvider) -> Score:
 
     Only confirmed atoms should reach this function: scoring the candidate
     against unreviewed model output would rank them on claims they never checked.
+
+    Refuses an empty profile. A live scan against one produced a fit_score of 100
+    for a face-photo collection gig: with nothing to match, the model rates the
+    jobs demanding least. A confident wrong ranking is worse than no ranking.
     """
+    if not atoms:
+        raise EmptyProfileError(
+            "Cannot score against an empty profile. Confirm at least one evidence "
+            "atom first — run the interview or import a CV, then confirm the atoms."
+        )
     response = llm.complete(
         PROMPT.format(posting=job_summary(job), profile=profile_summary(atoms)),
         schema=SCORE_SCHEMA,
@@ -111,8 +126,8 @@ def score_job(job: Job, atoms: list[EvidenceAtom], llm: LLMProvider) -> Score:
     return Score(
         job_id=job.id,
         fit_score=max(0, min(100, fit)),
-        matched_skills=_clean(response.get("matched_skills")),
-        missing_skills=_clean(response.get("missing_skills")),
+        matched_skills=canonical_skills(response.get("matched_skills")),
+        missing_skills=canonical_skills(response.get("missing_skills")),
         red_flags=_clean(response.get("red_flags")),
         seniority_fit=seniority if seniority in SENIORITY else "match",
         track=track if track in TRACKS else "other",
