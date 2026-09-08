@@ -3,7 +3,7 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from jobhunt.matching.skills import SKILL_ALIASES, canonical_skill
+from jobhunt.matching.skills import SKILL_ALIASES, canonical_skill, mentions_term
 
 TIMEOUT = 60
 
@@ -75,4 +75,11 @@ def _spellings(keyword: str) -> set[str]:
 
 
 def _mentioned(keyword: str, haystack: str) -> bool:
-    return any(spelling in haystack for spelling in _spellings(keyword))
+    """Word boundaries, not substrings -- the same rule the shortlist uses.
+
+    A substring test reads "Go" inside "Django" and "R" inside almost any prose,
+    and here that error runs the dangerous way round: a false "covered" tells the
+    user nothing is missing and silently suppresses the one signal this report
+    exists to give. A false "missing" only costs them a second look.
+    """
+    return any(mentions_term(haystack, spelling) for spelling in _spellings(keyword))

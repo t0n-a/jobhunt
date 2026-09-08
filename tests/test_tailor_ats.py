@@ -54,6 +54,29 @@ def test_an_alias_spelling_counts_as_covered(monkeypatch, tmp_path):
     assert report.coverage == 100.0
 
 
+def test_a_keyword_inside_a_longer_word_is_not_coverage(monkeypatch, tmp_path):
+    """ "Go" is a substring of "Django" and "MongoDB". Reporting the keyword as
+    covered would tell the user nothing is missing when the word never appears --
+    and a false "covered" hides the gap, where a false "missing" only costs a
+    second look."""
+    monkeypatch.setattr(
+        "jobhunt.tailor.ats.extract_pdf_text", FakeExtract("Built with Django and MongoDB.")
+    )
+
+    report = check_coverage(tmp_path / "r.pdf", ["Go"])
+
+    assert report.missing == ["Go"]
+    assert report.coverage == 0.0
+
+
+def test_a_genuine_mention_is_still_coverage(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "jobhunt.tailor.ats.extract_pdf_text", FakeExtract("Wrote the collector in Go.")
+    )
+
+    assert check_coverage(tmp_path / "r.pdf", ["Go"]).missing == []
+
+
 def test_no_keywords_is_full_coverage_not_a_crash(monkeypatch, tmp_path):
     monkeypatch.setattr("jobhunt.tailor.ats.extract_pdf_text", FakeExtract("anything"))
 
