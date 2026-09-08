@@ -2,13 +2,14 @@
 
 jobhunt is a local-first job-search agent. It finds and scores job postings, tailors an ATS-parseable resume per application, and converts aggregate skill gaps into one concrete, auto-verified daily task that earns a real resume line. Existing open-source tools (such as career-ops, autopilot-jobhunt, and Resume Matcher) handle discovery and tailoring, but none close the loop from skill gap to daily task to verified evidence.
 
-Phases 1 and 2 are built today: the profile subsystem, and job discovery with scoring.
+Phases 1 through 3 are built today: the profile subsystem, job discovery with scoring, and the daily skill-gap coach.
 
 ## Status
 
 - **Phase 1 (Complete):** Evidence-atom store, guided LLM interview, CV/GitHub/coursework importers, and local web UI.
 - **Phase 2 (Complete):** Nine job sources, dedupe into canonical jobs, LLM scoring with track tagging, and a ranked inbox.
-- **Phases 3–5 (Designed, not built):** The skill-gap coach, resume tailoring, and LinkedIn integration.
+- **Phase 3 (Complete):** The skill-gap coach, converting aggregate gaps into concrete daily tasks.
+- **Phases 4–5 (Designed, not built):** Resume tailoring and LinkedIn integration.
 
 ## Core Concept: Evidence Atoms
 
@@ -89,6 +90,17 @@ job sequentially at roughly ten seconds each, so start it and walk away.
 
 You can also paste any job you found elsewhere into the box on `/jobs`; it enters
 the same scoring pipeline.
+
+## Daily Coaching
+
+The coach converts your aggregated skill gaps into concrete, day-sized tasks:
+
+- **`/gaps`:** Shows your missing skills ranked by fit-weighted job count (e.g. "missing from 14 of your best-fit jobs"), with a button to start a multi-day project (quest) to close one.
+- **`/today`:** Displays exactly one task at a time. The duration matches your chosen energy level (low 15 / normal 45 / high 120 minutes). It states why the task matters and the exact CV line it earns *before* the work starts. Features "Done" and "Not this one" buttons, plus "Check my repo" to verify work against GitHub. Completing a task writes an unconfirmed EvidenceAtom (with `provenance=quest`) that you must still review.
+- **`jobhunt today`:** Prints your current task. This is used by the Claude Code SessionStart hook at `scripts/jobhunt-session-hook.sh`.
+- **`jobhunt notify`:** Pushes the current task to Telegram. Requires `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in `.env`.
+
+**No streaks by design:** The coach shows only one task at a time and maintains NO streak counters. A broken-streak screen converts a lapse into abandonment, so missing days must cost nothing.
 
 ## Repository Layout
 
