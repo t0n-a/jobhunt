@@ -6,7 +6,7 @@ from pathlib import Path
 
 import httpx
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
@@ -25,6 +25,8 @@ from jobhunt.profile.importers.cv import import_cv
 from jobhunt.profile.importers.github import import_github
 from jobhunt.profile.interview import InterviewSession, harvest, next_question, record_answer
 from jobhunt.profile.store import AtomStore
+from jobhunt.tailor.models import Application, delete_bullet, edit_bullet, iter_bullets
+from jobhunt.tailor.pipeline import mark_applied, render_application, tailor_job
 from jobhunt.web.deps import get_llm, get_store
 
 HERE = Path(__file__).parent
@@ -383,5 +385,110 @@ def create_app(config: Config) -> FastAPI:
             with _importer_errors():
                 _coach(db, llm).start_quest(gap)
         return RedirectResponse("/today", status_code=303)
+
+    def _application(db: Session, application_id: int) -> Application:
+        application = db.get(Application, application_id)
+        if application is None:
+            raise HTTPException(status_code=404, detail="No such application")
+        return application
+
+    @app.post("/jobs/{job_id}/tailor")
+    def job_tailor(job_id: int, llm: LLMProvider = Depends(get_llm)):
+        with Session(app.state.engine) as db:
+            job = JobStore(db).get(job_id)
+            if job is None:
+                raise HTTPException(status_code=404, detail="No such job")
+            with _importer_errors():
+                application = tailor_job(db, job, llm, profile=config.profile)
+            application_id = application.id
+        return RedirectResponse(f"/applications/{application_id}", status_code=303)
+
+    @app.get("/applications")
+    def applications_page(request: Request):
+        with Session(app.state.engine) as db:
+            applications = db.exec(
+                select(Application).order_by(Application.created_at.desc())
+            ).all()
+            jobs = {job.id: job for job in db.exec(select(Job)).all()}
+            return templates.TemplateResponse(
+                request,
+                "applications.html",
+                {"applications": list(applications), "jobs": jobs},
+            )
+
+    @app.get("/applications/{application_id}")
+    def application_detail(request: Request, application_id: int):
+        with Session(app.state.engine) as db:
+            application = _application(db, application_id)
+            job = JobStore(db).get(application.job_id)
+            return templates.TemplateResponse(
+                request,
+                "application_detail.html",
+                {
+                    "application": application,
+                    "job": job,
+                    "bullets": iter_bullets(application.resume_json),
+                },
+            )
+
+    @app.post("/applications/{application_id}/bullets/{index}")
+    def application_edit_bullet(
+        request: Request, application_id: int, index: int, text: str = Form(...)
+    ):
+        with Session(app.state.engine) as db:
+            application = _application(db, application_id)
+            try:
+                # Assign a new dict: JSON columns are not mutation-tracked, and
+                # an in-place edit is silently discarded on commit.
+                application.resume_json = edit_bullet(application.resume_json, index, text)
+            except IndexError as exc:
+                raise HTTPException(status_code=404, detail="No such bullet") from exc
+            db.add(application)
+            db.commit()
+            db.refresh(application)
+            bullet = dict(iter_bullets(application.resume_json))[index]
+            return templates.TemplateResponse(
+                request,
+                "partials/bullet_row.html",
+                {"application": application, "index": index, "bullet": bullet},
+            )
+
+    @app.post("/applications/{application_id}/bullets/{index}/delete")
+    def application_delete_bullet(application_id: int, index: int):
+        with Session(app.state.engine) as db:
+            application = _application(db, application_id)
+            try:
+                application.resume_json = delete_bullet(application.resume_json, index)
+            except IndexError as exc:
+                raise HTTPException(status_code=404, detail="No such bullet") from exc
+            db.add(application)
+            db.commit()
+        return HTMLResponse("")
+
+    @app.post("/applications/{application_id}/render")
+    def application_render(application_id: int):
+        with Session(app.state.engine) as db:
+            application = _application(db, application_id)
+            with _importer_errors():
+                render_application(
+                    db, application, profile=config.profile, data_dir=config.data_dir
+                )
+        return RedirectResponse(f"/applications/{application_id}", status_code=303)
+
+    @app.get("/applications/{application_id}/pdf")
+    def application_pdf(application_id: int):
+        with Session(app.state.engine) as db:
+            application = _application(db, application_id)
+            # pdf_path is stored relative to data_dir; resolve it here.
+            path = config.data_dir / application.pdf_path if application.pdf_path else None
+        if path is None or not path.exists():
+            raise HTTPException(status_code=404, detail="Not rendered yet")
+        return FileResponse(path, media_type="application/pdf", filename=path.name)
+
+    @app.post("/applications/{application_id}/applied")
+    def application_applied(application_id: int):
+        with Session(app.state.engine) as db:
+            mark_applied(db, _application(db, application_id))
+        return RedirectResponse("/applications", status_code=303)
 
     return app

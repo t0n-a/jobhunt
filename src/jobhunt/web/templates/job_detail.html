@@ -24,6 +24,9 @@
 <form method="post" action="/jobs/{{ job.id }}/rescore">
   <button type="submit">Re-score</button>
 </form>
+<form method="post" action="/jobs/{{ job.id }}/tailor">
+  <button type="submit">Tailor a resume for this</button>
+</form>
 
 <h2>Posting</h2>
 <p>{{ job.description }}</p>
