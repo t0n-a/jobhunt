@@ -13,7 +13,7 @@ from sqlmodel import Session, select
 
 from jobhunt.config import Config
 from jobhunt.db import create_engine_for, init_db
-from jobhunt.jobs.models import Score
+from jobhunt.jobs.models import Job, Score
 from jobhunt.jobs.store import JobStore
 from jobhunt.llm import LLMError, LLMProvider
 from jobhunt.matching.score import score_job
@@ -245,8 +245,15 @@ def create_app(config: Config) -> FastAPI:
         return HTMLResponse("")
 
     def _latest_scores(db: Session) -> dict[int, Score]:
+        """Newest score per job, but only if it still describes the CURRENT text.
+
+        upsert_posting recomputes content_hash when a longer description arrives,
+        and a rescore can then fail. Without this filter the inbox keeps showing
+        the old fit for a description the job no longer has.
+        """
         rows = db.exec(select(Score).order_by(Score.scored_at)).all()
-        return {row.job_id: row for row in rows}
+        current = {job.id: job.content_hash for job in db.exec(select(Job)).all()}
+        return {row.job_id: row for row in rows if current.get(row.job_id) == row.content_hash}
 
     @app.get("/jobs")
     def jobs_inbox(request: Request):

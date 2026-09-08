@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 
 import httpx
 
-from jobhunt.jobs.models import RawPosting, posting_hash
+from jobhunt.jobs.models import RawPosting, posting_hash, truncate_description
 from jobhunt.sources.base import register
 
 logger = logging.getLogger(__name__)
@@ -71,7 +71,7 @@ class _AtsSource:
                 for item in self.items(payload):
                     try:
                         yield self.to_posting(board, item)
-                    except (KeyError, TypeError) as exc:
+                    except (KeyError, TypeError, AttributeError) as exc:
                         logger.warning("%s: skipping malformed item: %s", self.name, exc)
 
     def url_for(self, board: str) -> str:  # pragma: no cover - overridden
@@ -106,7 +106,7 @@ class GreenhouseSource(_AtsSource):
             company=board,
             location=location,
             remote=_is_remote(location),
-            description=description,
+            description=truncate_description(description),
             posted_at=parse_iso(item.get("updated_at")),
             content_hash=posting_hash(title, board, description),
         )
@@ -134,7 +134,7 @@ class LeverSource(_AtsSource):
             company=board,
             location=location,
             remote=_is_remote(location),
-            description=description,
+            description=truncate_description(description),
             posted_at=_parse_epoch_ms(item.get("createdAt")),
             content_hash=posting_hash(title, board, description),
         )
@@ -162,7 +162,7 @@ class AshbySource(_AtsSource):
             company=board,
             location=location,
             remote=bool(item.get("isRemote")) or _is_remote(location),
-            description=description,
+            description=truncate_description(description),
             posted_at=parse_iso(item.get("publishedAt")),
             content_hash=posting_hash(title, board, description),
         )

@@ -1,9 +1,10 @@
 import logging
+import time
 from collections.abc import Iterable
 
 import httpx
 
-from jobhunt.jobs.models import RawPosting, posting_hash
+from jobhunt.jobs.models import RawPosting, posting_hash, truncate_description
 from jobhunt.sources.ats import TIMEOUT, strip_html
 from jobhunt.sources.base import register
 
@@ -24,12 +25,22 @@ class HackerNewsSource:
 
     name = "hackernews"
 
-    def __init__(self, keywords: list[str], role_keywords: list[str] | None = None):
+    def __init__(
+        self,
+        keywords: list[str],
+        role_keywords: list[str] | None = None,
+        deadline_seconds: float = 120.0,
+    ):
         self.keywords = [k.casefold() for k in keywords]
         # A live scan showed a location keyword alone matches every remote job of
         # any kind — Sales, Copywriting and Freelance Writing all came through on
         # "remote". A posting must also read as engineering work.
         self.role_keywords = [k.casefold() for k in (role_keywords or [])]
+        # This adapter walks up to MAX_COMMENTS comments, one HTTP call each, and
+        # once role-filtered most of them yield nothing. The scan's own deadline
+        # cannot help: all that work happens inside a single next(), which the
+        # consuming loop has no way to interrupt. So bound it here, at the source.
+        self.deadline_seconds = deadline_seconds
 
     def fetch(self) -> Iterable[RawPosting]:
         with httpx.Client(timeout=TIMEOUT, headers={"User-Agent": "jobhunt"}) as client:
@@ -39,7 +50,15 @@ class HackerNewsSource:
             story = self._json(client, ITEM_URL.format(id=thread_id))
             if not story:
                 return
+            started = time.monotonic()
             for comment_id in (story.get("kids") or [])[:MAX_COMMENTS]:
+                if time.monotonic() - started > self.deadline_seconds:
+                    logger.warning(
+                        "hackernews: stopped at the %ss deadline; "
+                        "the thread has more comments than that budget allows",
+                        self.deadline_seconds,
+                    )
+                    return
                 try:
                     comment = self._json(client, ITEM_URL.format(id=comment_id))
                     if not comment or comment.get("deleted") or comment.get("dead"):
@@ -56,11 +75,11 @@ class HackerNewsSource:
                         company=company,
                         location=None,
                         remote="remote" in text.casefold(),
-                        description=text,
+                        description=truncate_description(text),
                         posted_at=None,
                         content_hash=posting_hash(title, company, text),
                     )
-                except (KeyError, TypeError) as exc:
+                except (KeyError, TypeError, AttributeError) as exc:
                     logger.warning("%s: skipping malformed item: %s", self.name, exc)
 
     def _latest_thread(self, client: httpx.Client) -> str | None:

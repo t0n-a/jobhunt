@@ -3,7 +3,7 @@ from collections.abc import Iterable
 
 import httpx
 
-from jobhunt.jobs.models import RawPosting, posting_hash
+from jobhunt.jobs.models import RawPosting, posting_hash, truncate_description
 from jobhunt.sources.ats import TIMEOUT, parse_iso, strip_html
 from jobhunt.sources.base import register
 
@@ -62,11 +62,11 @@ class LandingJobsSource:
                     company=company,
                     location=location,
                     remote=bool(item.get("remote")),
-                    description=description,
+                    description=truncate_description(description),
                     posted_at=parse_iso(item.get("published_at")),
                     content_hash=posting_hash(title, company, description),
                 )
-            except (KeyError, TypeError) as exc:
+            except (KeyError, TypeError, AttributeError) as exc:
                 logger.warning("%s: skipping malformed item: %s", self.name, exc)
 
 
@@ -116,11 +116,11 @@ class ITJobsSource:
                     company=company,
                     location=location,
                     remote=False,
-                    description=description,
+                    description=truncate_description(description),
                     posted_at=None,
                     content_hash=posting_hash(title, company, description),
                 )
-            except (KeyError, TypeError) as exc:
+            except (KeyError, TypeError, AttributeError) as exc:
                 logger.warning("%s: skipping malformed item: %s", self.name, exc)
 
 

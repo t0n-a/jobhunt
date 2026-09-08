@@ -4,7 +4,7 @@ from collections.abc import Iterable
 import feedparser
 import httpx
 
-from jobhunt.jobs.models import RawPosting, posting_hash
+from jobhunt.jobs.models import RawPosting, posting_hash, truncate_description
 from jobhunt.sources.ats import TIMEOUT, parse_iso, strip_html
 from jobhunt.sources.base import register
 
@@ -48,11 +48,11 @@ class RemotiveSource:
                     company=company,
                     location=item.get("candidate_required_location"),
                     remote=True,
-                    description=description,
+                    description=truncate_description(description),
                     posted_at=parse_iso(item.get("publication_date")),
                     content_hash=posting_hash(title, company, description),
                 )
-            except (KeyError, TypeError) as exc:
+            except (KeyError, TypeError, AttributeError) as exc:
                 logger.warning("%s: skipping malformed item: %s", self.name, exc)
 
 
@@ -80,11 +80,11 @@ class RemoteOkSource:
                     company=company,
                     location=item.get("location"),
                     remote=True,
-                    description=description,
+                    description=truncate_description(description),
                     posted_at=parse_iso(item.get("date")),
                     content_hash=posting_hash(title, company, description),
                 )
-            except (KeyError, TypeError) as exc:
+            except (KeyError, TypeError, AttributeError) as exc:
                 logger.warning("%s: skipping malformed item: %s", self.name, exc)
 
 
@@ -121,9 +121,9 @@ class WeWorkRemotelySource:
                     company=company,
                     location=entry.get("region"),
                     remote=True,
-                    description=description,
+                    description=truncate_description(description),
                     posted_at=None,
                     content_hash=posting_hash(title, company, description),
                 )
-            except (KeyError, TypeError) as exc:
+            except (KeyError, TypeError, AttributeError) as exc:
                 logger.warning("%s: skipping malformed entry: %s", self.name, exc)

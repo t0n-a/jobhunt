@@ -48,7 +48,9 @@ def build_sources(cfg: SourcesConfig, itjobs_key: str | None) -> list:
         "remoteok": RemoteOkSource,
         "weworkremotely": WeWorkRemotelySource,
         "landingjobs": LandingJobsSource,
-        "hackernews": lambda: HackerNewsSource(cfg.location_keywords),
+        "hackernews": lambda: HackerNewsSource(
+            cfg.location_keywords, cfg.role_keywords, SOURCE_DEADLINE_SECONDS
+        ),
         "itjobs": lambda: ITJobsSource(itjobs_key),
     }
     sources = []
@@ -72,7 +74,24 @@ def _drain(source, deadline_seconds: int) -> tuple[list, bool]:
     """
     collected = []
     started = time.monotonic()
-    for posting in source.fetch():
+    stream = iter(source.fetch())
+    while True:
+        # next() rather than a for-loop: the clock must advance while the adapter
+        # is WORKING, not only when it yields. Hacker News walks up to 400
+        # comments and, once role-filtered, yields nothing for most of them — a
+        # yield-only check would never fire.
+        if time.monotonic() - started > deadline_seconds:
+            logger.warning(
+                "source %s hit the %ss deadline after %d postings; keeping those",
+                source.name,
+                deadline_seconds,
+                len(collected),
+            )
+            return collected, True
+        try:
+            posting = next(stream)
+        except StopIteration:
+            return collected, False
         collected.append(posting)
         if time.monotonic() - started > deadline_seconds:
             logger.warning(

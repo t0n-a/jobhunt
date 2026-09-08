@@ -168,7 +168,7 @@ def test_a_source_that_overruns_its_deadline_keeps_what_it_collected(tmp_path):
         delay=0.05,
     )
 
-    result = run_scan(engine, [slow], FakeProvider([score_payload()]), deadline_seconds=0)
+    result = run_scan(engine, [slow], FakeProvider([score_payload()]), deadline_seconds=0.01)
 
     assert result.timed_out_sources == ["slow"]
     assert result.fetched == 1  # stopped after the first, kept it
@@ -185,7 +185,7 @@ def test_a_timed_out_source_does_not_block_later_sources(tmp_path):
             StubSource("fast", [posting(title="B", company="Two")]),
         ],
         FakeProvider([score_payload(), score_payload()]),
-        deadline_seconds=0,
+        deadline_seconds=0.01,
     )
 
     assert "slow" in result.timed_out_sources
@@ -273,3 +273,34 @@ def test_scan_command_tells_the_user_how_to_fix_an_empty_profile(tmp_path):
     )
 
     assert "config.yaml" in run_scan_command(cfg)
+
+
+def test_deadline_stops_between_items_but_cannot_preempt_a_blocking_fetch(tmp_path):
+    """Documents a real limit. _drain checks the clock before and after each
+    next(), so it stops BETWEEN items — but work inside a single next() cannot be
+    interrupted from the consuming loop. That is why HackerNewsSource carries its
+    own internal deadline: all of its 400 sequential fetches happen inside one
+    next() and no check out here could ever bound them."""
+    import time as _time
+
+    class SlowBetweenItems:
+        name = "slow-between"
+
+        def fetch(self):
+            yield posting(title="A", company="One")
+            _time.sleep(0.05)
+            yield posting(title="B", company="Two")
+            yield posting(title="C", company="Three")
+
+    engine = fresh(tmp_path)
+    result = run_scan(
+        engine,
+        [SlowBetweenItems()],
+        FakeProvider([score_payload(), score_payload()]),
+        deadline_seconds=0.01,
+    )
+
+    assert result.timed_out_sources == ["slow-between"]
+    # A and B arrived (the sleep sits inside B's next(), which cannot be
+    # interrupted); C was never requested because the deadline stopped the loop.
+    assert result.fetched == 2

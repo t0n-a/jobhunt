@@ -88,3 +88,52 @@ def test_hackernews_comment_without_pipes_still_yields_a_bounded_posting():
     assert len(postings[0].title) <= 200
     assert len(postings[0].company) <= 200
     assert postings[0].description.startswith("We are a small team in Porto")
+
+
+@respx.mock
+def test_hackernews_stops_at_its_own_deadline():
+    """All 400 comment fetches happen inside one next(), so the scan's deadline
+    cannot bound them — the adapter must bound itself."""
+    respx.get(url__startswith=SEARCH).mock(
+        return_value=httpx.Response(
+            200, json={"hits": [{"objectID": "1", "title": "Ask HN: Who is hiring?"}]}
+        )
+    )
+    respx.get(f"{ITEM}/1.json").mock(
+        return_value=httpx.Response(200, json={"kids": list(range(100, 140))})
+    )
+    for i in range(100, 140):
+        respx.get(f"{ITEM}/{i}.json").mock(
+            return_value=httpx.Response(
+                200, json={"id": i, "by": "x", "text": "Acme | Porto | Backend Engineer"}
+            )
+        )
+
+    source = HackerNewsSource(["porto"], ["engineer"], deadline_seconds=0)
+    assert list(source.fetch()) == []
+
+
+@respx.mock
+def test_hackernews_role_filter_drops_non_engineering_postings():
+    """A live scan pulled in Sales, Copywriting and Freelance Writing because a
+    location keyword alone matches every remote listing."""
+    respx.get(url__startswith=SEARCH).mock(
+        return_value=httpx.Response(
+            200, json={"hits": [{"objectID": "1", "title": "Ask HN: Who is hiring?"}]}
+        )
+    )
+    respx.get(f"{ITEM}/1.json").mock(return_value=httpx.Response(200, json={"kids": [10, 11]}))
+    respx.get(f"{ITEM}/10.json").mock(
+        return_value=httpx.Response(
+            200, json={"id": 10, "by": "a", "text": "Nowhere Inc | Remote | Copywriter"}
+        )
+    )
+    respx.get(f"{ITEM}/11.json").mock(
+        return_value=httpx.Response(
+            200, json={"id": 11, "by": "b", "text": "Acme | Remote | Backend Engineer"}
+        )
+    )
+
+    titles = [p.title for p in HackerNewsSource(["remote"], ["engineer", "developer"]).fetch()]
+
+    assert titles == ["Backend Engineer"]

@@ -9,6 +9,19 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
+# Descriptions are interpolated into an LLM prompt that AgyProvider passes as an
+# argv element, so an unbounded one can exceed ARG_MAX and fail the whole call.
+# Truncating at the model boundary keeps the hash, the store and the prompt
+# agreeing on one bounded value.
+MAX_DESCRIPTION_CHARS = 20_000
+
+
+def truncate_description(text: str) -> str:
+    if len(text) <= MAX_DESCRIPTION_CHARS:
+        return text
+    return text[:MAX_DESCRIPTION_CHARS] + "\n[truncated]"
+
+
 def posting_hash(title: str, company: str, description: str) -> str:
     """Stable content hash used for dedupe and for the score cache."""
     payload = "\x1f".join(part.strip().casefold() for part in (title, company, description))
