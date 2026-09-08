@@ -14,4 +14,11 @@ def get_store(request: Request):
 
 
 def get_llm(request: Request):
-    return build_provider(request.app.state.config.llm)
+    """One provider per app, not per request.
+
+    Scoring a batch spawns one subprocess per posting otherwise.
+    """
+    app = request.app
+    if getattr(app.state, "llm", None) is None:
+        app.state.llm = build_provider(app.state.config.llm)
+    return app.state.llm
