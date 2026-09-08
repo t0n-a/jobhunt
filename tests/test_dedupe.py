@@ -16,27 +16,27 @@ def store(tmp_path):
 
 
 def make_posting(**over) -> RawPosting:
-    d = dict(
-        source="greenhouse",
-        external_id="1",
-        url="https://example.com/1",
-        title="Senior Backend Engineer (m/f)",
-        company="Acme Inc.",
-        description="Build APIs.",
-        content_hash=posting_hash("Senior Backend Engineer (m/f)", "Acme Inc.", "Build APIs."),
-    )
+    d = {
+        "source": "greenhouse",
+        "external_id": "1",
+        "url": "https://example.com/1",
+        "title": "Senior Backend Engineer (m/f)",
+        "company": "Acme Inc.",
+        "description": "Build APIs.",
+        "content_hash": posting_hash("Senior Backend Engineer (m/f)", "Acme Inc.", "Build APIs."),
+    }
     d.update(over)
     return RawPosting(**d)
 
 
 def make_job(**over) -> Job:
-    d = dict(
-        title="Senior Backend Engineer",
-        company="Acme",
-        description="Build APIs.",
-        url="https://other.example/9",
-        content_hash="different",
-    )
+    d = {
+        "title": "Senior Backend Engineer",
+        "company": "Acme",
+        "description": "Build APIs.",
+        "url": "https://other.example/9",
+        "content_hash": "different",
+    }
     d.update(over)
     return Job(**d)
 
