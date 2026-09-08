@@ -104,3 +104,26 @@ def test_the_shortlist_is_deterministic_for_equal_scores():
     second = shortlist_atoms(list(reversed(atoms)), ["Python"], limit=4)
 
     assert [a.title for a in first] == [a.title for a in second]
+
+
+def test_a_keyword_inside_a_longer_word_is_not_a_match():
+    """ "Go" is a substring of "Django" and "MongoDB". A substring test would
+    shortlist a Django project for a Go posting, on evidence the atom never
+    gave."""
+    django = atom("API", skills=["Python"], description="Built a REST API with Django and MongoDB.")
+
+    assert shortlist_atoms([django], ["Go"]) == []
+
+
+def test_a_one_letter_keyword_does_not_match_arbitrary_prose():
+    """R is a real posting keyword. Matched as a substring it appears in almost
+    every word, which would shortlist the entire atom store."""
+    unrelated = atom("Scraper", skills=["Python"], description="Wrote a scraper for the server.")
+
+    assert shortlist_atoms([unrelated], ["R"]) == []
+
+
+def test_a_genuine_prose_mention_still_counts():
+    mentioned = atom("Pipeline", skills=[], description="Deployed it with Terraform.")
+
+    assert [a.title for a in shortlist_atoms([mentioned], ["Terraform"])] == ["Pipeline"]

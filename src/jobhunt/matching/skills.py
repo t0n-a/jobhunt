@@ -10,6 +10,8 @@ wrong merge ("Java" into "JavaScript") would send the user to learn the wrong
 thing, which is worse than leaving two entries unmerged.
 """
 
+import re
+
 # alias (casefolded) -> canonical display name
 SKILL_ALIASES: dict[str, str] = {
     "amazon web services": "AWS",
@@ -79,3 +81,17 @@ def canonical_skills(names) -> list[str]:
             seen.add(key)
             out.append(canonical)
     return out
+
+
+def mentions_term(haystack: str, term: str, *, case_sensitive: bool = False) -> bool:
+    """Does `haystack` name `term` as a word rather than as a substring?
+
+    A plain `in` test reads "Go" inside "Django" and "MongoDB", and a one-letter
+    term such as "R" inside almost any prose. A plain \b fails the other way on
+    the real names of tools, whose edges are not word characters — "C#", ".NET",
+    "C++" — so the boundaries are spelled out instead.
+    """
+    if not haystack or not term:
+        return False
+    pattern = rf"(?<![A-Za-z0-9+#.]){re.escape(term)}(?![A-Za-z0-9+#])"
+    return re.search(pattern, haystack, 0 if case_sensitive else re.IGNORECASE) is not None

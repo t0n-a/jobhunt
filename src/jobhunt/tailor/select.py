@@ -1,4 +1,4 @@
-from jobhunt.matching.skills import canonical_skill
+from jobhunt.matching.skills import canonical_skill, mentions_term
 from jobhunt.profile.models import AtomKind, EvidenceAtom
 
 # A tagged skill is a claim the atom makes about itself. A keyword appearing in
@@ -52,6 +52,6 @@ def _score(atom: EvidenceAtom, wanted: set[str]) -> int:
     for keyword in wanted:
         if keyword in tagged:
             score += SKILL_WEIGHT
-        elif keyword in haystack:
+        elif mentions_term(haystack, keyword):
             score += TEXT_WEIGHT
     return score
