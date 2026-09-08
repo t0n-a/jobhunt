@@ -9,7 +9,8 @@ Phases 1 through 3 are built today: the profile subsystem, job discovery with sc
 - **Phase 1 (Complete):** Evidence-atom store, guided LLM interview, CV/GitHub/coursework importers, and local web UI.
 - **Phase 2 (Complete):** Nine job sources, dedupe into canonical jobs, LLM scoring with track tagging, and a ranked inbox.
 - **Phase 3 (Complete):** The skill-gap coach, converting aggregate gaps into concrete daily tasks.
-- **Phases 4–5 (Designed, not built):** Resume tailoring and LinkedIn integration.
+- **Phase 4 (Complete):** Resume tailoring with verifiable facts and ATS self-checking.
+- **Phase 5 (Designed, not built):** LinkedIn integration.
 
 ## Core Concept: Evidence Atoms
 
@@ -22,10 +23,11 @@ Downstream tailoring selects and rephrases existing atoms for a specific job; it
 - **OS:** Linux or WSL (reference environment is WSL2 on Windows).
 - **Python:** 3.12, pinned via `uv python pin 3.12`. Do not use Python 3.13+, as several dependencies lack compatible wheels.
 - **Package manager:** [uv](https://astral.sh/uv).
-- **PDF parser:** `poppler-utils` for `pdftotext` (used during PDF CV import).
+- **PDF tooling:** A TeX distribution providing `latexmk`, and `poppler-utils` providing `pdftotext` (used during PDF CV import and tailoring ATS checks). On Debian or Ubuntu:
   ```bash
-  sudo apt install poppler-utils
+  sudo apt install latexmk texlive-latex-recommended poppler-utils
   ```
+  Without them, everything works except the PDF step.
 - **LLM provider:** Antigravity CLI (`agy`) by default (see LLM Provider below).
 
 ## Setup
@@ -101,6 +103,19 @@ The coach converts your aggregated skill gaps into concrete, day-sized tasks:
 - **`jobhunt notify`:** Pushes the current task to Telegram. Requires `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in `.env`.
 
 **No streaks by design:** The coach shows only one task at a time and maintains NO streak counters. A broken-streak screen converts a lapse into abandonment, so missing days must cost nothing.
+
+## Tailoring
+
+Opening a job and pressing "Tailor a resume for this" produces an Application: extracted ATS keywords, selected evidence, rewritten bullets, and a cover letter.
+
+Because an LLM fabricates facts when rewriting a resume, the system structurally guarantees this cannot happen:
+- Every bullet is checked against the evidence atom it came from. A bullet stating a number or naming a technology the evidence does not support is dropped, and shown separately with the reason — so the user can tell a verifier bug from a model that is inventing.
+- Only confirmed atoms are eligible; unconfirmed atoms are unreviewed model output and cannot reach a document an employer reads.
+- Bullets can be edited; an edited bullet is marked as the user's own and is not re-checked, because those are their words and they are responsible for them.
+
+"Render the PDF" builds it with `latexmk`, then re-reads the result with `pdftotext` and reports keyword coverage — a PDF that looks perfect on screen can parse to nothing, and this is what turns that silent failure into a number. 
+
+You can set optional `phone`, `linkedin`, and `website` fields in `config.yaml` to include them on the generated PDF.
 
 ## Repository Layout
 
