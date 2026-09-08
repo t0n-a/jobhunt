@@ -1,3 +1,6 @@
+import shutil
+from pathlib import Path
+
 import pytest
 from sqlmodel import Session
 
@@ -8,7 +11,9 @@ from jobhunt.llm import FakeProvider
 from jobhunt.matching.score import EmptyProfileError
 from jobhunt.profile.models import AtomKind, EvidenceAtom, Provenance
 from jobhunt.profile.store import AtomStore
-from jobhunt.tailor.pipeline import mark_applied, tailor_job
+from jobhunt.tailor.pipeline import mark_applied, render_application, tailor_job
+
+HAS_LATEX = shutil.which("latexmk") is not None and shutil.which("pdftotext") is not None
 
 
 @pytest.fixture
@@ -158,6 +163,40 @@ def test_a_fresh_application_has_not_been_rendered(session):
 
     assert application.pdf_path is None
     assert application.coverage is None
+
+
+def test_a_document_whose_every_bullet_is_dropped_still_persists(session):
+    """The user needs to see WHAT the model tried to claim. Crashing here would
+    hand them an error where the explanation should be, and the cover letter is
+    skipped rather than written from nothing."""
+    job = seed_job(session)
+    atom = seed_atom(session)
+    bullets = [{"atom_id": atom.id, "text": "Cut latency by 40%."}]
+
+    application = tailor_job(
+        session, job, FakeProvider(responses(atom.id, bullets=bullets)), profile=profile()
+    )
+
+    assert application.id is not None
+    assert application.cover_letter == ""
+    assert len(application.dropped_bullets) == 1
+    assert application.status == "drafted"
+
+
+@pytest.mark.latex
+@pytest.mark.skipif(not HAS_LATEX, reason="needs latexmk and pdftotext")
+def test_render_application_stores_a_path_relative_to_the_data_dir(session, tmp_path):
+    """The row outlives the directory it was written in: an absolute path breaks
+    the moment the data directory moves or the repo is cloned elsewhere."""
+    job = seed_job(session)
+    atom = seed_atom(session)
+    application = tailor_job(session, job, FakeProvider(responses(atom.id)), profile=profile())
+
+    rendered = render_application(session, application, profile=profile(), data_dir=tmp_path)
+
+    assert not Path(rendered.pdf_path).is_absolute()
+    assert (tmp_path / rendered.pdf_path).exists()
+    assert rendered.coverage is not None
 
 
 def test_mark_applied_records_when(session):
