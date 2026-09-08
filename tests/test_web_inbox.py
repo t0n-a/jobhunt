@@ -160,3 +160,63 @@ def test_rescore_replaces_the_existing_score(make_client):
         scores = session.exec(select(Score).where(Score.job_id == job_id)).all()
     assert len(scores) == 1
     assert scores[0].fit_score == 95
+
+
+def seed_unscored(client, title="Unscored role") -> int:
+    """A job with no Score row — what a scan leaves behind when the LLM fails."""
+    with Session(client.engine) as session:
+        job = Job(
+            title=title,
+            company="Acme",
+            description="Python and Redis.",
+            url="https://example.com/2",
+            content_hash=posting_hash(title, "Acme", "Python and Redis."),
+        )
+        session.add(job)
+        session.commit()
+        session.refresh(job)
+        return job.id
+
+
+def test_unscored_jobs_still_appear_marked(make_client):
+    """A failed score must stay visible and distinguishable from a job that was
+    never found at all — hiding it makes the two indistinguishable."""
+    client = make_client([])
+    seed_unscored(client, title="Zephyr unscored role")
+
+    text = client.get("/jobs").text
+
+    assert "Zephyr unscored role" in text
+    assert "unscored" in text
+
+
+def test_unscored_jobs_sort_after_every_scored_job(make_client):
+    client = make_client([])
+    seed_unscored(client, title="Zephyr unscored role")
+    seed(client, title="Quixote low fit", fit=1)
+
+    text = client.get("/jobs").text
+
+    assert text.index("Quixote low fit") < text.index("Zephyr unscored role")
+
+
+def test_track_breakdown_excludes_unscored_jobs(make_client):
+    client = make_client([])
+    seed(client, title="Quixote scored", track="devops")
+    seed_unscored(client, title="Zephyr unscored role")
+
+    text = client.get("/jobs").text
+
+    # One scored devops job: the breakdown must count it once and not invent a
+    # track for the unscored one.
+    assert "devops · 1" in text
+
+
+def test_inbox_with_only_unscored_jobs_shows_no_track_breakdown(make_client):
+    client = make_client([])
+    seed_unscored(client, title="Zephyr unscored role")
+
+    text = client.get("/jobs").text
+
+    assert "Zephyr unscored role" in text
+    assert "best matches look like" not in text
