@@ -237,11 +237,29 @@ def _clean_bullets(raw) -> list[dict]:
     for bullet in raw or []:
         if not isinstance(bullet, dict):
             continue
-        atom_id = bullet.get("atom_id")
+        atom_id = _as_atom_id(bullet.get("atom_id"))
         text = bullet.get("text")
         # No id, no bullet: an unattributable claim cannot be checked, and an
         # unchecked claim is exactly what this phase exists to prevent.
-        if not isinstance(atom_id, int) or not isinstance(text, str) or not text.strip():
+        if atom_id is None or not isinstance(text, str) or not text.strip():
             continue
         bullets.append({"atom_id": atom_id, "text": text.strip(), "source": "model"})
     return bullets
+
+
+def _as_atom_id(value) -> int | None:
+    """Coerce a model's atom id to an int, or None when it is not one.
+
+    Two traps make the obvious isinstance check wrong. In Python a bool IS an
+    int, so `{"atom_id": true}` would sail through and be stored as True. And
+    models routinely emit a numeric STRING for an integer field despite the
+    schema: dropping those silently would empty the resume and report itself as
+    "no usable bullets", pointing the user at the model rather than at a type.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value.strip())
+    return None

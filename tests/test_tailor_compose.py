@@ -94,6 +94,30 @@ def test_a_bullet_without_an_atom_id_is_dropped():
     assert "Led the company." not in texts
 
 
+def test_a_string_atom_id_is_accepted_as_the_integer_it_is():
+    """Models emit "1" for an integer field routinely. Dropping those silently
+    would empty the resume and surface as "no usable bullets", pointing the user
+    at the model rather than at a type mismatch."""
+    doc = payload()
+    doc["sections"][0]["entries"][0]["bullets"] = [{"atom_id": "1", "text": "Built it."}]
+    llm = FakeProvider([doc])
+
+    composed = compose_resume(job(), [atom(1)], ["Python"], llm, profile=profile())
+
+    assert composed["sections"][0]["entries"][0]["bullets"][0]["atom_id"] == 1
+
+
+def test_a_boolean_atom_id_is_refused():
+    """isinstance(True, int) is True in Python, so the obvious type check would
+    store a bool as an atom id and hand the verifier something to look up."""
+    doc = payload()
+    doc["sections"][0]["entries"][0]["bullets"] = [{"atom_id": True, "text": "Built it."}]
+    llm = FakeProvider([doc])
+
+    with pytest.raises(LLMError):
+        compose_resume(job(), [atom(1)], ["Python"], llm, profile=profile())
+
+
 def test_the_shortlist_reaches_the_prompt_with_its_ids():
     llm = FakeProvider([payload()])
 
