@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from sqlmodel import Session, select
 
 from jobhunt.config import SourcesConfig
-from jobhunt.jobs.models import Score
+from jobhunt.jobs.models import Job, Score
 from jobhunt.jobs.store import JobStore
 from jobhunt.llm import LLMError, LLMProvider
 from jobhunt.matching.score import score_job
@@ -27,6 +27,16 @@ logger = logging.getLogger(__name__)
 # into a scan that never visibly finishes.
 SOURCE_DEADLINE_SECONDS = 180
 
+# Scoring is one LLM call per job, so a first scan of 200 postings is roughly
+# forty minutes of silence. A scan the user avoids running is a coach that goes
+# stale, so scoring is bounded too and says what it left behind.
+SCORING_DEADLINE_SECONDS = 1800
+
+# How many previously-unscored jobs one scan will retry. A job stored while the
+# LLM was down must not stay unscored forever, but neither should a backlog turn
+# every scan into a full rescore.
+SWEEP_LIMIT = 100
+
 
 @dataclass
 class ScanResult:
@@ -36,6 +46,7 @@ class ScanResult:
     failed_sources: list[str] = field(default_factory=list)
     timed_out_sources: list[str] = field(default_factory=list)
     scoring_skipped: str | None = None
+    unscored_remaining: int = 0
 
 
 def build_sources(cfg: SourcesConfig, itjobs_key: str | None) -> list:
@@ -109,6 +120,7 @@ def run_scan(
     sources: list,
     llm: LLMProvider,
     deadline_seconds: int = SOURCE_DEADLINE_SECONDS,
+    scoring_deadline_seconds: int = SCORING_DEADLINE_SECONDS,
 ) -> ScanResult:
     """Fetch every source, dedupe into jobs, and score anything unscored.
 
@@ -155,7 +167,19 @@ def run_scan(
 
         result.jobs = len(seen_job_ids)
 
-        for job_id in seen_job_ids if atoms else []:
+        queue = list(seen_job_ids) + _sweep_unscored(session, skip=seen_job_ids)
+        started = time.monotonic()
+        for index, job_id in enumerate(queue if atoms else []):
+            if time.monotonic() - started >= scoring_deadline_seconds:
+                logger.warning(
+                    "scoring hit the %ss deadline after %d jobs; %d left for the next scan",
+                    scoring_deadline_seconds,
+                    result.scored,
+                    len(queue) - index,
+                )
+                break
+            if index and index % 10 == 0:
+                logger.info("scoring %d/%d", index, len(queue))
             job = job_store.get(job_id)
             already = session.exec(
                 select(Score).where(Score.job_id == job_id, Score.content_hash == job.content_hash)
@@ -175,4 +199,29 @@ def run_scan(
                 session.rollback()
                 raise
 
+        result.unscored_remaining = len(_unscored_job_ids(session))
+
     return result
+
+
+def _unscored_job_ids(session: Session) -> list[int]:
+    """Jobs whose CURRENT text has no score.
+
+    A job scored before its description grew counts as unscored: the old
+    judgement describes text the job no longer has.
+    """
+    scored = {(score.job_id, score.content_hash) for score in session.exec(select(Score)).all()}
+    return [
+        job.id
+        for job in session.exec(select(Job)).all()
+        if (job.id, job.content_hash) not in scored
+    ]
+
+
+def _sweep_unscored(session: Session, *, skip: set[int]) -> list[int]:
+    """A bounded retry of jobs an earlier scan left unscored.
+
+    run_scan only ever looked at jobs seen in THIS run, so a job stored while the
+    LLM was down would stay unscored forever.
+    """
+    return [job_id for job_id in _unscored_job_ids(session) if job_id not in skip][:SWEEP_LIMIT]

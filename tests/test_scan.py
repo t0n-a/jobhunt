@@ -304,3 +304,30 @@ def test_deadline_stops_between_items_but_cannot_preempt_a_blocking_fetch(tmp_pa
     # A and B arrived (the sleep sits inside B's next(), which cannot be
     # interrupted); C was never requested because the deadline stopped the loop.
     assert result.fetched == 2
+
+
+def test_scoring_stops_at_its_deadline_and_reports_what_is_left(tmp_path):
+    """A 200-job scan is 40 minutes; the user must be able to bound it."""
+    engine = fresh(tmp_path)
+    postings = [posting(title=f"Role {i}", company=f"Co{i}") for i in range(5)]
+
+    result = run_scan(
+        engine,
+        [StubSource("s", postings)],
+        FakeProvider([score_payload() for _ in range(5)]),
+        scoring_deadline_seconds=0,
+    )
+
+    assert result.jobs == 5
+    assert result.scored == 0
+    assert result.unscored_remaining == 5
+
+
+def test_a_previously_unscored_job_is_retried_on_the_next_scan(tmp_path):
+    """A job stored while the LLM was down must not stay unscored forever."""
+    engine = fresh(tmp_path)
+
+    run_scan(engine, [StubSource("s", [posting()])], FakeProvider([]))  # scoring fails
+    second = run_scan(engine, [StubSource("s", [])], FakeProvider([score_payload()]))
+
+    assert second.scored == 1

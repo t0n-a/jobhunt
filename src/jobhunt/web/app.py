@@ -11,8 +11,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
 
+from jobhunt.coach.engine import Coach
+from jobhunt.coach.models import Energy
 from jobhunt.config import Config
 from jobhunt.db import create_engine_for, init_db
+from jobhunt.growth.gaps import compute_gaps
 from jobhunt.jobs.models import Job, Score
 from jobhunt.jobs.store import JobStore
 from jobhunt.llm import LLMError, LLMProvider
@@ -314,5 +317,71 @@ def create_app(config: Config) -> FastAPI:
             db.add(score)
             db.commit()
         return RedirectResponse(f"/jobs/{job_id}", status_code=303)
+
+    def _coach(db: Session, llm) -> Coach:
+        return Coach(
+            db,
+            llm,
+            github_user=config.profile.github_username,
+            github_token=os.environ.get("GITHUB_TOKEN"),
+        )
+
+    def _energy(raw: str) -> Energy:
+        """An unknown level must not 500 the one page the user opens daily."""
+        try:
+            return Energy(raw)
+        except ValueError:
+            return Energy.NORMAL
+
+    @app.get("/today")
+    def today_page(request: Request, llm: LLMProvider = Depends(get_llm)):
+        energy = _energy(request.query_params.get("energy", "normal"))
+        with Session(app.state.engine) as db:
+            today = _coach(db, llm).today(energy)
+            return templates.TemplateResponse(
+                request, "today.html", {"today": today, "energy": energy}
+            )
+
+    @app.post("/today/energy")
+    def today_energy(energy: str = Form("normal")):
+        return RedirectResponse(f"/today?energy={_energy(energy).value}", status_code=303)
+
+    @app.post("/today/done")
+    def today_done(
+        proof_note: str = Form(""),
+        llm: LLMProvider = Depends(get_llm),
+    ):
+        with Session(app.state.engine) as db:
+            _coach(db, llm).complete_current(proof_note or None)
+        return RedirectResponse("/today", status_code=303)
+
+    @app.post("/today/swap")
+    def today_swap(llm: LLMProvider = Depends(get_llm)):
+        with Session(app.state.engine) as db:
+            _coach(db, llm).swap_current()
+        return RedirectResponse("/today", status_code=303)
+
+    @app.post("/today/verify")
+    def today_verify(request: Request, llm: LLMProvider = Depends(get_llm)):
+        with Session(app.state.engine) as db:
+            result = _coach(db, llm).verify_current()
+        return templates.TemplateResponse(
+            request, "partials/verify_result.html", {"result": result}
+        )
+
+    @app.get("/gaps")
+    def gaps_page(request: Request):
+        with Session(app.state.engine) as db:
+            return templates.TemplateResponse(request, "gaps.html", {"gaps": compute_gaps(db)})
+
+    @app.post("/gaps/{skill}/start")
+    def gap_start(skill: str, llm: LLMProvider = Depends(get_llm)):
+        with Session(app.state.engine) as db:
+            gap = next((g for g in compute_gaps(db) if g.skill == skill), None)
+            if gap is None:
+                raise HTTPException(status_code=404, detail="No such gap")
+            with _importer_errors():
+                _coach(db, llm).start_quest(gap)
+        return RedirectResponse("/today", status_code=303)
 
     return app

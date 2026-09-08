@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Today — jobhunt{% endblock %}
+{% block content %}
+{% if not today.step %}
+  <h1>Nothing queued</h1>
+  <p class="empty">No active quest. Pick a <a href="/gaps">skill gap</a> to start one.</p>
+{% else %}
+  <p class="why">{{ today.why }}</p>
+  <h1>{{ today.step.title }}</h1>
+  <p class="meta">About {{ today.minutes }} minutes</p>
+  <form method="post" action="/today/energy" class="energy">
+    {% for level in ["low", "normal", "high"] %}
+      <button type="submit" name="energy" value="{{ level }}"
+              class="secondary{% if energy.value == level %} on{% endif %}">{{ level }}</button>
+    {% endfor %}
+  </form>
+  <p>{{ today.step.instructions }}</p>
+
+  <div class="reward">
+    <strong>What this earns you</strong>
+    <p>{{ today.reward }}</p>
+  </div>
+
+  <form method="post" action="/today/done">
+    <textarea name="proof_note" rows="2" placeholder="What did you make? (optional)"></textarea>
+    <button type="submit">Done</button>
+  </form>
+  <form method="post" action="/today/swap">
+    <button type="submit" class="secondary">Not this one</button>
+  </form>
+  <button hx-post="/today/verify" hx-target="#verify" hx-swap="innerHTML">Check my repo</button>
+  <div id="verify"></div>
+{% endif %}
+{% endblock %}

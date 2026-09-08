@@ -17,3 +17,8 @@ main { max-width: 62rem; margin: 0 auto; padding: 2rem 1.5rem; }
 .tracks { color: var(--muted); }
 details { margin: 1rem 0; }
 details form { display: grid; gap: .5rem; max-width: 40rem; margin-top: .75rem; }
+.why { color: var(--muted); margin-bottom: .25rem; }
+.reward { border-left: 3px solid #d9a441; padding: .5rem 0 .5rem .75rem; margin: 1rem 0; }
+button.secondary { background: none; border: 1px solid var(--line); }
+.energy { display: flex; gap: .4rem; margin: .5rem 0 1rem; }
+.energy button.on { border-color: var(--fg); color: var(--fg); }
