@@ -1,6 +1,7 @@
 import hashlib
 from datetime import UTC, datetime
 
+from sqlalchemy import JSON, Column
 from sqlmodel import Field, SQLModel
 
 
@@ -49,3 +50,24 @@ class Job(SQLModel, table=True):
     first_seen: datetime = Field(default_factory=_now)
     last_seen: datetime = Field(default_factory=_now)
     content_hash: str
+
+
+class Score(SQLModel, table=True):
+    """One LLM judgement of one job against the confirmed profile."""
+
+    __tablename__ = "score"
+
+    id: int | None = Field(default=None, primary_key=True)
+    job_id: int = Field(foreign_key="job.id")
+    fit_score: int
+    # These JSON columns are NOT mutation-tracked. Any change must ASSIGN A NEW
+    # LIST rather than mutate in place, or it silently fails to persist.
+    matched_skills: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    missing_skills: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    red_flags: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    seniority_fit: str
+    track: str
+    rationale: str
+    model: str = ""
+    content_hash: str
+    scored_at: datetime = Field(default_factory=_now)
