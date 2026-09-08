@@ -5,10 +5,12 @@ from jobhunt.matching.skills import SKILL_ALIASES, canonical_skill, mentions_ter
 from jobhunt.profile.models import EvidenceAtom
 from jobhunt.tailor.models import iter_bullets, keep_bullets
 
-# Bounded the same way the evidence side is matched. Without the lookarounds
-# this pulls "95" out of "p95" and then demands the evidence carry a bare 95,
-# dropping a bullet whose percentile the atom states in full.
-NUMBER = re.compile(r"(?<![A-Za-z0-9+#.])\d+(?:[.,]\d+)?(?![A-Za-z0-9+#])")
+# Left-bounded only. The lookbehind stops "95" being pulled out of "p95" and
+# then demanded on its own, which would drop a bullet whose percentile the
+# atom states in full. There is deliberately NO right boundary: a number
+# carrying a unit — "3x throughput", "$50k saved" — is still a number, and
+# that is exactly the shape a fabricated resume metric takes.
+NUMBER = re.compile(r"(?<![A-Za-z0-9+#.])\d+(?:[.,]\d+)?")
 
 # SKILL_ALIASES contains ordinary English words. Matching these case-insensitively
 # would read "the rest of the pipeline" as a REST claim and drop a true bullet, so
@@ -104,16 +106,30 @@ def _invented_number(text: str, haystack: str) -> str | None:
     would silently authorise a fabricated headcount — the exact failure this
     module exists to prevent, reachable from entirely ordinary evidence.
 
-    Extraction is bounded the same way, so a number embedded in a label is never
-    pulled out and demanded on its own: "p95" yields nothing to check, and the
-    reported number is the one actually fabricated rather than the first digits
-    in the line.
+    Extraction is bounded on the left the same way, so a number embedded in a
+    label is never pulled out and demanded on its own: "p95" yields nothing to
+    check, and the reported number is the one actually fabricated rather than
+    the first digits in the line. It is NOT bounded on the right, because
+    "3x throughput" and "$50k saved" are numbers a resume fabricates and a
+    right boundary would make them invisible to this check.
     """
     for match in NUMBER.finditer(text):
         number = match.group(0)
-        if not mentions_term(haystack, number):
+        if not _states_number(haystack, number):
             return number
     return None
+
+
+def _states_number(haystack: str, number: str) -> bool:
+    """Does the evidence carry this number, as a number?
+
+    The left boundary is as strict as extraction, so "9" is not found inside
+    "2019" and "100" is not found inside "10000". The right side forbids only
+    another DIGIT, never a letter, so a unit suffix still counts as evidence:
+    an atom that says "3x throughput" does state the 3.
+    """
+    pattern = rf"(?<![A-Za-z0-9+#.]){re.escape(number)}(?!\d)"
+    return re.search(pattern, haystack) is not None
 
 
 def _invented_technology(text: str, atom: EvidenceAtom, haystack: str) -> str | None:

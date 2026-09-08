@@ -98,6 +98,24 @@ def test_a_number_inside_a_longer_number_is_not_evidence():
     assert result.passed is False
 
 
+def test_a_number_carrying_a_unit_is_still_checked():
+    """ "3x throughput" and "$50k saved" are the shape a fabricated resume metric
+    actually takes. A right-hand boundary on extraction would make every one of
+    them invisible to this check."""
+    source = atom(description="Made the pipeline faster.", skills=["Python"])
+
+    assert verify_bullet(bullet("Improved throughput by 3x."), source, {1}).passed is False
+    assert verify_bullet(bullet("Saved $50k in costs."), source, {1}).passed is False
+
+
+def test_a_unit_suffix_in_the_evidence_counts_as_stating_the_number():
+    """The evidence side must accept the same shape, or a true bullet citing a
+    figure the atom states with a unit would be dropped."""
+    source = atom(description="Got 3x throughput out of the rewrite.", skills=["Python"])
+
+    assert verify_bullet(bullet("Improved throughput by 3x."), source, {1}).passed is True
+
+
 def test_a_year_in_the_evidence_does_not_authorise_a_headcount():
     """This is the ugly case: every atom carrying a four-digit year would
     otherwise authorise several single- and double-digit fabrications."""
