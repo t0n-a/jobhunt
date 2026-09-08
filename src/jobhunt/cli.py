@@ -37,6 +37,8 @@ def run_scan_command(config) -> str:
         f"jobs={result.jobs}",
         f"scored={result.scored}",
     ]
+    if result.unscored_remaining:
+        parts.append(f"unscored={result.unscored_remaining}")
     if result.failed_sources:
         parts.append(f"failed={','.join(result.failed_sources)}")
     if result.timed_out_sources:
