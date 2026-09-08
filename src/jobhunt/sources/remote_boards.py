@@ -1,18 +1,18 @@
 import logging
 from collections.abc import Iterable
-from datetime import datetime
 
 import feedparser
 import httpx
 
 from jobhunt.jobs.models import RawPosting, posting_hash
-from jobhunt.sources.ats import TIMEOUT, strip_html
+from jobhunt.sources.ats import TIMEOUT, parse_iso, strip_html
 from jobhunt.sources.base import register
 
 logger = logging.getLogger(__name__)
 
 REMOTIVE_URL = "https://remotive.com/api/remote-jobs?limit=200"
 REMOTEOK_URL = "https://remoteok.com/api"
+_NOT_A_COMPANY = {"remote", "anywhere", "worldwide", "hiring"}
 WWR_URL = "https://weworkremotely.com/categories/remote-programming-jobs.rss"
 
 
@@ -49,7 +49,7 @@ class RemotiveSource:
                     location=item.get("candidate_required_location"),
                     remote=True,
                     description=description,
-                    posted_at=_parse(item.get("publication_date")),
+                    posted_at=parse_iso(item.get("publication_date")),
                     content_hash=posting_hash(title, company, description),
                 )
             except (KeyError, TypeError) as exc:
@@ -81,7 +81,7 @@ class RemoteOkSource:
                     location=item.get("location"),
                     remote=True,
                     description=description,
-                    posted_at=_parse(item.get("date")),
+                    posted_at=parse_iso(item.get("date")),
                     content_hash=posting_hash(title, company, description),
                 )
             except (KeyError, TypeError) as exc:
@@ -109,6 +109,9 @@ class WeWorkRemotelySource:
                 company, _, role = raw_title.partition(":")
                 title = (role or raw_title).strip()
                 company = company.strip() if role else "unknown"
+                # "Remote: Backend Engineer" has a prefix that is not a company.
+                if company.casefold() in _NOT_A_COMPANY:
+                    company = "unknown"
                 description = strip_html(entry.get("description", ""))
                 yield RawPosting(
                     source=self.name,
@@ -124,12 +127,3 @@ class WeWorkRemotelySource:
                 )
             except (KeyError, TypeError) as exc:
                 logger.warning("%s: skipping malformed entry: %s", self.name, exc)
-
-
-def _parse(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    try:
-        return datetime.fromisoformat(value)
-    except ValueError:
-        return None

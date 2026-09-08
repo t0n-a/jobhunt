@@ -14,7 +14,11 @@ logger = logging.getLogger(__name__)
 TIMEOUT = 30
 _TAG_RE = re.compile(r"<[^>]+>")
 _WS_RE = re.compile(r"\s+")
-REMOTE_WORDS = ("remote", "anywhere", "distributed")
+# Word-boundary matched so "Remoteness, Alaska" is not a remote job.
+_REMOTE_RE = re.compile(r"\b(remote|anywhere|worldwide|distributed)\b", re.IGNORECASE)
+# A posting that names an office or a hybrid arrangement is not fully remote,
+# even when it also says "remote-friendly".
+_ONSITE_RE = re.compile(r"\b(on[- ]?site|hybrid|in[- ]office)\b", re.IGNORECASE)
 
 
 def strip_html(raw: str) -> str:
@@ -27,7 +31,14 @@ def strip_html(raw: str) -> str:
 
 
 def _is_remote(location: str | None) -> bool:
-    return bool(location) and any(w in location.casefold() for w in REMOTE_WORDS)
+    """True only for genuinely remote locations.
+
+    `remote` feeds the scorer, which weighs Porto and remote equally, so a false
+    positive here corrupts a scoring input rather than merely mislabelling a row.
+    """
+    if not location:
+        return False
+    return bool(_REMOTE_RE.search(location)) and not _ONSITE_RE.search(location)
 
 
 def _get(client: httpx.Client, url: str) -> dict | list | None:
@@ -96,7 +107,7 @@ class GreenhouseSource(_AtsSource):
             location=location,
             remote=_is_remote(location),
             description=description,
-            posted_at=_parse_iso(item.get("updated_at")),
+            posted_at=parse_iso(item.get("updated_at")),
             content_hash=posting_hash(title, board, description),
         )
 
@@ -152,12 +163,13 @@ class AshbySource(_AtsSource):
             location=location,
             remote=bool(item.get("isRemote")) or _is_remote(location),
             description=description,
-            posted_at=_parse_iso(item.get("publishedAt")),
+            posted_at=parse_iso(item.get("publishedAt")),
             content_hash=posting_hash(title, board, description),
         )
 
 
-def _parse_iso(value: str | None) -> datetime | None:
+def parse_iso(value: str | None) -> datetime | None:
+    """Shared ISO-8601 parser. Imported by the other source modules."""
     if not value:
         return None
     try:
@@ -166,8 +178,14 @@ def _parse_iso(value: str | None) -> datetime | None:
         return None
 
 
+# Milliseconds since 1970 for any plausible posting date exceed 10^12. A value
+# below that is a seconds-based epoch, which divided by 1000 would silently
+# yield a date near 1970 instead of failing.
+_MIN_EPOCH_MS = 10**12
+
+
 def _parse_epoch_ms(value: int | None) -> datetime | None:
-    if not value:
+    if not value or not isinstance(value, int) or value < _MIN_EPOCH_MS:
         return None
     try:
         return datetime.fromtimestamp(value / 1000, tz=UTC)

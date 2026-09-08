@@ -92,3 +92,21 @@ def test_remote_source_failure_yields_nothing_and_does_not_raise():
     respx.get(url__startswith="https://remotive.com").mock(return_value=httpx.Response(503))
 
     assert list(RemotiveSource().fetch()) == []
+
+
+@respx.mock
+def test_wwr_prefix_that_is_not_a_company_falls_back_to_unknown():
+    rss = """<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel><item>
+<title>Remote: Backend Engineer</title>
+<link>https://weworkremotely.com/jobs/2</link>
+<description>Build things</description>
+</item></channel></rss>"""
+    respx.get(url__startswith="https://weworkremotely.com").mock(
+        return_value=httpx.Response(200, text=rss)
+    )
+
+    p = next(iter(WeWorkRemotelySource().fetch()))
+
+    assert p.company == "unknown"
+    assert p.title == "Backend Engineer"
