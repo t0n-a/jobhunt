@@ -51,7 +51,7 @@ def run_scan_command(config) -> str:
 def main() -> None:
     load_env()
     parser = argparse.ArgumentParser(prog="jobhunt")
-    parser.add_argument("command", choices=["serve", "scan"])
+    parser.add_argument("command", choices=["serve", "scan", "today", "notify"])
     parser.add_argument("--config", type=Path, default=Path("config.yaml"))
     parser.add_argument("--port", type=int, default=8000)
     args = parser.parse_args()
@@ -60,6 +60,40 @@ def main() -> None:
 
     if args.command == "scan":
         print(run_scan_command(config))
+        return
+
+    if args.command in ("today", "notify"):
+        import os
+
+        from sqlmodel import Session
+
+        from jobhunt.coach.engine import Coach
+        from jobhunt.coach.models import Energy
+        from jobhunt.coach.notify import render_task_line, send_telegram
+        from jobhunt.db import create_engine_for, init_db
+        from jobhunt.llm import build_provider
+
+        engine = create_engine_for(config.data_dir / "jobhunt.db")
+        init_db(engine)
+        with Session(engine) as db:
+            coach = Coach(
+                db,
+                build_provider(config.llm),
+                github_user=config.profile.github_username,
+                github_token=os.environ.get("GITHUB_TOKEN"),
+            )
+            line = render_task_line(coach.today(Energy.NORMAL))
+
+        if args.command == "today":
+            print(line)
+            return
+
+        token = os.environ.get("TELEGRAM_BOT_TOKEN")
+        chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+        if not token or not chat_id:
+            print("Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env to use notify.")
+            return
+        print("sent" if send_telegram(token, chat_id, line) else "send failed")
         return
 
     uvicorn.run(create_app(config), host="127.0.0.1", port=args.port)
