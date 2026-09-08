@@ -7,7 +7,7 @@ from jobhunt.tailor.models import (
     delete_bullet,
     edit_bullet,
     iter_bullets,
-    replace_bullets,
+    keep_bullets,
 )
 
 
@@ -97,25 +97,40 @@ def test_iter_bullets_on_an_empty_document_is_empty():
     assert iter_bullets({}) == []
 
 
-def test_replace_bullets_substitutes_in_document_order():
-    kept = [
-        {"atom_id": 1, "text": "One.", "source": "model"},
-        {"atom_id": 2, "text": "Two.", "source": "model"},
+def test_keep_bullets_keeps_only_the_named_ordinals():
+    updated = keep_bullets(resume(), {0, 2})
+
+    assert [b["text"] for _, b in iter_bullets(updated)] == [
+        "Built it in Flask.",
+        "Wrote the importer.",
     ]
 
-    updated = replace_bullets(resume(), kept)
 
-    assert [b["text"] for _, b in iter_bullets(updated)] == ["One.", "Two."]
-    assert len(updated["sections"][0]["entries"][0]["bullets"]) == 2
-    assert updated["sections"][1]["entries"][0]["bullets"] == []
+def test_keep_bullets_leaves_survivors_in_their_own_entry():
+    """Dropping a bullet from an EARLY entry must not pull a later entry's
+    bullet up into it. Selecting by ordinal rather than refilling each entry to
+    its old slot count is what prevents evidence being filed under the wrong
+    project, silently and with no error."""
+    updated = keep_bullets(resume(), {1, 2})
+
+    projects, experience = updated["sections"]
+    assert [b["text"] for b in projects["entries"][0]["bullets"]] == ["Cached in Redis."]
+    assert [b["text"] for b in experience["entries"][0]["bullets"]] == ["Wrote the importer."]
 
 
-def test_replace_bullets_returns_a_new_object():
+def test_keep_bullets_can_empty_the_document():
+    updated = keep_bullets(resume(), set())
+
+    assert iter_bullets(updated) == []
+    assert updated["sections"][0]["entries"][0]["bullets"] == []
+
+
+def test_keep_bullets_returns_a_new_object():
     """JSON columns are not mutation-tracked: an in-place edit is silently lost
     on commit, so every helper hands back a new dict."""
     original = resume()
 
-    updated = replace_bullets(original, [])
+    updated = keep_bullets(original, set())
 
     assert updated is not original
     assert len(list(iter_bullets(original))) == 3

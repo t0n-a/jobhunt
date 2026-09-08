@@ -53,20 +53,24 @@ def iter_bullets(resume_json: dict) -> list[tuple[int, dict]]:
     return out
 
 
-def replace_bullets(resume_json: dict, bullets: list[dict]) -> dict:
-    """Return a NEW document with `bullets` distributed back in document order.
+def keep_bullets(resume_json: dict, keep_indices: set[int]) -> dict:
+    """Return a NEW document holding only the bullets at those flat ordinals.
 
-    Used after verification: the survivors are laid back into the structure they
-    came from, and entries whose every bullet was dropped simply end up empty.
+    Used after verification. Selection is BY ORDINAL rather than by refilling
+    each entry from a flat list of survivors: a positional refill cannot know
+    which entry a survivor came from, so dropping one bullet from an early entry
+    pulls every later bullet up into the wrong entry — filing evidence under the
+    wrong project, with no error and nothing on screen to notice.
     """
     updated = copy.deepcopy(resume_json or {})
-    remaining = list(bullets)
+    index = 0
     for section in updated.get("sections", []):
         for entry in section.get("entries", []):
             kept = []
-            for _ in entry.get("bullets", []):
-                if remaining:
-                    kept.append(remaining.pop(0))
+            for bullet in entry.get("bullets", []):
+                if index in keep_indices:
+                    kept.append(bullet)
+                index += 1
             entry["bullets"] = kept
     return updated
 
