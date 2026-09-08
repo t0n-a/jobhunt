@@ -173,6 +173,28 @@ def test_a_capitalised_rest_claim_is_still_checked():
     assert result.passed is False
 
 
+def test_a_bare_node_claim_is_checked():
+    """Node.js is how the canonical map spells it; Node is how a resume
+    does. Requiring the suffix let the commonest spelling through unchecked."""
+    source = atom(skills=["Python"], description="Wrote the backend.")
+
+    assert verify_bullet(bullet("Built the API service in Node."), source, {1}).passed is False
+
+
+def test_a_node_claim_the_evidence_supports_is_kept():
+    source = atom(skills=["Node.js"], description="Wrote the backend.")
+
+    assert verify_bullet(bullet("Built the API service in Node."), source, {1}).passed is True
+
+
+def test_a_sentence_opening_with_rest_is_not_a_rest_claim():
+    """The stem is taken from the canonical, not from title-casing the alias --
+    otherwise Rest starting a sentence would read as a REST claim."""
+    source = atom(skills=["Python"], description="Cleaned the data.")
+
+    assert verify_bullet(bullet("Rest of the pipeline was refactored."), source, {1}).passed is True
+
+
 def test_a_js_claim_is_checked_like_any_other():
     """ "JS" is not an English homograph, so it gets no exemption. Exempting it
     would mean a JavaScript claim is never checked at all."""

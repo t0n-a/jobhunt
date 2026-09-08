@@ -144,8 +144,14 @@ def _invented_technology(text: str, atom: EvidenceAtom, haystack: str) -> str | 
 
     for alias, canonical in SKILL_ALIASES.items():
         ambiguous = alias in AMBIGUOUS
+        # An ambiguous alias must appear in its canonical spelling, exactly. Some
+        # canonicals carry a suffix a resume routinely drops -- "Node.js" written
+        # as "Node" -- so the stem counts too. The stem is derived from the
+        # canonical rather than by title-casing the alias, because "Rest" at the
+        # start of a sentence is not a REST claim.
+        spellings = {canonical, canonical.split(".")[0]}
         if ambiguous:
-            if not mentions_term(text, canonical, case_sensitive=True):
+            if not any(mentions_term(text, s, case_sensitive=True) for s in spellings):
                 continue
         elif not mentions_term(text, alias):
             continue
@@ -157,9 +163,34 @@ def _invented_technology(text: str, atom: EvidenceAtom, haystack: str) -> str | 
         # evidence for "Designed the REST API", laundering the claim through a
         # word the atom used in its ordinary English sense.
         if ambiguous:
-            if mentions_term(haystack, canonical, case_sensitive=True):
+            if any(mentions_term(haystack, s, case_sensitive=True) for s in spellings):
                 continue
         elif mentions_term(haystack, alias) or mentions_term(haystack, canonical):
             continue
         return canonical
     return None
+
+
+def verify_skills(skills: list[str], atoms: dict[int, EvidenceAtom]) -> tuple[list[str], list[str]]:
+    """Split a skills line into what the evidence supports and what it does not.
+
+    The line is model-written and never passes through verify_bullet, so without
+    this it is the one place on the page where an unevidenced technology reaches
+    an employer unchallenged, and a skills list is exactly where an interviewer
+    picks the thing to ask about.
+    """
+    kept: list[str] = []
+    unevidenced: list[str] = []
+    for skill in skills:
+        if any(_atom_supports(atom, canonical_skill(skill)) for atom in atoms.values()):
+            kept.append(skill)
+        else:
+            unevidenced.append(skill)
+    return kept, unevidenced
+
+
+def _atom_supports(atom: EvidenceAtom, canonical: str) -> bool:
+    if canonical.casefold() in {canonical_skill(s).casefold() for s in atom.skills}:
+        return True
+    haystack = " ".join(part for part in (atom.title, atom.description, atom.metrics or ""))
+    return mentions_term(haystack, canonical)

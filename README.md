@@ -108,12 +108,13 @@ The coach converts your aggregated skill gaps into concrete, day-sized tasks:
 
 Opening a job and pressing "Tailor a resume for this" produces an Application: extracted ATS keywords, selected evidence, rewritten bullets, and a cover letter.
 
-Because an LLM fabricates facts when rewriting a resume, the system structurally guarantees this cannot happen:
-- Every bullet is checked against the evidence atom it came from. A bullet stating a number or naming a technology the evidence does not support is dropped, and shown separately with the reason — so the user can tell a verifier bug from a model that is inventing.
+Because an LLM fabricates facts when rewriting a resume, the system bounds the risk structurally:
+- Every bullet is checked against the evidence atom it came from, and the skills line is checked the same way. A bullet stating a number or naming a technology the evidence does not support is dropped, and shown separately with the reason — so the user can tell a verifier bug from a model that is inventing.
+- The headline, summary, and the employer and dates on each entry are model-written and are NOT checked, so they are shown on the application page for the user to read before sending.
 - Only confirmed atoms are eligible; unconfirmed atoms are unreviewed model output and cannot reach a document an employer reads.
 - Bullets can be edited; an edited bullet is marked as the user's own and is not re-checked, because those are their words and they are responsible for them.
 
-"Render the PDF" builds it with `latexmk`, then re-reads the result with `pdftotext` and reports keyword coverage — a PDF that looks perfect on screen can parse to nothing, and this is what turns that silent failure into a number. 
+"Render the PDF" builds it with `latexmk`, then re-reads the result with `pdftotext` and reports keyword coverage — a PDF that looks perfect on screen can parse to nothing, and this is what turns that silent failure into a number.
 
 You can set optional `phone`, `linkedin`, and `website` fields in `config.yaml` to include them on the generated PDF.
 

@@ -28,13 +28,16 @@ def extract_pdf_text(pdf_path: Path) -> str:
         raise RuntimeError(
             "pdftotext is not installed. Install poppler-utils to run the ATS check."
         )
-    result = subprocess.run(
-        ["pdftotext", "-layout", str(pdf_path), "-"],
-        capture_output=True,
-        text=True,
-        timeout=TIMEOUT,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            ["pdftotext", "-layout", str(pdf_path), "-"],
+            capture_output=True,
+            text=True,
+            timeout=TIMEOUT,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"pdftotext timed out after {TIMEOUT} seconds") from exc
     if result.returncode != 0:
         raise RuntimeError(f"pdftotext failed on {pdf_path.name}: {result.stderr[-500:]}")
     return result.stdout

@@ -56,7 +56,7 @@ def seed_atom(session, *, confirmed=True) -> EvidenceAtom:
     )
 
 
-def responses(atom_id, *, bullets=None):
+def responses(atom_id, *, bullets=None, skills=None):
     resume = {
         "headline": "Backend Engineer",
         "summary": "",
@@ -75,7 +75,7 @@ def responses(atom_id, *, bullets=None):
                 ],
             }
         ],
-        "skills": ["Python", "Redis"],
+        "skills": skills or ["Python", "Redis"],
     }
     return [
         {"keywords": ["Python", "Redis"]},
@@ -197,6 +197,21 @@ def test_render_application_stores_a_path_relative_to_the_data_dir(session, tmp_
     assert not Path(rendered.pdf_path).is_absolute()
     assert (tmp_path / rendered.pdf_path).exists()
     assert rendered.coverage is not None
+
+
+def test_an_unevidenced_skill_is_dropped_from_the_skills_line(session):
+    """The skills line never passes through the bullet verifier, so an invented
+    technology would otherwise reach the page unchallenged — and a skills list is
+    where an interviewer picks what to ask about."""
+    job = seed_job(session)
+    atom = seed_atom(session)
+    llm = FakeProvider(responses(atom.id, skills=["Python", "Redis", "Kubernetes"]))
+
+    application = tailor_job(session, job, llm, profile=profile())
+
+    assert "Redis" in application.resume_json["skills"]
+    assert "Kubernetes" not in application.resume_json["skills"]
+    assert any(d["text"] == "Skill: Kubernetes" for d in application.dropped_bullets)
 
 
 def test_mark_applied_records_when(session):

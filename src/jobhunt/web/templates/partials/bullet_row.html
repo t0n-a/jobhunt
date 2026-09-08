@@ -10,5 +10,5 @@
     · from atom {{ bullet.atom_id }}
   </p>
   <button hx-post="/applications/{{ application.id }}/bullets/{{ index }}/delete"
-          hx-target="#bullet-{{ index }}" hx-swap="outerHTML" class="secondary">Remove</button>
+          hx-target="#bullets" hx-swap="innerHTML" class="secondary">Remove</button>
 </li>

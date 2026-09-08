@@ -14,7 +14,7 @@ from jobhunt.tailor.keywords import extract_keywords
 from jobhunt.tailor.latex import render_pdf
 from jobhunt.tailor.models import Application, iter_bullets
 from jobhunt.tailor.select import shortlist_atoms
-from jobhunt.tailor.verify import verify_document
+from jobhunt.tailor.verify import verify_document, verify_skills
 
 
 def tailor_job(
@@ -51,6 +51,12 @@ def tailor_job(
 
     by_id = {atom.id: atom for atom in shortlist}
     verified, dropped = verify_document(document, by_id, set(by_id))
+
+    verified["skills"], unevidenced = verify_skills(verified.get("skills", []), by_id)
+    dropped.extend(
+        {"atom_id": None, "text": f"Skill: {skill}", "reason": "No evidence names it."}
+        for skill in unevidenced
+    )
 
     survivors = [bullet for _, bullet in iter_bullets(verified)]
     cover_letter = compose_cover_letter(job, survivors, llm, profile=profile) if survivors else ""

@@ -192,3 +192,16 @@ def test_the_pdf_route_404s_before_anything_is_rendered(make_client):
     client.post(f"/jobs/{job_id}/tailor", follow_redirects=True)
 
     assert client.get("/applications/1/pdf").status_code == 404
+
+
+def test_the_unverified_header_fields_are_shown_for_review(make_client):
+    """They are model-written and the verifier does not check them, so the only
+    safeguard is the user reading them, which needs them on the page."""
+    client = make_client(responses())
+    job_id = seed(client)
+    client.post(f"/jobs/{job_id}/tailor", follow_redirects=True)
+
+    text = client.get("/applications/1").text
+
+    assert "Backend Engineer" in text
+    assert "not checked against your evidence" in text.casefold()

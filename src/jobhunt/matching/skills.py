@@ -84,7 +84,7 @@ def canonical_skills(names) -> list[str]:
 
 
 def mentions_term(haystack: str, term: str, *, case_sensitive: bool = False) -> bool:
-    """Does `haystack` name `term` as a word rather than as a substring?
+    r"""Does `haystack` name `term` as a word rather than as a substring?
 
     A plain `in` test reads "Go" inside "Django" and "MongoDB", and a one-letter
     term such as "R" inside almost any prose. A plain \b fails the other way on

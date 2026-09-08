@@ -11,11 +11,19 @@
   <p class="meta">Not mentioned: {{ application.missing_keywords|join(", ") }}</p>
 {% endif %}
 
+<h2>Header</h2>
+<p class="meta">Model-written and NOT checked against your evidence - read these before you send.</p>
+<p><strong>{{ application.resume_json.headline }}</strong></p>
+{% if application.resume_json.summary %}
+  <p>{{ application.resume_json.summary }}</p>
+{% endif %}
+{% if application.resume_json.skills %}
+  <p class="meta">Skills: {{ application.resume_json.skills|join(", ") }}</p>
+{% endif %}
+
 <h2>Resume lines</h2>
 <ul class="atoms" id="bullets">
-  {% for index, bullet in bullets %}
-    {% include "partials/bullet_row.html" %}
-  {% endfor %}
+  {% include "partials/bullet_list.html" %}
 </ul>
 
 {% if application.dropped_bullets %}

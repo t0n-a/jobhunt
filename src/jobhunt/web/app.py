@@ -458,16 +458,25 @@ def create_app(config: Config) -> FastAPI:
             )
 
     @app.post("/applications/{application_id}/bullets/{index}/delete")
-    def application_delete_bullet(application_id: int, index: int):
+    def application_delete_bullet(request: Request, application_id: int, index: int):
         with Session(app.state.engine) as db:
             application = _application(db, application_id)
             try:
-                application.resume_json = delete_bullet(application.resume_json, index)
+                updated = delete_bullet(application.resume_json, index)
             except IndexError as exc:
                 raise HTTPException(status_code=404, detail="No such bullet") from exc
+            application.resume_json = updated
             db.add(application)
             db.commit()
-        return HTMLResponse("")
+            # Re-render the WHOLE list, not the removed row. Deleting shifts every
+            # later ordinal down, and a page still showing the old numbers sends
+            # the next edit to a different bullet, overwriting a line the user
+            # never touched, with nothing on screen to show it happened.
+            return templates.TemplateResponse(
+                request,
+                "partials/bullet_list.html",
+                {"application": application, "bullets": iter_bullets(updated)},
+            )
 
     @app.post("/applications/{application_id}/render")
     def application_render(application_id: int):

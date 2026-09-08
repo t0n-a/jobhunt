@@ -103,14 +103,17 @@ def render_pdf(application: Application, profile: ProfileConfig, out_dir: Path) 
         (work_dir / "resume.tex").write_text(
             render_tex(application.resume_json, profile), encoding="utf-8"
         )
-        build = subprocess.run(
-            ["latexmk", "-pdf", "-interaction=nonstopmode", "-halt-on-error", "resume.tex"],
-            cwd=work_dir,
-            capture_output=True,
-            text=True,
-            timeout=TIMEOUT,
-            check=False,
-        )
+        try:
+            build = subprocess.run(
+                ["latexmk", "-pdf", "-interaction=nonstopmode", "-halt-on-error", "resume.tex"],
+                cwd=work_dir,
+                capture_output=True,
+                text=True,
+                timeout=TIMEOUT,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise LatexError(f"latexmk timed out after {TIMEOUT} seconds") from exc
         built = work_dir / "resume.pdf"
         if build.returncode != 0 or not built.exists():
             # Surfaced, not swallowed: the LaTeX error is the only thing that
