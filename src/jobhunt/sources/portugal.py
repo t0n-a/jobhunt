@@ -44,7 +44,16 @@ class LandingJobsSource:
                 ).strip()
                 tags = item.get("tags") or []
                 if tags:
-                    description = f"{description} Skills: {', '.join(tags)}."
+                    skills = f"Skills: {', '.join(tags)}."
+                    description = f"{description} {skills}".strip() if description else skills
+                if not description:
+                    # The scorer's judgement is only as good as the description,
+                    # so an empty one degrades scoring invisibly. Say so.
+                    logger.warning(
+                        "%s: posting %s has no extractable description",
+                        self.name,
+                        item.get("id"),
+                    )
                 yield RawPosting(
                     source=self.name,
                     external_id=str(item["id"]),
@@ -75,11 +84,20 @@ class ITJobsSource:
             logger.info("itjobs: no API key configured, skipping")
             return
         payload = _fetch_json(ITJOBS_URL, {"api_key": self.api_key, "limit": 200})
-        if not payload or "results" not in payload:
-            if payload and "error" in payload:
-                logger.warning("itjobs: %s", payload["error"].get("message"))
+        # isinstance first: a scalar JSON body would make `"results" not in payload`
+        # raise TypeError, which the per-item guards below do not cover, so it would
+        # escape fetch() and abort the whole scan rather than just this source.
+        if not isinstance(payload, dict):
             return
-        for item in payload["results"]:
+        if "results" not in payload:
+            if "error" in payload:
+                logger.warning("itjobs: %s", (payload["error"] or {}).get("message"))
+            return
+        results = payload["results"]
+        if not isinstance(results, list):
+            logger.warning("itjobs: expected a list of results, got %s", type(results).__name__)
+            return
+        for item in results:
             try:
                 title = item["title"]
                 company = (item.get("company") or {}).get("name") or "unknown"

@@ -106,3 +106,63 @@ def test_itjobs_maps_results():
 
     assert p.company == "Acme Lda"
     assert p.location == "Porto"
+
+
+@respx.mock
+def test_itjobs_sends_the_api_key_and_limit():
+    """Nothing would fail if the key param were silently dropped or renamed,
+    so assert the request shape rather than only the mapped response."""
+    route = respx.get(url__startswith="https://api.itjobs.pt").mock(
+        return_value=httpx.Response(200, json={"results": []})
+    )
+
+    list(ITJobsSource("secret-key").fetch())
+
+    params = route.calls[0].request.url.params
+    assert params["api_key"] == "secret-key"
+    assert params["limit"] == "200"
+
+
+@respx.mock
+def test_itjobs_scalar_payload_does_not_raise():
+    """A scalar JSON body would make `"results" not in payload` raise TypeError,
+    which the per-item guards do not cover — it would abort the whole scan."""
+    respx.get(url__startswith="https://api.itjobs.pt").mock(
+        return_value=httpx.Response(200, json=42)
+    )
+
+    assert list(ITJobsSource("k").fetch()) == []
+
+
+@respx.mock
+def test_itjobs_non_list_results_does_not_iterate_characters():
+    """A string `results` would iterate per character and log one warning each."""
+    respx.get(url__startswith="https://api.itjobs.pt").mock(
+        return_value=httpx.Response(200, json={"results": "oops"})
+    )
+
+    assert list(ITJobsSource("k").fetch()) == []
+
+
+@respx.mock
+def test_landingjobs_missing_description_fields_do_not_produce_leading_space():
+    respx.get(url__startswith="https://landing.jobs/api/v1/jobs").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {
+                    "id": 5,
+                    "title": "T",
+                    "url": "u",
+                    "locations": [],
+                    "remote": True,
+                    "tags": ["Python"],
+                }
+            ],
+        )
+    )
+
+    p = next(iter(LandingJobsSource().fetch()))
+
+    assert p.description == "Skills: Python."
+    assert not p.description.startswith(" ")
