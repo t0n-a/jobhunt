@@ -127,7 +127,9 @@ def test_dropped_bullets_are_shown_with_their_reason(make_client):
     text = client.get("/applications/1").text
 
     assert "Cut latency by 40%." in text
-    assert "40" in text
+    # The REASON, not just the text: asserting a substring of the bullet itself
+    # would pass against a template that dropped the explanation entirely.
+    assert "evidence does not" in text
 
 
 def test_editing_a_bullet_marks_it_as_the_users_own(make_client):

@@ -440,13 +440,17 @@ def create_app(config: Config) -> FastAPI:
             try:
                 # Assign a new dict: JSON columns are not mutation-tracked, and
                 # an in-place edit is silently discarded on commit.
-                application.resume_json = edit_bullet(application.resume_json, index, text)
+                updated = edit_bullet(application.resume_json, index, text)
             except IndexError as exc:
                 raise HTTPException(status_code=404, detail="No such bullet") from exc
+            application.resume_json = updated
             db.add(application)
             db.commit()
-            db.refresh(application)
-            bullet = dict(iter_bullets(application.resume_json))[index]
+            # Render from the document we just wrote, not from a re-read row. A
+            # delete committed between this commit and a refresh would leave the
+            # index missing and raise KeyError — a 500 for a request that
+            # succeeded.
+            bullet = dict(iter_bullets(updated))[index]
             return templates.TemplateResponse(
                 request,
                 "partials/bullet_row.html",
