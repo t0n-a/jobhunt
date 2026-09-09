@@ -1,0 +1,47 @@
+<!-- src/jobhunt/web/templates/linkedin.html -->
+{% extends "base.html" %}
+{% block title %}LinkedIn — jobhunt{% endblock %}
+{% block content %}
+<h1>LinkedIn profile</h1>
+
+{% if refusal %}
+  <p class="meta">{{ refusal }}</p>
+{% endif %}
+
+<form method="post" action="/linkedin/generate">
+  <button type="submit">Build from my evidence</button>
+</form>
+
+{% if version %}
+  <p class="meta">
+    Built {{ version.created_at.date() }} · aimed at
+    {% if version.keyword_source == 'applications' %}the roles you have applied to
+    {%- else %}your own evidence, since you have no applications yet{% endif %}
+    {%- if version.keywords %}: {{ version.keywords[:8]|join(", ") }}{% endif %}
+  </p>
+  <p class="meta">Nothing here is published. Read each field, edit it if you want, then approve it.</p>
+
+  <ul class="atoms">
+    {% for item in fields %}
+      {% with field = item.field, spec = item.spec, diff = item.diff, publishable = item.publishable %}
+        {% include "partials/linkedin_field.html" %}
+      {% endwith %}
+    {% endfor %}
+  </ul>
+
+  {% if dropped %}
+    <h2>Dropped, unverified</h2>
+    <p class="meta">Your evidence did not support these, so they are not in any field.</p>
+    <ul class="atoms">
+      {% for item in dropped %}
+        <li class="atom unconfirmed">
+          <p>{{ item.text }}</p>
+          <p class="meta">{{ item.field }} · {{ item.reason }}</p>
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+{% else %}
+  <p class="meta">Nothing built yet.</p>
+{% endif %}
+{% endblock %}

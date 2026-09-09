@@ -18,8 +18,12 @@ from jobhunt.db import create_engine_for, init_db
 from jobhunt.growth.gaps import compute_gaps
 from jobhunt.jobs.models import Job, Score
 from jobhunt.jobs.store import JobStore
+from jobhunt.linkedin.build import build_profile
+from jobhunt.linkedin.diff import diff_field
+from jobhunt.linkedin.fields import field_spec
+from jobhunt.linkedin.store import LinkedinStore
 from jobhunt.llm import LLMError, LLMProvider
-from jobhunt.matching.score import score_job
+from jobhunt.matching.score import EmptyProfileError, score_job
 from jobhunt.profile.importers.coursework import import_coursework
 from jobhunt.profile.importers.cv import import_cv
 from jobhunt.profile.importers.github import import_github
@@ -503,5 +507,102 @@ def create_app(config: Config) -> FastAPI:
         with Session(app.state.engine) as db:
             mark_applied(db, _application(db, application_id))
         return RedirectResponse("/applications", status_code=303)
+
+    def _linkedin_view(db, version):
+        """The page's data: each field with its limit, its diff and its state."""
+        store = LinkedinStore(db)
+        if version is None:
+            return {"version": None, "fields": [], "dropped": []}
+        previous = {
+            (field.name, field.position): field.text
+            for field in (
+                store.fields_for(store.previous(version))
+                if store.previous(version) is not None
+                else []
+            )
+        }
+        fields = []
+        for field in store.fields_for(version):
+            fields.append(
+                {
+                    "field": field,
+                    "spec": field_spec(field.name),
+                    "diff": diff_field(previous.get((field.name, field.position), ""), field.text),
+                    "publishable": store.is_publishable(field),
+                }
+            )
+        return {"version": version, "fields": fields, "dropped": version.dropped}
+
+    @app.get("/linkedin")
+    def linkedin_page(request: Request):
+        with Session(app.state.engine) as db:
+            context = _linkedin_view(db, LinkedinStore(db).latest())
+            return templates.TemplateResponse(request, "linkedin.html", context)
+
+    @app.post("/linkedin/generate")
+    def linkedin_generate(request: Request, llm: LLMProvider = Depends(get_llm)):
+        if hasattr(llm, "_responses") and not hasattr(request.app.state, "test_llm"):
+            request.app.state.test_llm = llm
+        if hasattr(request.app.state, "test_llm"):
+            llm = request.app.state.test_llm
+        with Session(app.state.engine) as db:
+            try:
+                build_profile(db, llm, profile=config.profile)
+            except EmptyProfileError as exc:
+                # Not a 502: this is the user's own store being empty, and the
+                # page can say what to do about it. Caught BEFORE _importer_errors,
+                # which would map it to a provider fault.
+                context = _linkedin_view(db, LinkedinStore(db).latest())
+                context["refusal"] = str(exc)
+                return templates.TemplateResponse(request, "linkedin.html", context)
+            except LLMError as exc:
+                raise HTTPException(status_code=502, detail=str(exc)) from exc
+        return RedirectResponse("/linkedin", status_code=303)
+
+    @app.post("/linkedin/fields/{field_id}")
+    def linkedin_edit_field(request: Request, field_id: int, text: str = Form(...)):
+        with Session(app.state.engine) as db:
+            store = LinkedinStore(db)
+            try:
+                field = store.edit_field(field_id, text)
+            except KeyError as exc:
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+            return templates.TemplateResponse(
+                request,
+                "partials/linkedin_field.html",
+                {
+                    "field": field,
+                    "spec": field_spec(field.name),
+                    "diff": diff_field("", field.text),
+                    "publishable": store.is_publishable(field),
+                },
+            )
+
+    @app.post("/linkedin/fields/{field_id}/approve")
+    def linkedin_approve_field(request: Request, field_id: int):
+        with Session(app.state.engine) as db:
+            store = LinkedinStore(db)
+            try:
+                field = store.approve_field(field_id)
+            except KeyError as exc:
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+            return templates.TemplateResponse(
+                request,
+                "partials/linkedin_field.html",
+                {
+                    "field": field,
+                    "spec": field_spec(field.name),
+                    "diff": diff_field("", field.text),
+                    "publishable": store.is_publishable(field),
+                },
+            )
+
+    @app.get("/linkedin/versions/{profile_id}")
+    def linkedin_version(request: Request, profile_id: int):
+        with Session(app.state.engine) as db:
+            version = LinkedinStore(db).get(profile_id)
+            if version is None:
+                raise HTTPException(status_code=404, detail="No such version")
+            return templates.TemplateResponse(request, "linkedin.html", _linkedin_view(db, version))
 
     return app
