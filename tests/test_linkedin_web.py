@@ -158,3 +158,61 @@ def test_an_older_version_is_readable(make_client):
 def test_an_unknown_version_is_a_404(make_client):
     client = make_client([])
     assert client.get("/linkedin/versions/999").status_code == 404
+
+
+def test_editing_an_approved_field_withdraws_the_approval(make_client):
+    client = make_client([response()])
+    seed_atom(client)
+    client.post("/linkedin/generate", follow_redirects=False)
+    field_id = field_ids(client, "headline")[0]
+
+    approved = client.post(f"/linkedin/fields/{field_id}/approve")
+    assert approved.status_code == 200
+    assert "Approved" in approved.text
+    assert "Not approved yet" not in approved.text
+    assert ">Approve<" not in approved.text
+
+    edited = client.post(f"/linkedin/fields/{field_id}", data={"text": "Backend Engineer, Porto"})
+
+    assert edited.status_code == 200
+    assert "Not approved yet" in edited.text
+    assert ">Approve<" in edited.text
+
+
+def seed_atom_with_skills(client, skills):
+    with Session(client.engine) as session:
+        AtomStore(session).add(
+            EvidenceAtom(
+                kind=AtomKind.PROJECT,
+                title="URL shortener",
+                description="Built a link shortener in Flask, cached in Redis.",
+                skills=skills,
+                provenance=Provenance.INTERVIEW,
+                confirmed=True,
+            )
+        )
+        session.commit()
+
+
+def test_a_skills_field_over_the_item_count_reports_items_not_characters(make_client):
+    # Every entry is "Python" so verify_skills keeps all 60 of them: the
+    # evidence atom itself lists "Python" as a skill.
+    skills = ["Python"] * 60
+    client = make_client([response(skills=skills)])
+    seed_atom_with_skills(client, ["Python"])
+    client.post("/linkedin/generate", follow_redirects=False)
+
+    page = client.get("/linkedin")
+    assert "60 skills, LinkedIn allows 50" in page.text
+    assert "50 items" not in page.text
+
+
+def test_a_skills_field_over_the_per_item_length_reports_the_item_limit(make_client):
+    long_skill = "x" * 90
+    skills = ["Python", long_skill]
+    client = make_client([response(skills=skills)])
+    seed_atom_with_skills(client, skills)
+    client.post("/linkedin/generate", follow_redirects=False)
+
+    page = client.get("/linkedin")
+    assert "One skill is longer than 80 characters" in page.text

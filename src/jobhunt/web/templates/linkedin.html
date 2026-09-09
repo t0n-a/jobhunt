@@ -23,7 +23,7 @@
 
   <ul class="atoms">
     {% for item in fields %}
-      {% with field = item.field, spec = item.spec, diff = item.diff, publishable = item.publishable %}
+      {% with field = item.field, spec = item.spec, diff = item.diff, publishable = item.publishable, limit_message = item.limit_message %}
         {% include "partials/linkedin_field.html" %}
       {% endwith %}
     {% endfor %}

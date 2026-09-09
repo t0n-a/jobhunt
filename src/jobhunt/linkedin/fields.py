@@ -71,3 +71,23 @@ def over_limit(spec: FieldSpec, text: str) -> bool:
             return True
         return any(len(item) > spec.item_limit for item in items) if spec.item_limit else False
     return len(text) > spec.limit
+
+
+def over_limit_message(spec: FieldSpec, text: str) -> str:
+    """Say what actually overran, in the units that actually overran.
+
+    Skills has two independent caps — how many items, and how long each one
+    is — and they are counted in different units (items vs. characters). A
+    message that always reports characters can name the wrong limit entirely
+    for a skills field that is fine on item count but has one long entry.
+    Reporting the item-count overrun first is arbitrary but fine: both can be
+    true at once, and the user fixes one, sees the page again, fixes the other.
+    """
+    if spec.kind == "skills":
+        items = split_skills(text)
+        if len(items) > spec.limit:
+            return f"{len(items)} skills, LinkedIn allows {spec.limit}"
+        if spec.item_limit is not None and any(len(item) > spec.item_limit for item in items):
+            return f"One skill is longer than {spec.item_limit} characters"
+        return ""
+    return f"{len(text)} of {spec.limit} characters"

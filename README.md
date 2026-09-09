@@ -121,7 +121,7 @@ You can set optional `phone`, `linkedin`, and `website` fields in `config.yaml` 
 
 ### LinkedIn
 
-`/linkedin` builds your profile text — headline, About, experience entries, projects and skills — from your confirmed evidence atoms, aimed at the roles you have actually applied to.
+`/linkedin` builds your profile text — headline, About, experience entries, projects and skills — from your confirmed evidence atoms, aimed at the roles you have actually applied to (or, with no applications yet, at the skills on your confirmed atoms).
 
 Every field is checked against your evidence before it is stored. Entries carry the atom they came from and get the same per-atom check as a resume bullet: the atom must state every number and name every technology the entry claims. The headline and About section blend several atoms at once, so they are checked against your evidence as a whole — every number and technology in them appears somewhere in your confirmed atoms, though not necessarily in one. Anything that fails is dropped and shown to you under "Dropped, unverified", so you can tell a bug from a model inventing things.
 

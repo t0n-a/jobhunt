@@ -20,7 +20,7 @@ from jobhunt.jobs.models import Job, Score
 from jobhunt.jobs.store import JobStore
 from jobhunt.linkedin.build import build_profile
 from jobhunt.linkedin.diff import diff_field
-from jobhunt.linkedin.fields import field_spec
+from jobhunt.linkedin.fields import field_spec, over_limit_message
 from jobhunt.linkedin.store import LinkedinStore
 from jobhunt.llm import LLMError, LLMProvider
 from jobhunt.matching.score import EmptyProfileError, score_job
@@ -523,12 +523,16 @@ def create_app(config: Config) -> FastAPI:
         }
         fields = []
         for field in store.fields_for(version):
+            spec = field_spec(field.name)
             fields.append(
                 {
                     "field": field,
-                    "spec": field_spec(field.name),
+                    "spec": spec,
                     "diff": diff_field(previous.get((field.name, field.position), ""), field.text),
                     "publishable": store.is_publishable(field),
+                    "limit_message": over_limit_message(spec, field.text)
+                    if field.over_limit
+                    else "",
                 }
             )
         return {"version": version, "fields": fields, "dropped": version.dropped}
@@ -563,14 +567,18 @@ def create_app(config: Config) -> FastAPI:
                 field = store.edit_field(field_id, text)
             except KeyError as exc:
                 raise HTTPException(status_code=404, detail=str(exc)) from exc
+            spec = field_spec(field.name)
             return templates.TemplateResponse(
                 request,
                 "partials/linkedin_field.html",
                 {
                     "field": field,
-                    "spec": field_spec(field.name),
+                    "spec": spec,
                     "diff": diff_field("", field.text),
                     "publishable": store.is_publishable(field),
+                    "limit_message": over_limit_message(spec, field.text)
+                    if field.over_limit
+                    else "",
                 },
             )
 
@@ -582,14 +590,18 @@ def create_app(config: Config) -> FastAPI:
                 field = store.approve_field(field_id)
             except KeyError as exc:
                 raise HTTPException(status_code=404, detail=str(exc)) from exc
+            spec = field_spec(field.name)
             return templates.TemplateResponse(
                 request,
                 "partials/linkedin_field.html",
                 {
                     "field": field,
-                    "spec": field_spec(field.name),
+                    "spec": spec,
                     "diff": diff_field("", field.text),
                     "publishable": store.is_publishable(field),
+                    "limit_message": over_limit_message(spec, field.text)
+                    if field.over_limit
+                    else "",
                 },
             )
 
