@@ -22,3 +22,4 @@ details form { display: grid; gap: .5rem; max-width: 40rem; margin-top: .75rem; 
 button.secondary { background: none; border: 1px solid var(--line); }
 .energy { display: flex; gap: .4rem; margin: .5rem 0 1rem; }
 .energy button.on { border-color: var(--fg); color: var(--fg); }
+.letter { white-space: pre-wrap; font: inherit; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 1rem; }

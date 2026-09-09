@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Applications — jobhunt{% endblock %}
+{% block content %}
+<h1>Applications</h1>
+{% if not applications %}
+  <p class="empty">No applications yet. Open a job and tailor a resume for it.</p>
+{% else %}
+  <ul class="atoms">
+    {% for application in applications %}
+      <li class="atom">
+        <h3><a href="/applications/{{ application.id }}">
+          {{ jobs[application.job_id].title if application.job_id in jobs else "Job" }}
+          — {{ jobs[application.job_id].company if application.job_id in jobs else "" }}
+        </a></h3>
+        <p class="meta">
+          {{ application.status }}
+          {%- if application.coverage is not none %} · {{ application.coverage }}% keyword coverage{% endif %}
+          {%- if application.dropped_bullets %} · {{ application.dropped_bullets|length }} line(s) dropped{% endif %}
+        </p>
+      </li>
+    {% endfor %}
+  </ul>
+{% endif %}
+{% endblock %}

@@ -12,6 +12,11 @@ class ProfileConfig(BaseModel):
     email: str
     location: str
     github_username: str | None = None
+    # Optional resume header lines. Omitted from the document when unset, so a
+    # user without a LinkedIn does not get an empty separator on their CV.
+    phone: str | None = None
+    linkedin: str | None = None
+    website: str | None = None
 
 
 class LLMConfig(BaseModel):

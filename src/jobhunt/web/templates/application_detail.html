@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}{{ job.title if job }} — jobhunt{% endblock %}
+{% block content %}
+<h1>{{ job.title if job }} — {{ job.company if job }}</h1>
+<p class="meta">
+  {{ application.status }}
+  {%- if application.coverage is not none %} · {{ application.coverage }}% keyword coverage{% endif %}
+</p>
+
+{% if application.missing_keywords %}
+  <p class="meta">Not mentioned: {{ application.missing_keywords|join(", ") }}</p>
+{% endif %}
+
+<h2>Header</h2>
+<p class="meta">Model-written and NOT checked against your evidence - read these before you send.</p>
+<p><strong>{{ application.resume_json.headline }}</strong></p>
+{% if application.resume_json.summary %}
+  <p>{{ application.resume_json.summary }}</p>
+{% endif %}
+{% if application.resume_json.skills %}
+  <p class="meta">Skills: {{ application.resume_json.skills|join(", ") }}</p>
+{% endif %}
+
+<h2>Resume lines</h2>
+<ul class="atoms" id="bullets">
+  {% include "partials/bullet_list.html" %}
+</ul>
+
+{% if application.dropped_bullets %}
+  <h2>Dropped, unverified</h2>
+  <p class="meta">These claims were not supported by your evidence, so they are not in the document.</p>
+  <ul class="atoms">
+    {% for dropped in application.dropped_bullets %}
+      <li class="atom unconfirmed">
+        <p>{{ dropped.text }}</p>
+        <p class="meta">{{ dropped.reason }}</p>
+      </li>
+    {% endfor %}
+  </ul>
+{% endif %}
+
+<h2>Cover letter</h2>
+<pre class="letter">{{ application.cover_letter }}</pre>
+
+<form method="post" action="/applications/{{ application.id }}/render">
+  <button type="submit">Render the PDF</button>
+</form>
+{% if application.pdf_path %}
+  <p><a href="/applications/{{ application.id }}/pdf">Download the PDF</a></p>
+{% endif %}
+<form method="post" action="/applications/{{ application.id }}/applied">
+  <button type="submit" class="secondary">Mark as applied</button>
+</form>
+{% endblock %}

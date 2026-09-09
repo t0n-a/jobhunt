@@ -4,6 +4,10 @@ profile:
   email: you@example.com
   location: Porto, Portugal
   github_username: your-github-handle
+  # Optional. Each appears on the resume header only when set.
+  # phone: "+351 000 000 000"
+  # linkedin: linkedin.com/in/your-handle
+  # website: your-site.example
 
 llm:
   provider: agy            # "agy" (Antigravity CLI) or "openai_compat"
