@@ -1,0 +1,39 @@
+<!-- src/jobhunt/web/templates/partials/linkedin_field.html -->
+<li class="atom{% if not publishable %} unconfirmed{% endif %}" id="field-{{ field.id }}">
+  <h3>
+    {{ field.name|capitalize }}{% if field.entry_title %} — {{ field.entry_title }}{% endif %}
+  </h3>
+
+  {% if field.over_limit %}
+    <p class="meta">Too long for LinkedIn ({{ limit_message }}) — trim it before pasting.</p>
+  {% endif %}
+
+  {% if readonly %}
+    <p class="field-text">{{ field.text }}</p>
+  {% else %}
+  <form method="post" action="/linkedin/fields/{{ field.id }}"
+        hx-post="/linkedin/fields/{{ field.id }}"
+        hx-target="#field-{{ field.id }}" hx-swap="outerHTML">
+    <textarea name="text" rows="{% if spec.kind == 'prose' and spec.limit > 500 %}8{% else %}3{% endif %}">{{ field.text }}</textarea>
+    <button type="submit">Save</button>
+  </form>
+  {% endif %}
+
+  {% if diff_has_changes %}
+    <p class="meta">Changed since the last build:
+      {% for kind, chunk in diff %}<span class="diff-{{ kind }}">{{ chunk }}</span> {% endfor %}
+    </p>
+  {% endif %}
+
+  <p class="meta">
+    {% if field.source == 'user' %}Yours{% else %}Drafted from your evidence{% endif %}
+    {%- if field.atom_id %} · from atom {{ field.atom_id }}{% endif %}
+    {%- if publishable %} · Approved {{ field.approved_at.date() }} by {{ field.approved_by }}
+    {%- else %} · Not approved yet{% endif %}
+  </p>
+
+  {% if not readonly and not publishable %}
+    <button hx-post="/linkedin/fields/{{ field.id }}/approve"
+            hx-target="#field-{{ field.id }}" hx-swap="outerHTML">Approve</button>
+  {% endif %}
+</li>

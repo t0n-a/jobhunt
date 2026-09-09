@@ -18,8 +18,12 @@ from jobhunt.db import create_engine_for, init_db
 from jobhunt.growth.gaps import compute_gaps
 from jobhunt.jobs.models import Job, Score
 from jobhunt.jobs.store import JobStore
+from jobhunt.linkedin.build import build_profile
+from jobhunt.linkedin.diff import diff_field
+from jobhunt.linkedin.fields import field_spec, over_limit_message
+from jobhunt.linkedin.store import LinkedinStore
 from jobhunt.llm import LLMError, LLMProvider
-from jobhunt.matching.score import score_job
+from jobhunt.matching.score import EmptyProfileError, score_job
 from jobhunt.profile.importers.coursework import import_coursework
 from jobhunt.profile.importers.cv import import_cv
 from jobhunt.profile.importers.github import import_github
@@ -503,5 +507,140 @@ def create_app(config: Config) -> FastAPI:
         with Session(app.state.engine) as db:
             mark_applied(db, _application(db, application_id))
         return RedirectResponse("/applications", status_code=303)
+
+    def _previous_texts(store: LinkedinStore, version) -> dict[tuple[str, int], str]:
+        """This version's predecessor's text, keyed the same way a field is: by
+        (name, position). Empty when there is no predecessor."""
+        previous = store.previous(version)
+        if previous is None:
+            return {}
+        return {(field.name, field.position): field.text for field in store.fields_for(previous)}
+
+    def _field_context(store: LinkedinStore, field, diff, *, readonly: bool) -> dict:
+        """One field's render context: its limit, its diff and its approval state.
+
+        The single place this dict is built, so `_linkedin_view` and both HTMX
+        partial routes cannot quietly disagree about what a field looks like.
+        `over_limit_message` is called unconditionally — it answers "" for text
+        within every limit, so no caller needs to guard the call.
+        """
+        spec = field_spec(field.name)
+        diff_has_changes = any(kind != "same" for kind, _ in diff)
+        return {
+            "field": field,
+            "spec": spec,
+            "diff": diff,
+            "diff_has_changes": diff_has_changes,
+            "publishable": store.is_publishable(field),
+            "limit_message": over_limit_message(spec, field.text),
+            "readonly": readonly,
+        }
+
+    def _linkedin_view(db, version, *, readonly: bool = False):
+        """The page's data: each field with its limit, its diff and its state."""
+        store = LinkedinStore(db)
+        if version is None:
+            return {"version": None, "fields": [], "dropped": [], "readonly": readonly}
+        previous_texts = _previous_texts(store, version)
+        fields = [
+            _field_context(
+                store,
+                field,
+                diff_field(previous_texts.get((field.name, field.position), ""), field.text),
+                readonly=readonly,
+            )
+            for field in store.fields_for(version)
+        ]
+        return {
+            "version": version,
+            "fields": fields,
+            "dropped": version.dropped,
+            "readonly": readonly,
+        }
+
+    def _ensure_latest(store: LinkedinStore, field) -> None:
+        """Refuse to mutate a field that does not belong to the latest version.
+
+        The UI hides the edit form and Approve button on an older version (Fix
+        1a), but that is cosmetic: a hand-crafted POST must not be able to
+        rewrite history just because nothing in the markup stopped it.
+        """
+        latest = store.latest()
+        if latest is None or field.profile_id != latest.id:
+            raise HTTPException(
+                status_code=409,
+                detail="This field belongs to an older version and cannot be changed.",
+            )
+
+    @app.get("/linkedin")
+    def linkedin_page(request: Request):
+        with Session(app.state.engine) as db:
+            context = _linkedin_view(db, LinkedinStore(db).latest())
+            return templates.TemplateResponse(request, "linkedin.html", context)
+
+    @app.post("/linkedin/generate")
+    def linkedin_generate(request: Request, llm: LLMProvider = Depends(get_llm)):
+        with Session(app.state.engine) as db:
+            try:
+                build_profile(db, llm, profile=config.profile)
+            except EmptyProfileError as exc:
+                # Not a 502: this is the user's own store being empty, and the
+                # page can say what to do about it. Caught BEFORE _importer_errors,
+                # which would map it to a provider fault.
+                context = _linkedin_view(db, LinkedinStore(db).latest())
+                context["refusal"] = str(exc)
+                return templates.TemplateResponse(request, "linkedin.html", context)
+            except LLMError as exc:
+                raise HTTPException(status_code=502, detail=str(exc)) from exc
+        return RedirectResponse("/linkedin", status_code=303)
+
+    @app.post("/linkedin/fields/{field_id}")
+    def linkedin_edit_field(request: Request, field_id: int, text: str = Form(...)):
+        with Session(app.state.engine) as db:
+            store = LinkedinStore(db)
+            existing = store.get_field(field_id)
+            if existing is None:
+                raise HTTPException(status_code=404, detail=f"No LinkedIn field with id {field_id}")
+            _ensure_latest(store, existing)
+            try:
+                field = store.edit_field(field_id, text)
+            except KeyError as exc:
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+            # The user rewrote the text: a diff against the model's draft is no
+            # longer the comparison they care about, so this collapses to one
+            # "same" segment and the template hides the change notice. That is
+            # intentional here (unlike the approve route below).
+            context = _field_context(store, field, diff_field("", field.text), readonly=False)
+            return templates.TemplateResponse(request, "partials/linkedin_field.html", context)
+
+    @app.post("/linkedin/fields/{field_id}/approve")
+    def linkedin_approve_field(request: Request, field_id: int):
+        with Session(app.state.engine) as db:
+            store = LinkedinStore(db)
+            existing = store.get_field(field_id)
+            if existing is None:
+                raise HTTPException(status_code=404, detail=f"No LinkedIn field with id {field_id}")
+            _ensure_latest(store, existing)
+            try:
+                field = store.approve_field(field_id)
+            except KeyError as exc:
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+            # Approving changes no text at all, so the real diff against the
+            # previous version — the same one _linkedin_view computes — must
+            # keep showing, unlike the edit route above.
+            version = store.get(field.profile_id)
+            previous_texts = _previous_texts(store, version)
+            diff = diff_field(previous_texts.get((field.name, field.position), ""), field.text)
+            context = _field_context(store, field, diff, readonly=False)
+            return templates.TemplateResponse(request, "partials/linkedin_field.html", context)
+
+    @app.get("/linkedin/versions/{profile_id}")
+    def linkedin_version(request: Request, profile_id: int):
+        with Session(app.state.engine) as db:
+            version = LinkedinStore(db).get(profile_id)
+            if version is None:
+                raise HTTPException(status_code=404, detail="No such version")
+            context = _linkedin_view(db, version, readonly=True)
+            return templates.TemplateResponse(request, "linkedin.html", context)
 
     return app

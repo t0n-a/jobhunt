@@ -23,3 +23,5 @@ button.secondary { background: none; border: 1px solid var(--line); }
 .energy { display: flex; gap: .4rem; margin: .5rem 0 1rem; }
 .energy button.on { border-color: var(--fg); color: var(--fg); }
 .letter { white-space: pre-wrap; font: inherit; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 1rem; }
+.diff-removed { text-decoration: line-through; color: var(--muted); }
+.diff-added { background: #eaf6ec; color: #1c6b32; border-radius: 3px; padding: 0 .15rem; }

@@ -10,7 +10,8 @@ Phases 1 through 3 are built today: the profile subsystem, job discovery with sc
 - **Phase 2 (Complete):** Nine job sources, dedupe into canonical jobs, LLM scoring with track tagging, and a ranked inbox.
 - **Phase 3 (Complete):** The skill-gap coach, converting aggregate gaps into concrete daily tasks.
 - **Phase 4 (Complete):** Resume tailoring with verifiable facts and ATS self-checking.
-- **Phase 5 (Designed, not built):** LinkedIn integration.
+- **Phase 5 (Partially built):** LinkedIn profile buildout — generate, verify and approve the profile text.
+- **Phase 5, remaining:** post queue, posting via the official API, outreach drafts. Needs a registered LinkedIn app.
 
 ## Core Concept: Evidence Atoms
 
@@ -117,6 +118,18 @@ Because an LLM fabricates facts when rewriting a resume, the system bounds the r
 "Render the PDF" builds it with `latexmk`, then re-reads the result with `pdftotext` and reports keyword coverage — a PDF that looks perfect on screen can parse to nothing, and this is what turns that silent failure into a number.
 
 You can set optional `phone`, `linkedin`, and `website` fields in `config.yaml` to include them on the generated PDF.
+
+### LinkedIn
+
+`/linkedin` builds your profile text — headline, About, experience entries, projects and skills — from your confirmed evidence atoms, aimed at the roles you have actually applied to (or, with no applications yet, at the skills on your confirmed atoms).
+
+Every field is checked against your evidence before it is stored. Entries carry the atom they came from and get the same per-atom check as a resume bullet: the atom must state every number and name every technology the entry claims. The headline and About section blend several atoms at once, so they are checked against your evidence as a whole — every number and technology in them appears somewhere in your confirmed atoms, though not necessarily in one. Anything that fails is dropped and shown to you under "Dropped, unverified", so you can tell a bug from a model inventing things.
+
+Nothing is published. LinkedIn exposes no write API for profile fields, so you copy each field across yourself — and each field has to be approved before it counts as reviewed. Editing a field withdraws its approval, so approved text is always text you have read in its final form. Rebuilding creates a new version and shows you what changed per field, so you only re-paste what moved.
+
+Fields longer than LinkedIn accepts are flagged rather than cut. The limits are recorded in `src/jobhunt/linkedin/fields.py`; LinkedIn does not publish them formally, so if one is wrong, that is the one line to change.
+
+**Not yet built:** posting, the post queue, and outreach drafts.
 
 ## Repository Layout
 
