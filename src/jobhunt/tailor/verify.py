@@ -62,9 +62,47 @@ def verify_bullet(
     if invented_number is not None:
         return VerificationResult(False, f"States {invented_number}, which the evidence does not.")
 
-    invented_tech = _invented_technology(text, atom, haystack)
+    invented_tech = _invented_technology(
+        text, {canonical_skill(skill).casefold() for skill in atom.skills}, haystack
+    )
     if invented_tech is not None:
         return VerificationResult(False, f"Names {invented_tech}, which the evidence does not.")
+
+    return VerificationResult(True)
+
+
+def verify_prose(text: str, atoms: list[EvidenceAtom]) -> VerificationResult:
+    """Check a synthesised passage against the union of the evidence.
+
+    A LinkedIn headline or About section blends many atoms, so there is no
+    single source atom and verify_bullet cannot apply. The guarantee here is
+    deliberately weaker, and worth stating plainly: every number and every
+    recognised technology in the passage appears SOMEWHERE in the confirmed
+    evidence. It does not establish that a given claim came from a given atom.
+
+    That is the honest guarantee for synthesised prose, and it still covers
+    where fabrication actually costs an interview — an invented metric or an
+    unearned technology.
+    """
+    if not atoms:
+        # With an empty haystack every check below trivially passes, so the
+        # answer would be "verified" for text nothing supports.
+        return VerificationResult(False, "There is no evidence to check this against.")
+
+    haystack = " ".join(
+        part
+        for atom in atoms
+        for part in (atom.title, atom.description, atom.metrics or "", " ".join(atom.skills))
+    )
+    claimed = {canonical_skill(skill).casefold() for atom in atoms for skill in atom.skills}
+
+    invented_number = _invented_number(text, haystack)
+    if invented_number is not None:
+        return VerificationResult(False, f"States {invented_number}, which your evidence does not.")
+
+    invented_tech = _invented_technology(text, claimed, haystack)
+    if invented_tech is not None:
+        return VerificationResult(False, f"Names {invented_tech}, which your evidence does not.")
 
     return VerificationResult(True)
 
@@ -132,16 +170,16 @@ def _states_number(haystack: str, number: str) -> bool:
     return re.search(pattern, haystack) is not None
 
 
-def _invented_technology(text: str, atom: EvidenceAtom, haystack: str) -> str | None:
-    """Return the first technology the bullet claims and the atom does not.
+def _invented_technology(text: str, claimed: set[str], haystack: str) -> str | None:
+    """Return the first technology the text claims and the evidence does not.
 
-    Only technologies in the curated SKILL_ALIASES map are checked. The map is
-    the same allowlist that keeps gap ranking honest; extending it extends this
-    check, and guessing at arbitrary capitalised words would drop true bullets
-    for naming a company.
+    Takes the set of canonical skills the evidence claims rather than an atom,
+    so the same check serves one bullet (that bullet's atom) and a whole
+    passage (the union of the shortlist). Only technologies in the curated
+    SKILL_ALIASES map are checked. The map is the same allowlist that keeps gap
+    ranking honest; extending it extends this check, and guessing at arbitrary
+    capitalised words would drop true bullets for naming a company.
     """
-    claimed = {canonical_skill(skill).casefold() for skill in atom.skills}
-
     for alias, canonical in SKILL_ALIASES.items():
         ambiguous = alias in AMBIGUOUS
         # An ambiguous alias must appear in its canonical spelling, exactly. Some

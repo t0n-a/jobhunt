@@ -1,5 +1,5 @@
 from jobhunt.profile.models import AtomKind, EvidenceAtom, Provenance
-from jobhunt.tailor.verify import verify_bullet, verify_document
+from jobhunt.tailor.verify import verify_bullet, verify_document, verify_prose
 
 
 def atom(
@@ -359,3 +359,56 @@ def test_verify_document_returns_a_new_object():
 
     assert kept is not document
     assert len(document["sections"][0]["entries"][0]["bullets"]) == 1
+
+
+def _atom(**kwargs) -> EvidenceAtom:
+    fields = {
+        "id": 1,
+        "kind": AtomKind.PROJECT,
+        "title": "URL shortener",
+        "description": "Built a link shortener in Flask, cached in Redis.",
+        "skills": ["Python", "Flask", "Redis"],
+        "provenance": Provenance.INTERVIEW,
+        "confirmed": True,
+    }
+    fields.update(kwargs)
+    return EvidenceAtom(**fields)
+
+
+def test_verify_prose_passes_prose_the_union_supports():
+    atoms = [
+        _atom(id=1),
+        _atom(id=2, title="Scraper", description="Scraped 12 sites.", skills=["Python"]),
+    ]
+    result = verify_prose("Python engineer who built a Flask service and scraped 12 sites.", atoms)
+    assert result.passed
+
+
+def test_verify_prose_rejects_a_number_no_atom_states():
+    result = verify_prose("Cut latency for 40000 daily users.", [_atom()])
+    assert not result.passed
+    assert "40000" in result.reason
+
+
+def test_verify_prose_rejects_a_technology_no_atom_names():
+    result = verify_prose("Built a link shortener on Kubernetes.", [_atom()])
+    assert not result.passed
+    assert "Kubernetes" in result.reason
+
+
+def test_verify_prose_accepts_evidence_from_a_DIFFERENT_atom():
+    # This is the whole point of the union: prose legitimately draws on several
+    # atoms at once, and per-atom checking would reject every such sentence.
+    atoms = [
+        _atom(id=1, skills=["Python"], description="Built a shortener.", title="Shortener"),
+        _atom(id=2, skills=["Kubernetes"], description="Deployed to k3s.", title="Cluster"),
+    ]
+    assert verify_prose("Python developer who deploys on Kubernetes.", atoms).passed
+
+
+def test_verify_prose_refuses_when_there_is_no_evidence_at_all():
+    # Vacuous truth is the dangerous default here: with an empty haystack every
+    # check trivially finds nothing to complain about.
+    result = verify_prose("Led a team of 40 engineers.", [])
+    assert not result.passed
+    assert "no evidence" in result.reason.lower()
