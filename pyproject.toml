@@ -43,6 +43,11 @@ addopts = "-m 'not live'"
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# The formatter reformats Python code blocks inside Markdown, which would rewrite
+# every phase plan under docs/ — historical records of how each phase was built,
+# and the source the SDD task briefs are extracted from. The formatter's job here
+# is the code, not the prose.
+extend-exclude = ["*.md"]
 
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["fastapi.Depends", "fastapi.File", "fastapi.Form"]
