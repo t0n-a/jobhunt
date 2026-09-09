@@ -237,7 +237,7 @@ def _clean_bullets(raw) -> list[dict]:
     for bullet in raw or []:
         if not isinstance(bullet, dict):
             continue
-        atom_id = _as_atom_id(bullet.get("atom_id"))
+        atom_id = as_atom_id(bullet.get("atom_id"))
         text = bullet.get("text")
         # No id, no bullet: an unattributable claim cannot be checked, and an
         # unchecked claim is exactly what this phase exists to prevent.
@@ -247,7 +247,7 @@ def _clean_bullets(raw) -> list[dict]:
     return bullets
 
 
-def _as_atom_id(value) -> int | None:
+def as_atom_id(value) -> int | None:
     """Coerce a model's atom id to an int, or None when it is not one.
 
     Two traps make the obvious isinstance check wrong. In Python a bool IS an
