@@ -329,7 +329,15 @@ def test_agy_provider_does_not_translate_path_for_non_exe_binary(monkeypatch):
     idx = agy_cmd.index("--json-schema")
     schema_arg = agy_cmd[idx + 1]
     assert not schema_arg.startswith(r"\\wsl.localhost")
-    assert not schema_arg.startswith("C:")
+    # Asserting `not schema_arg.startswith("C:")` here tested the HOST, not the
+    # code: on Windows the untranslated tempfile path IS a C:\ path, so the
+    # assertion failed for reasons having nothing to do with translation. The
+    # pass-through invariant is checked directly instead, on a path we control.
+    # Compared against the path's own str() rather than a literal: a literal
+    # would bake in a separator style and be just as host-dependent as the
+    # assertion it replaces.
+    untranslated = Path("/tmp/schema.json")
+    assert provider._binary_path(untranslated) == str(untranslated)
 
 
 def test_caching_provider_falls_back_to_inner_on_corrupt_cache(tmp_path: Path):
