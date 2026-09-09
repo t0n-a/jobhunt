@@ -21,12 +21,22 @@ class LinkedinStore:
         half-written version looks generated and would be reviewed as if it
         were complete.
         """
-        self.session.add(version)
-        self.session.flush()  # assigns version.id without ending the transaction
-        for field in fields:
-            field.profile_id = version.id
-            self.session.add(field)
-        self._commit()
+        try:
+            self.session.add(version)
+            self.session.flush()  # assigns version.id without ending the transaction
+            for field in fields:
+                field.profile_id = version.id
+                # A version is born unapproved. This is the write boundary, so
+                # it is where that is guaranteed rather than assumed: approval
+                # can only ever come from approve_field, never from a row
+                # handed in already carrying one.
+                field.approved_at = None
+                field.approved_by = None
+                self.session.add(field)
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            raise
         self.session.refresh(version)
         return version
 

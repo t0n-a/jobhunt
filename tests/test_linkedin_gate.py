@@ -60,7 +60,8 @@ def test_editing_an_approved_field_withdraws_the_approval(store):
     # which is the hole the gate exists to close.
     version = make_version(store)
     field = store.fields_for(version)[0]
-    store.approve_field(field.id)
+    approved = store.approve_field(field.id)
+    assert store.is_publishable(approved) is True
 
     edited = store.edit_field(field.id, "Something else entirely")
 
@@ -125,3 +126,27 @@ def test_editing_an_unknown_field_raises(store):
 def test_approving_an_unknown_field_raises(store):
     with pytest.raises(KeyError):
         store.approve_field(999)
+
+
+def test_add_version_refuses_to_honour_an_approval_it_was_handed(store):
+    # A row arriving pre-approved is the one thing that must be impossible: it
+    # would put unreviewed text past the gate without anyone approving it.
+    from datetime import UTC, datetime
+
+    version = store.add_version(
+        LinkedinProfile(),
+        [
+            LinkedinField(
+                profile_id=0,
+                name="headline",
+                text="Backend Engineer",
+                approved_at=datetime.now(UTC),
+                approved_by="user",
+            )
+        ],
+    )
+
+    field = store.fields_for(version)[0]
+    assert field.approved_at is None
+    assert field.approved_by is None
+    assert store.is_publishable(field) is False
