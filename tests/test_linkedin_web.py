@@ -21,7 +21,8 @@ def make_client(tmp_path):
             data_dir=tmp_path,
         )
         app = create_app(cfg)
-        app.dependency_overrides[get_llm] = lambda: FakeProvider(responses)
+        provider = FakeProvider(responses)
+        app.dependency_overrides[get_llm] = lambda: provider
         client = TestClient(app)
         client.engine = create_engine_for(tmp_path / "jobhunt.db")
         init_db(client.engine)

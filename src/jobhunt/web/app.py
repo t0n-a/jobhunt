@@ -541,10 +541,6 @@ def create_app(config: Config) -> FastAPI:
 
     @app.post("/linkedin/generate")
     def linkedin_generate(request: Request, llm: LLMProvider = Depends(get_llm)):
-        if hasattr(llm, "_responses") and not hasattr(request.app.state, "test_llm"):
-            request.app.state.test_llm = llm
-        if hasattr(request.app.state, "test_llm"):
-            llm = request.app.state.test_llm
         with Session(app.state.engine) as db:
             try:
                 build_profile(db, llm, profile=config.profile)

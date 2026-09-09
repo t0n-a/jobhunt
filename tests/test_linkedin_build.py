@@ -5,7 +5,7 @@ from jobhunt.config import ProfileConfig
 from jobhunt.db import create_engine_for, init_db
 from jobhunt.linkedin.build import build_profile
 from jobhunt.linkedin.store import LinkedinStore
-from jobhunt.llm import FakeProvider
+from jobhunt.llm import FakeProvider, LLMError
 from jobhunt.matching.score import EmptyProfileError
 from jobhunt.profile.models import AtomKind, EvidenceAtom, Provenance
 from jobhunt.profile.store import AtomStore
@@ -161,11 +161,33 @@ def test_an_entry_gets_one_row_per_entry_with_its_atom_id(session):
     assert projects[0].entry_title == "Shortener"
 
 
+def test_a_rejected_middle_entry_compacts_the_survivors_positions(session):
+    atom = seed_atom(session)
+    llm = FakeProvider(
+        [
+            response(
+                atom.id,
+                projects=[
+                    {"atom_id": atom.id, "title": "First", "text": "Built it in Flask."},
+                    {"atom_id": atom.id, "title": "Second", "text": "Ran it on Kubernetes."},
+                    {"atom_id": atom.id, "title": "Third", "text": "Cached it in Redis."},
+                ],
+            )
+        ]
+    )
+
+    version = build_profile(session, llm, profile=profile())
+
+    projects = [f for f in LinkedinStore(session).fields_for(version) if f.name == "projects"]
+    assert [f.position for f in projects] == [0, 1]
+    assert [f.text for f in projects] == ["Built it in Flask.", "Cached it in Redis."]
+
+
 def test_a_failed_model_call_leaves_no_version_at_all(session):
     seed_atom(session)
     llm = FakeProvider(["not a dict"])
 
-    with pytest.raises(Exception):  # noqa: B017 - build_profile's failure mode is deliberately unspecified here
+    with pytest.raises(LLMError):
         build_profile(session, llm, profile=profile())
 
     assert LinkedinStore(session).latest() is None
