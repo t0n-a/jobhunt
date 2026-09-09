@@ -1,6 +1,6 @@
 import pytest
 
-from jobhunt.linkedin.fields import FIELDS, field_spec, over_limit
+from jobhunt.linkedin.fields import FIELDS, field_spec, over_limit, over_limit_message
 
 
 def test_every_field_has_a_spec():
@@ -47,3 +47,42 @@ def test_one_overlong_skill_is_over_the_limit():
 def test_a_normal_skills_line_is_not_over_the_limit():
     spec = field_spec("skills")
     assert over_limit(spec, "Python, Flask, Redis") is False
+
+
+def test_skills_over_the_item_count_reports_the_item_count():
+    spec = field_spec("skills")
+    text = ", ".join(f"skill{i}" for i in range(60))
+    assert over_limit_message(spec, text) == f"60 skills, LinkedIn allows {spec.limit}"
+
+
+def test_skills_within_item_count_but_one_item_too_long_reports_the_item_limit():
+    spec = field_spec("skills")
+    text = "Python, " + "x" * (spec.item_limit + 1)
+    assert (
+        over_limit_message(spec, text) == f"One skill is longer than {spec.item_limit} characters"
+    )
+
+
+def test_skills_over_both_limits_reports_the_item_count_first():
+    spec = field_spec("skills")
+    long_skill = "x" * (spec.item_limit + 1)
+    text = ", ".join([long_skill] * (spec.limit + 1))
+    assert (
+        over_limit_message(spec, text) == f"{spec.limit + 1} skills, LinkedIn allows {spec.limit}"
+    )
+
+
+def test_skills_within_both_limits_is_the_empty_string():
+    spec = field_spec("skills")
+    assert over_limit_message(spec, "Python, Flask, Redis") == ""
+
+
+def test_a_prose_field_over_its_limit_reports_characters():
+    spec = field_spec("headline")
+    text = "x" * (spec.limit + 1)
+    assert over_limit_message(spec, text) == f"{len(text)} of {spec.limit} characters"
+
+
+def test_a_prose_field_within_its_limit_is_the_empty_string():
+    spec = field_spec("headline")
+    assert over_limit_message(spec, "x" * spec.limit) == ""

@@ -19,11 +19,18 @@
     {%- else %}your own evidence, since you have no applications yet{% endif %}
     {%- if version.keywords %}: {{ version.keywords[:8]|join(", ") }}{% endif %}
   </p>
-  <p class="meta">Nothing here is published. Read each field, edit it if you want, then approve it.</p>
+  {% if readonly %}
+    <p class="meta">
+      This is an older version, built on {{ version.created_at.date() }}.
+      <a href="/linkedin">Back to the latest.</a>
+    </p>
+  {% else %}
+    <p class="meta">Nothing here is published. Read each field, edit it if you want, then approve it.</p>
+  {% endif %}
 
   <ul class="atoms">
     {% for item in fields %}
-      {% with field = item.field, spec = item.spec, diff = item.diff, publishable = item.publishable, limit_message = item.limit_message %}
+      {% with field = item.field, spec = item.spec, diff = item.diff, diff_has_changes = item.diff_has_changes, publishable = item.publishable, limit_message = item.limit_message, readonly = item.readonly %}
         {% include "partials/linkedin_field.html" %}
       {% endwith %}
     {% endfor %}

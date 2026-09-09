@@ -52,8 +52,10 @@ Rules:
   paragraphs at most. It may draw on several evidence items in one sentence.
   Plain and specific. No "passionate", no "results-driven", no "proven track
   record".
-- Each "experience" and "projects" entry is one description under
-  {entry_limit} characters: what was built, with what, and what came of it.
+- Each "experience" entry is one description under {experience_limit} characters:
+  what was built, with what, and what came of it.
+- Each "projects" entry is one description under {projects_limit} characters:
+  what was built, with what, and what came of it.
 - "skills" lists only technologies the evidence actually evidences, at most
   {skills_limit} of them, strongest first.
 
@@ -91,7 +93,8 @@ def compose_profile(
         PROFILE_PROMPT.format(
             headline_limit=field_spec("headline").limit,
             about_limit=field_spec("about").limit,
-            entry_limit=field_spec("experience").limit,
+            experience_limit=field_spec("experience").limit,
+            projects_limit=field_spec("projects").limit,
             skills_limit=field_spec("skills").limit,
             keywords=", ".join(keywords) or "none yet — write for the evidence itself",
             name=profile.name,

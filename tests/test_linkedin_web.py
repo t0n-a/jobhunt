@@ -4,6 +4,7 @@ from sqlmodel import Session, select
 
 from jobhunt.config import Config, LLMConfig, ProfileConfig
 from jobhunt.db import create_engine_for, init_db
+from jobhunt.linkedin.fields import field_spec
 from jobhunt.linkedin.models import LinkedinField
 from jobhunt.llm import FakeProvider
 from jobhunt.profile.models import AtomKind, EvidenceAtom, Provenance
@@ -92,6 +93,21 @@ def test_generating_with_no_evidence_explains_itself_instead_of_erroring(make_cl
     assert "confirm" in posted.text.lower()
 
 
+def test_a_genuine_provider_failure_is_still_a_502(make_client):
+    # EmptyProfileError subclasses LLMError, and the route must catch the
+    # narrower exception first. Atoms ARE seeded here, so build_profile gets
+    # past the empty-store check and reaches the LLM, where FakeProvider (given
+    # no queued responses) raises a plain LLMError. If the except clauses were
+    # ever reordered, this would start returning the empty-store page instead
+    # of a 502 — pinning both tests together pins the ordering.
+    client = make_client([])
+    seed_atom(client)
+
+    posted = client.post("/linkedin/generate", follow_redirects=False)
+
+    assert posted.status_code == 502
+
+
 def test_editing_a_field_returns_the_partial_and_marks_it_yours(make_client):
     client = make_client([response()])
     seed_atom(client)
@@ -124,12 +140,16 @@ def test_an_unknown_field_is_a_404(make_client):
 
 
 def test_an_over_length_field_says_so_on_the_page(make_client):
-    client = make_client([response(headline="Python " * 60)])
+    # compose_profile strips the text before storing it, so the length that
+    # actually gets checked is the stripped length, not the raw one.
+    long_headline = ("Python " * 60).strip()
+    client = make_client([response(headline=long_headline)])
     seed_atom(client)
     client.post("/linkedin/generate", follow_redirects=False)
 
     page = client.get("/linkedin")
-    assert "over LinkedIn" in page.text.lower() or "too long" in page.text.lower()
+    limit = field_spec("headline").limit
+    assert f"Too long for LinkedIn ({len(long_headline)} of {limit} characters)" in page.text
 
 
 def test_rejects_are_shown_on_the_page(make_client):
@@ -155,9 +175,49 @@ def test_an_older_version_is_readable(make_client):
     assert "First" in older.text
 
 
+def test_an_older_version_is_rendered_read_only(make_client):
+    client = make_client([response(headline="First"), response(headline="Second")])
+    seed_atom(client)
+    client.post("/linkedin/generate", follow_redirects=False)
+    client.post("/linkedin/generate", follow_redirects=False)
+
+    older = client.get("/linkedin/versions/1")
+    assert older.status_code == 200
+    assert "older version" in older.text.lower()
+    assert 'href="/linkedin"' in older.text
+    assert "<textarea" not in older.text
+    assert ">Approve<" not in older.text
+
+
 def test_an_unknown_version_is_a_404(make_client):
     client = make_client([])
     assert client.get("/linkedin/versions/999").status_code == 404
+
+
+def test_editing_a_field_on_an_older_version_is_refused(make_client):
+    client = make_client([response(headline="First"), response(headline="Second")])
+    seed_atom(client)
+    client.post("/linkedin/generate", follow_redirects=False)
+    old_field_id = field_ids(client, "headline")[0]
+    client.post("/linkedin/generate", follow_redirects=False)
+
+    refused = client.post(f"/linkedin/fields/{old_field_id}", data={"text": "Rewritten"})
+
+    assert refused.status_code == 409
+    assert "older version" in refused.text.lower()
+
+
+def test_approving_a_field_on_an_older_version_is_refused(make_client):
+    client = make_client([response(headline="First"), response(headline="Second")])
+    seed_atom(client)
+    client.post("/linkedin/generate", follow_redirects=False)
+    old_field_id = field_ids(client, "headline")[0]
+    client.post("/linkedin/generate", follow_redirects=False)
+
+    refused = client.post(f"/linkedin/fields/{old_field_id}/approve")
+
+    assert refused.status_code == 409
+    assert "older version" in refused.text.lower()
 
 
 def test_editing_an_approved_field_withdraws_the_approval(make_client):

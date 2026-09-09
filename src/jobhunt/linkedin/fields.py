@@ -76,6 +76,10 @@ def over_limit(spec: FieldSpec, text: str) -> bool:
 def over_limit_message(spec: FieldSpec, text: str) -> str:
     """Say what actually overran, in the units that actually overran.
 
+    Returns "" for text that is within every limit this spec sets — callers do
+    not need to guard the call with `field.over_limit` first, so this is a
+    real, reachable answer rather than a branch nothing ever takes.
+
     Skills has two independent caps — how many items, and how long each one
     is — and they are counted in different units (items vs. characters). A
     message that always reports characters can name the wrong limit entirely
@@ -90,4 +94,6 @@ def over_limit_message(spec: FieldSpec, text: str) -> str:
         if spec.item_limit is not None and any(len(item) > spec.item_limit for item in items):
             return f"One skill is longer than {spec.item_limit} characters"
         return ""
-    return f"{len(text)} of {spec.limit} characters"
+    if len(text) > spec.limit:
+        return f"{len(text)} of {spec.limit} characters"
+    return ""

@@ -8,14 +8,18 @@
     <p class="meta">Too long for LinkedIn ({{ limit_message }}) — trim it before pasting.</p>
   {% endif %}
 
+  {% if readonly %}
+    <p class="field-text">{{ field.text }}</p>
+  {% else %}
   <form method="post" action="/linkedin/fields/{{ field.id }}"
         hx-post="/linkedin/fields/{{ field.id }}"
         hx-target="#field-{{ field.id }}" hx-swap="outerHTML">
     <textarea name="text" rows="{% if spec.kind == 'prose' and spec.limit > 500 %}8{% else %}3{% endif %}">{{ field.text }}</textarea>
     <button type="submit">Save</button>
   </form>
+  {% endif %}
 
-  {% if diff|length > 1 %}
+  {% if diff_has_changes %}
     <p class="meta">Changed since the last build:
       {% for kind, chunk in diff %}<span class="diff-{{ kind }}">{{ chunk }}</span> {% endfor %}
     </p>
@@ -28,7 +32,7 @@
     {%- else %} · Not approved yet{% endif %}
   </p>
 
-  {% if not publishable %}
+  {% if not readonly and not publishable %}
     <button hx-post="/linkedin/fields/{{ field.id }}/approve"
             hx-target="#field-{{ field.id }}" hx-swap="outerHTML">Approve</button>
   {% endif %}
