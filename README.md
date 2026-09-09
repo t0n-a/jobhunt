@@ -2,7 +2,7 @@
 
 jobhunt is a local-first job-search agent. It finds and scores job postings, tailors an ATS-parseable resume per application, and converts aggregate skill gaps into one concrete, auto-verified daily task that earns a real resume line. Existing open-source tools (such as career-ops, autopilot-jobhunt, and Resume Matcher) handle discovery and tailoring, but none close the loop from skill gap to daily task to verified evidence.
 
-Phases 1 through 3 are built today: the profile subsystem, job discovery with scoring, and the daily skill-gap coach.
+All five phases are built: the profile subsystem, job discovery with scoring, the daily skill-gap coach, resume tailoring, and LinkedIn profile buildout. Phase 5 covers the profile text only — posting is not built, and the Status section says exactly where the line falls.
 
 ## Status
 
@@ -21,7 +21,7 @@ Downstream tailoring selects and rephrases existing atoms for a specific job; it
 
 ## Requirements
 
-- **OS:** Linux or WSL (reference environment is WSL2 on Windows).
+- **OS:** Linux or WSL (reference environment is WSL2 on Windows). Windows natively also runs the full suite; the only difference is that you need a Windows TeX distribution such as MiKTeX for the PDF step.
 - **Python:** 3.12, pinned via `uv python pin 3.12`. Do not use Python 3.13+, as several dependencies lack compatible wheels.
 - **Package manager:** [uv](https://astral.sh/uv).
 - **PDF tooling:** A TeX distribution providing `latexmk`, and `poppler-utils` providing `pdftotext` (used during PDF CV import and tailoring ATS checks). On Debian or Ubuntu:
@@ -43,6 +43,17 @@ uv run jobhunt serve
 ```
 
 Then open http://localhost:8000. Both `config.yaml` and `.env` are gitignored.
+
+## First Run, In Order
+
+Everything in this system is downstream of **confirmed evidence atoms**, so the order matters more than it looks:
+
+1. **Put something in the profile.** Import a CV, your GitHub, or a course list at `/import`, or answer questions at `/interview`.
+2. **Confirm the atoms at `/atoms`.** Imported atoms arrive *unconfirmed* — they are unreviewed model output, and nothing downstream will touch them until you have read each one. This is the step people skip.
+3. **`uv run jobhunt scan`.** Finds and scores jobs against what you confirmed. Start it and walk away; the first run is slow.
+4. **Then everything else works:** `/jobs` to see ranked matches, `/gaps` and `/today` for daily tasks, "Tailor a resume for this" on any job, and `/linkedin` for profile text.
+
+Steps 3 onward all **refuse to run** against an empty profile rather than producing something plausible. That is deliberate: with no evidence to match against, the scorer rates whichever job asks for least, and a generator with nothing to draw on writes confident fiction. An early refusal is the honest answer.
 
 ## LLM Provider
 
@@ -135,13 +146,29 @@ Fields longer than LinkedIn accepts are flagged rather than cut. The limits are 
 
 - `src/jobhunt/config.py`: Configuration models and YAML loading.
 - `src/jobhunt/db.py`: SQLite engine and session lifecycle.
-- `src/jobhunt/llm/`: Provider abstraction (`agy`, fake) and disk cache.
+- `src/jobhunt/llm/`: Provider abstraction (`agy`, OpenAI-compatible, fake) and disk cache.
 - `src/jobhunt/profile/`: Models, atom store, importers (CV, GitHub, coursework), and interview engine.
 - `src/jobhunt/sources/`: One adapter per job board, plus ATS board discovery.
 - `src/jobhunt/jobs/`: Raw postings, canonical jobs, dedupe, and the job store.
 - `src/jobhunt/matching/`: LLM scoring, track tagging, and skill-name canonicalisation.
+- `src/jobhunt/growth/`: Gap aggregation across scored jobs, fit-weighted.
+- `src/jobhunt/coach/`: Quest engine, daily task selection, GitHub verification, Telegram push.
+- `src/jobhunt/tailor/`: Keyword extraction, atom shortlisting, composition, the fabrication verifier, LaTeX rendering, and the ATS self-check.
+- `src/jobhunt/linkedin/`: Field registry and limits, profile versions, composition, the approval gate, and the per-field diff.
 - `src/jobhunt/scan.py`: Scan orchestration with per-source isolation and deadlines.
 - `src/jobhunt/web/`: FastAPI app, Jinja2 templates, HTMX partials.
+
+## Known Limitations
+
+Written down rather than left to be rediscovered:
+
+- `docs/superpowers/phase5-known-limitations.md` — the LinkedIn buildout: entry-level diffs mis-pair after an entry is dropped, an empty profile returns a 502 from the tailoring route (the LinkedIn route handles the same case properly), and smaller items.
+- `docs/superpowers/phase1-known-limitations.md` — the profile subsystem's original gaps, three of which Phase 2 closed.
+
+Two things worth knowing before you rely on this:
+
+- **The LinkedIn buildout has never been run against a live model.** Its tests all use a fake provider, so the approval gate and the verifier are proven, but the quality of what the real model writes is not.
+- **The design documents in `docs/superpowers/` are the reasoning**, not marketing. If you want to know why something works the way it does — particularly why fabrication is treated as a correctness bug — the specs argue it out.
 
 ## Development
 
