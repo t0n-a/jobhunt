@@ -52,7 +52,11 @@ class HackerNewsSource:
                 return
             started = time.monotonic()
             for comment_id in (story.get("kids") or [])[:MAX_COMMENTS]:
-                if time.monotonic() - started > self.deadline_seconds:
+                # Inclusive on purpose. `>` only stops a zero budget if the clock
+                # is finer-grained than the work: time.monotonic() resolves to
+                # 15.6ms on Windows, so 40 mocked fetches all report elapsed as
+                # exactly 0.0, and `0.0 > 0` let every one of them through.
+                if time.monotonic() - started >= self.deadline_seconds:
                     logger.warning(
                         "hackernews: stopped at the %ss deadline; "
                         "the thread has more comments than that budget allows",
