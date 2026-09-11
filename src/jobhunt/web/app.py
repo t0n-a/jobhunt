@@ -6,6 +6,7 @@ from pathlib import Path
 
 import httpx
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -82,6 +83,35 @@ def create_app(config: Config) -> FastAPI:
         if consumed:
             response.delete_cookie(FLASH_COOKIE, path="/")
         return response
+
+    @app.exception_handler(HTTPException)
+    async def html_errors(request: Request, exc: HTTPException):
+        """Browsers get the error inside the layout; HTMX and API clients keep JSON.
+
+        The default handler's JSON is what every existing test asserts on, so
+        the branch is on the request, never on the status code.
+        """
+        wants_html = "text/html" in request.headers.get("accept", "")
+        if not wants_html or "HX-Request" in request.headers:
+            return await http_exception_handler(request, exc)
+        titles = {
+            400: "That input could not be used",
+            404: "Not found",
+            409: "That is out of date",
+            502: "The model gave up",
+            503: "Something is missing",
+        }
+        return templates.TemplateResponse(
+            request,
+            "error.html",
+            {
+                "status_code": exc.status_code,
+                "title": titles.get(exc.status_code, "Something went wrong"),
+                "detail": exc.detail,
+                "back": request.headers.get("referer") or "/",
+            },
+            status_code=exc.status_code,
+        )
 
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 
