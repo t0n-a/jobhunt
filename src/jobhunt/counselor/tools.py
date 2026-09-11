@@ -33,16 +33,22 @@ def cached_repos(
     if cache.exists():
         try:
             data = json.loads(cache.read_text(encoding="utf-8"))
-            if time.time() - float(data.get("fetched_at", 0)) < REPO_CACHE_TTL_SECONDS:
+            if (
+                isinstance(data, dict)
+                and time.time() - float(data.get("fetched_at", 0)) < REPO_CACHE_TTL_SECONDS
+            ):
                 return list(data.get("repos", [])), ""
-        except (ValueError, OSError):
+        except (ValueError, OSError, AttributeError, TypeError):
             pass
     try:
         repos = fetch_repos(username, token)
     except Exception as exc:  # noqa: BLE001 — any failure becomes a note the model reads
         return [], f"GitHub unavailable: {exc}"
-    cache.parent.mkdir(parents=True, exist_ok=True)
-    cache.write_text(json.dumps({"fetched_at": time.time(), "repos": repos}), encoding="utf-8")
+    try:
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_text(json.dumps({"fetched_at": time.time(), "repos": repos}), encoding="utf-8")
+    except OSError:
+        pass
     return repos, ""
 
 
@@ -163,5 +169,5 @@ def run_tool(name: str, args: dict, session: Session, *, config: Config) -> str:
         return f"error: unknown tool {name!r}"
     try:
         return tool(args or {}, session, config)
-    except ValueError as exc:
+    except Exception as exc:  # noqa: BLE001 — the contract is a string, whatever went wrong
         return f"error: {exc}"

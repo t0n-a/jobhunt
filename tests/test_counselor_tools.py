@@ -155,3 +155,32 @@ def test_repo_tool_reads_from_the_cache(db, config, monkeypatch):
     text = run_tool("repo", {"name": "shortener"}, db, config=config)
     assert "Redis-backed" in text and "Python" in text
     assert run_tool("repo", {"name": "nope"}, db, config=config).startswith("error:")
+
+
+def test_cached_repos_treats_a_non_dict_cache_as_a_miss(tmp_path, monkeypatch):
+    cache = tmp_path / "counselor" / "repos-ada.json"
+    cache.parent.mkdir(parents=True)
+    cache.write_text("[]")
+    monkeypatch.setattr(
+        tools, "fetch_repos", lambda u, token=None: [{"name": "r", "full_name": "ada/r"}]
+    )
+    repos, note = cached_repos("ada", None, tmp_path)
+    assert repos == [{"name": "r", "full_name": "ada/r"}] and note == ""
+
+
+def test_cached_repos_survives_an_unwritable_cache_dir(tmp_path, monkeypatch):
+    blocker = tmp_path / "counselor"
+    blocker.write_text("not a directory")  # a file where the cache directory should be
+    monkeypatch.setattr(
+        tools, "fetch_repos", lambda u, token=None: [{"name": "r", "full_name": "ada/r"}]
+    )
+    repos, note = cached_repos("ada", None, tmp_path)
+    assert repos == [{"name": "r", "full_name": "ada/r"}] and note == ""
+
+
+def test_run_tool_turns_any_exception_into_an_error_string(db, config, monkeypatch):
+    def boom(args, session, cfg):
+        raise RuntimeError("kaboom")
+
+    monkeypatch.setitem(tools.TOOLS, "atom", boom)
+    assert run_tool("atom", {"id": 1}, db, config=config) == "error: kaboom"
