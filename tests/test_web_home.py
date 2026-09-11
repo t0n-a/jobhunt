@@ -105,7 +105,7 @@ def test_home_state_counts_from_the_database(client):
     assert (state.confirmed, state.unconfirmed) == (2, 1)
     assert (state.jobs_scored, state.jobs_total) == (1, 1)
     assert state.today_title == "Ship a Dockerfile"
-    assert state.next_step.text == "Confirm 1 atoms so they can be used."
+    assert state.next_step.text == "Confirm 1 atom so it can be used."
 
 
 def test_root_renders_home_with_the_banner(client):

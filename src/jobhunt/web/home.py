@@ -34,7 +34,9 @@ def next_step(
     if confirmed + unconfirmed == 0:
         return NextStep("Start by putting something in your profile.", "/import")
     if unconfirmed > 0:
-        return NextStep(f"Confirm {unconfirmed} atoms so they can be used.", "/atoms")
+        noun = "atom" if unconfirmed == 1 else "atoms"
+        pronoun = "it" if unconfirmed == 1 else "they"
+        return NextStep(f"Confirm {unconfirmed} {noun} so {pronoun} can be used.", "/atoms")
     if jobs_total == 0:
         return NextStep("Run `jobhunt scan` to find and score jobs.", None)
     if today_title:

@@ -46,7 +46,7 @@ Then open http://localhost:8000. Both `config.yaml` and `.env` are gitignored.
 
 ## First Run, In Order
 
-Everything in this system is downstream of **confirmed evidence atoms**, so the order matters more than it looks:
+Then open http://localhost:8000. The Home page shows the four stages and names the one thing to do next. Everything in this system is downstream of **confirmed evidence atoms**, so the order matters more than it looks:
 
 1. **Put something in the profile.** Import a CV, your GitHub, or a course list at `/import`, or answer questions at `/interview`.
 2. **Confirm the atoms at `/atoms`.** Imported atoms arrive *unconfirmed* — they are unreviewed model output, and nothing downstream will touch them until you have read each one. This is the step people skip.
@@ -109,7 +109,7 @@ the same scoring pipeline.
 
 The coach converts your aggregated skill gaps into concrete, day-sized tasks:
 
-- **`/gaps`:** Shows your missing skills ranked by fit-weighted job count (e.g. "missing from 14 of your best-fit jobs"), with a button to start a multi-day project (quest) to close one.
+- **`/gaps`** (the Gaps tab)**:** Shows your missing skills ranked by fit-weighted job count (e.g. "missing from 14 of your best-fit jobs"), with a button to start a multi-day project (quest) to close one.
 - **`/today`:** Displays exactly one task at a time. The duration matches your chosen energy level (low 15 / normal 45 / high 120 minutes). It states why the task matters and the exact CV line it earns *before* the work starts. Features "Done" and "Not this one" buttons, plus "Check my repo" to verify work against GitHub. Completing a task writes an unconfirmed EvidenceAtom (with `provenance=quest`) that you must still review.
 - **`jobhunt today`:** Prints your current task. This is used by the Claude Code SessionStart hook at `scripts/jobhunt-session-hook.sh`.
 - **`jobhunt notify`:** Pushes the current task to Telegram. Requires `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in `.env`.
@@ -156,7 +156,7 @@ Fields longer than LinkedIn accepts are flagged rather than cut. The limits are 
 - `src/jobhunt/tailor/`: Keyword extraction, atom shortlisting, composition, the fabrication verifier, LaTeX rendering, and the ATS self-check.
 - `src/jobhunt/linkedin/`: Field registry and limits, profile versions, composition, the approval gate, and the per-field diff.
 - `src/jobhunt/scan.py`: Scan orchestration with per-source isolation and deadlines.
-- `src/jobhunt/web/`: FastAPI app, Jinja2 templates, HTMX partials.
+- `src/jobhunt/web/`: FastAPI app, Jinja2 templates, HTMX partials, the Home page state, flash messages.
 
 ## Known Limitations
 

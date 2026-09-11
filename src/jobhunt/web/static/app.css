@@ -80,7 +80,7 @@ p { margin: 0 0 .85rem; }
 
 /* ---------- flash ---------- */
 .flash {
-  max-width: 44rem; margin: 1rem auto 0; padding: .7rem 1rem;
+  max-width: calc(44rem - 2.3rem); width: calc(100% - 2.3rem); margin: 1rem auto 0; padding: .7rem 1rem;
   border: 1px solid var(--line); border-radius: var(--radius);
   background: var(--surface); box-shadow: var(--shadow);
 }
@@ -159,6 +159,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
 }
 form { display: grid; gap: .6rem; margin: .75rem 0; }
 form.inline { display: inline; margin: 0; }
+form > button { justify-self: start; }
 details { margin: 1rem 0; }
 summary { cursor: pointer; font-weight: 600; color: var(--ink-soft); }
 
@@ -167,7 +168,7 @@ summary { cursor: pointer; font-weight: 600; color: var(--ink-soft); }
 .energy button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
 
 /* ---------- home ---------- */
-.steps { display: grid; gap: .8rem; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); }
+.steps { display: grid; gap: .8rem; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); }
 .steps .card .n { font-size: 1.6rem; font-weight: 700; letter-spacing: -.02em; }
 .steps .card .label {
   font-size: .78rem; letter-spacing: .09em; text-transform: uppercase;
@@ -180,5 +181,6 @@ summary { cursor: pointer; font-weight: 600; color: var(--ink-soft); }
   background: var(--surface); border: 1px solid var(--line);
   border-radius: var(--radius); padding: 1rem;
 }
+.prose { white-space: pre-line; }
 .diff-removed { text-decoration: line-through; color: var(--ink-soft); }
 .diff-added { background: var(--ok-bg); color: var(--ok); border-radius: 3px; padding: 0 .15rem; }
