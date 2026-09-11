@@ -68,4 +68,7 @@ def test_stylesheet_defines_the_tokens(client):
 def test_layout_ships_the_busy_button_script(client):
     html = client.get("/import").text
     assert "data-busy" in html
-    assert "dataset.busy" in html
+    assert '<script src="/static/app.js"></script>' in html
+    js = client.get("/static/app.js").text
+    assert "dataset.busy" in js
+    assert "setTimeout" in js
