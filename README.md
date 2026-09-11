@@ -109,7 +109,7 @@ the same scoring pipeline.
 
 The coach converts your aggregated skill gaps into concrete, day-sized tasks:
 
-- **`/gaps`** (the Gaps tab)**:** Shows your missing skills ranked by fit-weighted job count (e.g. "missing from 14 of your best-fit jobs"), with a button to start a multi-day project (quest) to close one.
+- **`/gaps` (the Gaps tab):** Shows your missing skills ranked by fit-weighted job count (e.g. "missing from 14 of your best-fit jobs"), with a button to start a multi-day project (quest) to close one.
 - **`/today`:** Displays exactly one task at a time. The duration matches your chosen energy level (low 15 / normal 45 / high 120 minutes). It states why the task matters and the exact CV line it earns *before* the work starts. Features "Done" and "Not this one" buttons, plus "Check my repo" to verify work against GitHub. Completing a task writes an unconfirmed EvidenceAtom (with `provenance=quest`) that you must still review.
 - **`jobhunt today`:** Prints your current task. This is used by the Claude Code SessionStart hook at `scripts/jobhunt-session-hook.sh`.
 - **`jobhunt notify`:** Pushes the current task to Telegram. Requires `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in `.env`.
