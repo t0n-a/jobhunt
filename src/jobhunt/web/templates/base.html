@@ -24,6 +24,8 @@
     {{ tab('/import', 'Import') }}
     <span class="who">{{ profile_name }}</span>
   </nav>
+  {% set flashed = read_flash(request) %}
+  {% if flashed %}<div class="flash {{ flashed[1] }}">{{ flashed[0] }}</div>{% endif %}
   <main>
     <h1>{% block kicker %}{{ self.title().split(' — ')[0] }}{% endblock %}</h1>
     {% block content %}{% endblock %}
