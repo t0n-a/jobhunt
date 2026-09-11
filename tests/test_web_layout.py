@@ -63,3 +63,9 @@ def test_stylesheet_defines_the_tokens(client):
     ):
         assert f"{token}:" in css
     assert "prefers-color-scheme: dark" in css
+
+
+def test_layout_ships_the_busy_button_script(client):
+    html = client.get("/import").text
+    assert "data-busy" in html
+    assert "dataset.busy" in html
