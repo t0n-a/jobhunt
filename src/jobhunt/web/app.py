@@ -32,6 +32,7 @@ from jobhunt.profile.store import AtomStore
 from jobhunt.tailor.models import Application, delete_bullet, edit_bullet, iter_bullets
 from jobhunt.tailor.pipeline import mark_applied, render_application, tailor_job
 from jobhunt.web.deps import get_llm, get_store
+from jobhunt.web.home import home_state
 
 HERE = Path(__file__).parent
 
@@ -73,8 +74,9 @@ def create_app(config: Config) -> FastAPI:
         return {"status": "ok"}
 
     @app.get("/")
-    def root():
-        return RedirectResponse("/atoms")
+    def home_page(request: Request):
+        with Session(app.state.engine) as db:
+            return templates.TemplateResponse(request, "home.html", {"state": home_state(db)})
 
     @app.get("/atoms")
     def atoms_page(

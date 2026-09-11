@@ -46,11 +46,11 @@ def test_healthz_returns_ok(client):
     assert response.json() == {"status": "ok"}
 
 
-def test_root_redirects_to_atoms(client):
-    response = client.get("/", follow_redirects=False)
+def test_root_renders_home(client):
+    response = client.get("/")
 
-    assert response.status_code == 307
-    assert response.headers["location"] == "/atoms"
+    assert response.status_code == 200
+    assert "Evidence" in response.text
 
 
 def test_atoms_page_renders_empty_state(client):
