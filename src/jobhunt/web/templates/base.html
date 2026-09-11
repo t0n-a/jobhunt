@@ -8,19 +8,25 @@
   <script src="/static/htmx.min.js"></script>
 </head>
 <body>
-  <header>
-    <strong>jobhunt</strong>
-    <nav>
-      <a href="/today">Today</a>
-      <a href="/jobs">Jobs</a>
-      <a href="/applications">Applications</a>
-      <a href="/linkedin">LinkedIn</a>
-      <a href="/atoms">Evidence</a>
-      <a href="/interview">Interview</a>
-      <a href="/import">Import</a>
-    </nav>
+  {% set path = request.url.path %}
+  {% macro tab(href, label) -%}
+    <a href="{{ href }}"{% if path == href or (href != '/' and path.startswith(href + '/')) or (href != '/' and path == href) %} aria-current="page"{% endif %}>{{ label }}</a>
+  {%- endmacro %}
+  <nav class="tabs">
+    {{ tab('/', 'Home') }}
+    {{ tab('/today', 'Today') }}
+    {{ tab('/jobs', 'Jobs') }}
+    {{ tab('/gaps', 'Gaps') }}
+    {{ tab('/applications', 'Applications') }}
+    {{ tab('/linkedin', 'LinkedIn') }}
+    {{ tab('/atoms', 'Evidence') }}
+    {{ tab('/interview', 'Interview') }}
+    {{ tab('/import', 'Import') }}
     <span class="who">{{ profile_name }}</span>
-  </header>
-  <main>{% block content %}{% endblock %}</main>
+  </nav>
+  <main>
+    <h1>{% block kicker %}{{ self.title().split(' — ')[0] }}{% endblock %}</h1>
+    {% block content %}{% endblock %}
+  </main>
 </body>
 </html>
