@@ -1,11 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Jobs — jobhunt{% endblock %}
 {% block content %}
-<h1>Jobs</h1>
-
 {% if tracks %}
-  <p class="tracks">Your best matches look like:
-    {% for name, count in tracks %}<span class="skill">{{ name }} · {{ count }}</span>{% endfor %}
+  <p class="meta">Your best matches look like:
+    {% for name, count in tracks %}<span class="pill">{{ name }} · {{ count }}</span>{% endfor %}
   </p>
 {% endif %}
 
@@ -16,14 +14,14 @@
     <input type="text" name="company" placeholder="Company" required>
     <input type="text" name="url" placeholder="URL (optional)">
     <textarea name="description" rows="8" placeholder="Paste the full job description" required></textarea>
-    <button type="submit">Score it</button>
+    <button type="submit" class="primary" data-busy="Scoring…">Score it</button>
   </form>
 </details>
 
 {% if not jobs %}
   <p class="empty">No jobs yet. Run <code>jobhunt scan</code>, or paste one above.</p>
 {% else %}
-  <ul class="atoms">
+  <ul class="cards">
     {% for job in jobs %}{% include "partials/job_row.html" %}{% endfor %}
   </ul>
 {% endif %}

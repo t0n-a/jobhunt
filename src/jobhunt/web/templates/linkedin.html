@@ -2,14 +2,12 @@
 {% extends "base.html" %}
 {% block title %}LinkedIn — jobhunt{% endblock %}
 {% block content %}
-<h1>LinkedIn profile</h1>
-
 {% if refusal %}
-  <p class="meta">{{ refusal }}</p>
+  <div class="callout"><p>{{ refusal }}</p></div>
 {% endif %}
 
 <form method="post" action="/linkedin/generate">
-  <button type="submit">Build from my evidence</button>
+  <button type="submit" class="primary" data-busy="Building…">Build from my evidence</button>
 </form>
 
 {% if version %}
@@ -25,23 +23,32 @@
       <a href="/linkedin">Back to the latest.</a>
     </p>
   {% else %}
-    <p class="meta">Nothing here is published. Read each field, edit it if you want, then approve it.</p>
+    <div class="callout">
+      <strong>Nothing here is published.</strong>
+      <p>Read each field, edit it if you want, then approve it. Paste approved text into LinkedIn yourself.</p>
+    </div>
   {% endif %}
 
-  <ul class="atoms">
-    {% for item in fields %}
-      {% with field = item.field, spec = item.spec, diff = item.diff, diff_has_changes = item.diff_has_changes, publishable = item.publishable, limit_message = item.limit_message, readonly = item.readonly %}
-        {% include "partials/linkedin_field.html" %}
-      {% endwith %}
-    {% endfor %}
-  </ul>
+  {% for group_name in ["headline", "about", "experience", "projects", "skills"] %}
+    {% set items = fields | selectattr("field.name", "equalto", group_name) | list %}
+    {% if items %}
+      <h3>{{ group_name | capitalize }}</h3>
+      <ul class="cards">
+        {% for item in items %}
+          {% with field = item.field, spec = item.spec, diff = item.diff, diff_has_changes = item.diff_has_changes, publishable = item.publishable, limit_message = item.limit_message, readonly = item.readonly %}
+            {% include "partials/linkedin_field.html" %}
+          {% endwith %}
+        {% endfor %}
+      </ul>
+    {% endif %}
+  {% endfor %}
 
   {% if dropped %}
-    <h2>Dropped, unverified</h2>
+    <h3>Dropped, unverified</h3>
     <p class="meta">Your evidence did not support these, so they are not in any field.</p>
-    <ul class="atoms">
+    <ul class="cards">
       {% for item in dropped %}
-        <li class="atom unconfirmed">
+        <li class="card warn">
           <p>{{ item.text }}</p>
           <p class="meta">{{ item.field }} · {{ item.reason }}</p>
         </li>
@@ -49,6 +56,6 @@
     </ul>
   {% endif %}
 {% else %}
-  <p class="meta">Nothing built yet.</p>
+  <p class="empty">Nothing built yet.</p>
 {% endif %}
 {% endblock %}

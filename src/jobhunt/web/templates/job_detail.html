@@ -1,33 +1,38 @@
 {% extends "base.html" %}
 {% block title %}{{ job.title }} — jobhunt{% endblock %}
+{% block kicker %}Jobs{% endblock %}
 {% block content %}
-<h1>{{ job.title }}</h1>
+<h2>{{ job.title }}</h2>
 <p class="meta">{{ job.company }}{% if job.location %} · {{ job.location }}{% endif %}
   {% if job.remote %} · remote{% endif %}
   {% if job.url %} · <a href="{{ job.url }}">original posting</a>{% endif %}</p>
 
 {% if score %}
-  <p class="meta">Fit {{ score.fit_score }}/100 · {{ score.track }} · seniority {{ score.seniority_fit }}</p>
+  <p><span class="pill{% if score.fit_score >= 70 %} ok{% endif %}">fit {{ score.fit_score }}/100</span>
+     <span class="pill">{{ score.track }}</span>
+     <span class="pill">seniority {{ score.seniority_fit }}</span></p>
   <p>{{ score.rationale }}</p>
-  <h2>Matched</h2>
-  <p>{% for s in score.matched_skills %}<span class="skill">{{ s }}</span>{% endfor %}</p>
-  <h2>Missing</h2>
-  <p>{% for s in score.missing_skills %}<span class="skill">{{ s }}</span>{% endfor %}</p>
+  <h4>Matched</h4>
+  <p>{% for s in score.matched_skills %}<span class="pill ok">{{ s }}</span>{% endfor %}</p>
+  <h4>Missing</h4>
+  <p>{% for s in score.missing_skills %}<span class="pill warn">{{ s }}</span>{% endfor %}</p>
   {% if score.red_flags %}
-    <h2>Red flags</h2>
+    <h4>Red flags</h4>
     <ul>{% for f in score.red_flags %}<li>{{ f }}</li>{% endfor %}</ul>
   {% endif %}
 {% else %}
   <p class="empty">Not scored yet.</p>
 {% endif %}
 
-<form method="post" action="/jobs/{{ job.id }}/rescore">
-  <button type="submit">Re-score</button>
-</form>
-<form method="post" action="/jobs/{{ job.id }}/tailor">
-  <button type="submit">Tailor a resume for this</button>
-</form>
+<div class="actions">
+  <form method="post" action="/jobs/{{ job.id }}/tailor">
+    <button type="submit" class="primary" data-busy="Tailoring…">Tailor a resume for this</button>
+  </form>
+  <form method="post" action="/jobs/{{ job.id }}/rescore">
+    <button type="submit" data-busy="Scoring…">Re-score</button>
+  </form>
+</div>
 
-<h2>Posting</h2>
+<h3>Posting</h3>
 <p>{{ job.description }}</p>
 {% endblock %}

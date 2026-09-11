@@ -2,13 +2,17 @@
 {% if open_turn and open_turn.answer is none %}
   <p class="question">{{ open_turn.question }}</p>
   <form hx-post="/interview/{{ current.id }}/answer"
-        hx-target="#interview-turn" hx-swap="innerHTML">
+        hx-target="#interview-turn" hx-swap="innerHTML"
+        hx-indicator="#answer-ind" hx-disabled-elt="find button">
     <textarea name="answer" rows="4" required></textarea>
-    <button type="submit">Answer</button>
+    <div class="actions">
+      <button type="submit" class="primary">Answer</button>
+      <span id="answer-ind" class="indicator">Thinking of the next question…</span>
+    </div>
   </form>
 {% else %}
   <p>That's enough for this topic.</p>
 {% endif %}
 <form method="post" action="/interview/{{ current.id }}/harvest">
-  <button type="submit">Finish and extract evidence</button>
+  <button type="submit" data-busy="Extracting…">Finish and extract evidence</button>
 </form>

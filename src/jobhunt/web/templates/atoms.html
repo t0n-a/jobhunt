@@ -1,12 +1,14 @@
 {% extends "base.html" %}
 {% block title %}Evidence — jobhunt{% endblock %}
 {% block content %}
-<h1>Evidence</h1>
 {% if not atoms %}
   <p class="empty">No evidence yet. Start with the
     <a href="/interview">interview</a> or <a href="/import">import</a> a CV.</p>
 {% else %}
-  <ul class="atoms">
+  {% set pending = atoms | rejectattr("confirmed") | list | length %}
+  <p class="meta">{{ atoms | length - pending }} confirmed
+    {%- if pending %} · <span class="pill warn">{{ pending }} unconfirmed</span> — read each one, then confirm or delete it{% endif %}</p>
+  <ul class="cards">
     {% for atom in atoms %}{% include "partials/atom_row.html" %}{% endfor %}
   </ul>
 {% endif %}

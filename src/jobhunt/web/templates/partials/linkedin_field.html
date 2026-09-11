@@ -1,8 +1,10 @@
 <!-- src/jobhunt/web/templates/partials/linkedin_field.html -->
-<li class="atom{% if not publishable %} unconfirmed{% endif %}" id="field-{{ field.id }}">
-  <h3>
-    {{ field.name|capitalize }}{% if field.entry_title %} — {{ field.entry_title }}{% endif %}
-  </h3>
+<li class="card{% if field.over_limit %} warn{% endif %}" id="field-{{ field.id }}">
+  <div class="head">
+    <h3>{% if field.entry_title %}{{ field.entry_title }}{% else %}{{ field.name|capitalize }}{% endif %}</h3>
+    {% if publishable %}<span class="pill ok">Approved {{ field.approved_at.date() }}</span>
+    {% else %}<span class="pill warn">Not approved yet</span>{% endif %}
+  </div>
 
   {% if field.over_limit %}
     <p class="meta">Too long for LinkedIn ({{ limit_message }}) — trim it before pasting.</p>
@@ -15,7 +17,13 @@
         hx-post="/linkedin/fields/{{ field.id }}"
         hx-target="#field-{{ field.id }}" hx-swap="outerHTML">
     <textarea name="text" rows="{% if spec.kind == 'prose' and spec.limit > 500 %}8{% else %}3{% endif %}">{{ field.text }}</textarea>
-    <button type="submit">Save</button>
+    <div class="actions">
+      <button type="submit">Save</button>
+      {% if not publishable %}
+        <button type="button" class="primary" hx-post="/linkedin/fields/{{ field.id }}/approve"
+                hx-target="#field-{{ field.id }}" hx-swap="outerHTML">Approve</button>
+      {% endif %}
+    </div>
   </form>
   {% endif %}
 
@@ -28,12 +36,6 @@
   <p class="meta">
     {% if field.source == 'user' %}Yours{% else %}Drafted from your evidence{% endif %}
     {%- if field.atom_id %} · from atom {{ field.atom_id }}{% endif %}
-    {%- if publishable %} · Approved {{ field.approved_at.date() }} by {{ field.approved_by }}
-    {%- else %} · Not approved yet{% endif %}
+    {%- if publishable %} · by {{ field.approved_by }}{% endif %}
   </p>
-
-  {% if not readonly and not publishable %}
-    <button hx-post="/linkedin/fields/{{ field.id }}/approve"
-            hx-target="#field-{{ field.id }}" hx-swap="outerHTML">Approve</button>
-  {% endif %}
 </li>
