@@ -1,21 +1,19 @@
 {% extends "base.html" %}
 {% block title %}Interview — jobhunt{% endblock %}
 {% block content %}
-<h1>Interview</h1>
-
 <form method="post" action="/interview">
   <input type="text" name="topic" placeholder="A project, internship, or course" required>
-  <button type="submit">Start</button>
+  <button type="submit" class="primary" data-busy="Thinking…">Start</button>
 </form>
 
 {% if current %}
-  <div id="interview-turn">
+  <div id="interview-turn" class="card">
     {% include "partials/interview_turn.html" %}
   </div>
 {% endif %}
 
 {% if sessions %}
-  <h2>Past topics</h2>
+  <h3>Past topics</h3>
   <ul>
     {% for s in sessions %}
       <li><a href="/interview/{{ s.id }}">{{ s.topic }}</a> — {{ s.status }}</li>

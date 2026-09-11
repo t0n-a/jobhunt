@@ -1,18 +1,18 @@
 {% extends "base.html" %}
 {% block title %}Gaps — jobhunt{% endblock %}
 {% block content %}
-<h1>Skill gaps</h1>
 {% if not gaps %}
   <p class="empty">No gaps yet. Run <code>jobhunt scan</code> to score some jobs first.</p>
 {% else %}
-  <ul class="atoms">
+  <p class="meta">Skills your best-fit jobs ask for that your evidence does not show.</p>
+  <ul class="cards">
     {% for gap in gaps %}
-      <li class="atom">
+      <li class="card">
         <h3>{{ gap.skill }}</h3>
         <p class="meta">Missing from {{ gap.job_count }} of your best-fit jobs
           {%- if gap.example_titles %}, including {{ gap.example_titles[0] }}{% endif %}.</p>
         <form method="post" action="/gaps/{{ gap.skill }}/start">
-          <button type="submit">Start a project for this</button>
+          <button type="submit" class="primary" data-busy="Planning…">Start a project for this</button>
         </form>
       </li>
     {% endfor %}

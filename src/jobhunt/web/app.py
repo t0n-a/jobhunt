@@ -6,10 +6,12 @@ from pathlib import Path
 
 import httpx
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from jobhunt.coach.engine import Coach
 from jobhunt.coach.models import Energy
@@ -32,6 +34,8 @@ from jobhunt.profile.store import AtomStore
 from jobhunt.tailor.models import Application, delete_bullet, edit_bullet, iter_bullets
 from jobhunt.tailor.pipeline import mark_applied, render_application, tailor_job
 from jobhunt.web.deps import get_llm, get_store
+from jobhunt.web.flash import FLASH_COOKIE, flash, read_flash
+from jobhunt.web.home import home_state
 
 HERE = Path(__file__).parent
 
@@ -64,7 +68,51 @@ def create_app(config: Config) -> FastAPI:
 
     templates = Jinja2Templates(directory=HERE / "templates")
     templates.env.globals["profile_name"] = config.profile.name
+    templates.env.globals["read_flash"] = read_flash
     app.state.templates = templates
+
+    @app.middleware("http")
+    async def clear_flash(request: Request, call_next):
+        """A flash is shown once: the full-page GET that follows the redirect."""
+        response = await call_next(request)
+        consumed = (
+            request.method == "GET"
+            and FLASH_COOKIE in request.cookies
+            and "HX-Request" not in request.headers
+            and response.headers.get("content-type", "").startswith("text/html")
+        )
+        if consumed:
+            response.delete_cookie(FLASH_COOKIE, path="/")
+        return response
+
+    @app.exception_handler(StarletteHTTPException)
+    async def html_errors(request: Request, exc: StarletteHTTPException):
+        """Browsers get the error inside the layout; HTMX and API clients keep JSON.
+
+        The default handler's JSON is what every existing test asserts on, so
+        the branch is on the request, never on the status code.
+        """
+        wants_html = "text/html" in request.headers.get("accept", "")
+        if not wants_html or "HX-Request" in request.headers:
+            return await http_exception_handler(request, exc)
+        titles = {
+            400: "That input could not be used",
+            404: "Not found",
+            409: "That is out of date",
+            502: "The model gave up",
+            503: "Something is missing",
+        }
+        return templates.TemplateResponse(
+            request,
+            "error.html",
+            {
+                "status_code": exc.status_code,
+                "title": titles.get(exc.status_code, "Something went wrong"),
+                "detail": exc.detail,
+                "back": request.headers.get("referer") or "/",
+            },
+            status_code=exc.status_code,
+        )
 
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 
@@ -73,8 +121,9 @@ def create_app(config: Config) -> FastAPI:
         return {"status": "ok"}
 
     @app.get("/")
-    def root():
-        return RedirectResponse("/atoms")
+    def home_page(request: Request):
+        with Session(app.state.engine) as db:
+            return templates.TemplateResponse(request, "home.html", {"state": home_state(db)})
 
     @app.get("/atoms")
     def atoms_page(
@@ -86,6 +135,12 @@ def create_app(config: Config) -> FastAPI:
     @app.get("/import")
     def import_page(request: Request):
         return templates.TemplateResponse(request, "import.html", {})
+
+    def _imported(count: int):
+        response = RedirectResponse("/atoms", status_code=303)
+        if count == 0:
+            return flash(response, "Nothing found to import.", "warn")
+        return flash(response, f"{count} atoms imported — confirm the ones that are right.")
 
     @app.post("/import/cv")
     def import_cv_route(
@@ -114,7 +169,7 @@ def create_app(config: Config) -> FastAPI:
             atoms = import_cv(target, llm)
 
         store.add_many(atoms)
-        return RedirectResponse("/atoms", status_code=303)
+        return _imported(len(atoms))
 
     @app.post("/import/github")
     def import_github_route(
@@ -129,7 +184,7 @@ def create_app(config: Config) -> FastAPI:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
         store.add_many(atoms)
-        return RedirectResponse("/atoms", status_code=303)
+        return _imported(len(atoms))
 
     @app.post("/import/coursework")
     def import_coursework_route(
@@ -142,7 +197,7 @@ def create_app(config: Config) -> FastAPI:
             atoms = import_coursework(text, institution, llm)
 
         store.add_many(atoms)
-        return RedirectResponse("/atoms", status_code=303)
+        return _imported(len(atoms))
 
     @app.get("/interview")
     def interview_page(request: Request):
@@ -222,7 +277,10 @@ def create_app(config: Config) -> FastAPI:
             AtomStore(db).add_many(atoms)
             db.add(interview)
             db.commit()
-        return RedirectResponse("/atoms", status_code=303)
+        response = RedirectResponse("/atoms", status_code=303)
+        if len(atoms) == 0:
+            return flash(response, "Nothing to extract yet — answer at least one question.", "warn")
+        return flash(response, f"{len(atoms)} atoms extracted — confirm them below.")
 
     @app.post("/atoms/{atom_id}/confirm")
     def atom_confirm(request: Request, atom_id: int, store: AtomStore = Depends(get_store)):
@@ -307,7 +365,8 @@ def create_app(config: Config) -> FastAPI:
                 score = score_job(job, atoms, llm)
             db.add(score)
             db.commit()
-        return RedirectResponse("/jobs", status_code=303)
+            title, company = job.title, job.company
+        return flash(RedirectResponse("/jobs", status_code=303), f"Scored: {title} at {company}.")
 
     @app.post("/jobs/{job_id}/rescore")
     def job_rescore(job_id: int, llm: LLMProvider = Depends(get_llm)):
@@ -322,7 +381,7 @@ def create_app(config: Config) -> FastAPI:
                 db.delete(old)
             db.add(score)
             db.commit()
-        return RedirectResponse(f"/jobs/{job_id}", status_code=303)
+        return flash(RedirectResponse(f"/jobs/{job_id}", status_code=303), "Re-scored.")
 
     def _coach(db: Session, llm) -> Coach:
         return Coach(
@@ -358,14 +417,17 @@ def create_app(config: Config) -> FastAPI:
         llm: LLMProvider = Depends(get_llm),
     ):
         with Session(app.state.engine) as db:
-            _coach(db, llm).complete_current(proof_note or None)
-        return RedirectResponse("/today", status_code=303)
+            atom = _coach(db, llm).complete_current(proof_note or None)
+        response = RedirectResponse("/today", status_code=303)
+        if atom is not None:
+            return flash(response, "Done. That earns an evidence line — confirm it on Evidence.")
+        return flash(response, "Nothing to mark done.", "warn")
 
     @app.post("/today/swap")
     def today_swap(llm: LLMProvider = Depends(get_llm)):
         with Session(app.state.engine) as db:
             _coach(db, llm).swap_current()
-        return RedirectResponse("/today", status_code=303)
+        return flash(RedirectResponse("/today", status_code=303), "Swapped.")
 
     @app.post("/today/verify")
     def today_verify(request: Request, llm: LLMProvider = Depends(get_llm)):
@@ -388,7 +450,10 @@ def create_app(config: Config) -> FastAPI:
                 raise HTTPException(status_code=404, detail="No such gap")
             with _importer_errors():
                 _coach(db, llm).start_quest(gap)
-        return RedirectResponse("/today", status_code=303)
+        return flash(
+            RedirectResponse("/today", status_code=303),
+            f"Quest started for {skill}. Your first task is on Today.",
+        )
 
     def _application(db: Session, application_id: int) -> Application:
         application = db.get(Application, application_id)
@@ -405,7 +470,10 @@ def create_app(config: Config) -> FastAPI:
             with _importer_errors():
                 application = tailor_job(db, job, llm, profile=config.profile)
             application_id = application.id
-        return RedirectResponse(f"/applications/{application_id}", status_code=303)
+        return flash(
+            RedirectResponse(f"/applications/{application_id}", status_code=303),
+            "Resume tailored — read the header before you send it.",
+        )
 
     @app.get("/applications")
     def applications_page(request: Request):
@@ -487,10 +555,17 @@ def create_app(config: Config) -> FastAPI:
         with Session(app.state.engine) as db:
             application = _application(db, application_id)
             with _importer_errors():
-                render_application(
+                rendered = render_application(
                     db, application, profile=config.profile, data_dir=config.data_dir
                 )
-        return RedirectResponse(f"/applications/{application_id}", status_code=303)
+            coverage = rendered.coverage
+        response = RedirectResponse(f"/applications/{application_id}", status_code=303)
+        if coverage is None:
+            return flash(response, "PDF rendered.")
+        elif coverage < 60:
+            return flash(response, f"PDF rendered — {coverage:.0f}% keyword coverage.", "warn")
+        else:
+            return flash(response, f"PDF rendered — {coverage:.0f}% keyword coverage.", "ok")
 
     @app.get("/applications/{application_id}/pdf")
     def application_pdf(application_id: int):
@@ -506,7 +581,7 @@ def create_app(config: Config) -> FastAPI:
     def application_applied(application_id: int):
         with Session(app.state.engine) as db:
             mark_applied(db, _application(db, application_id))
-        return RedirectResponse("/applications", status_code=303)
+        return flash(RedirectResponse("/applications", status_code=303), "Marked as applied.")
 
     def _previous_texts(store: LinkedinStore, version) -> dict[tuple[str, int], str]:
         """This version's predecessor's text, keyed the same way a field is: by
@@ -582,7 +657,8 @@ def create_app(config: Config) -> FastAPI:
     def linkedin_generate(request: Request, llm: LLMProvider = Depends(get_llm)):
         with Session(app.state.engine) as db:
             try:
-                build_profile(db, llm, profile=config.profile)
+                version = build_profile(db, llm, profile=config.profile)
+                dropped = len(version.dropped or [])
             except EmptyProfileError as exc:
                 # Not a 502: this is the user's own store being empty, and the
                 # page can say what to do about it. Caught BEFORE _importer_errors,
@@ -592,7 +668,12 @@ def create_app(config: Config) -> FastAPI:
                 return templates.TemplateResponse(request, "linkedin.html", context)
             except LLMError as exc:
                 raise HTTPException(status_code=502, detail=str(exc)) from exc
-        return RedirectResponse("/linkedin", status_code=303)
+        response = RedirectResponse("/linkedin", status_code=303)
+        if dropped > 0:
+            return flash(
+                response, f"Profile built. {dropped} fields dropped as unverified.", "warn"
+            )
+        return flash(response, "Profile built.")
 
     @app.post("/linkedin/fields/{field_id}")
     def linkedin_edit_field(request: Request, field_id: int, text: str = Form(...)):

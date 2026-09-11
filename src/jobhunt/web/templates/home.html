@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Home — jobhunt{% endblock %}
+{% block content %}
+<div class="callout">
+  <strong>Next</strong>
+  {% if state.next_step.href %}
+    <p><a href="{{ state.next_step.href }}">{{ state.next_step.text }}</a></p>
+  {% else %}
+    <p>{{ state.next_step.text | replace("`jobhunt scan`", "<code>jobhunt scan</code>") | safe }}</p>
+  {% endif %}
+  {% if state.confirmed + state.unconfirmed == 0 %}
+    <p class="meta">Import a CV, your GitHub or a course list — or <a href="/interview">answer a few questions</a>.</p>
+  {% endif %}
+</div>
+
+<div class="steps">
+  <a class="card" href="/atoms">
+    <p class="label">1 · Evidence</p>
+    <p class="n">{{ state.confirmed }}</p>
+    <p class="meta">confirmed
+      {%- if state.unconfirmed %} · <span class="pill warn">{{ state.unconfirmed }} unconfirmed</span>{% endif %}</p>
+  </a>
+  <a class="card" href="/jobs">
+    <p class="label">2 · Jobs</p>
+    <p class="n">{{ state.jobs_scored }}</p>
+    <p class="meta">scored of {{ state.jobs_total }}</p>
+  </a>
+  <a class="card" href="/today">
+    <p class="label">3 · Today</p>
+    <p class="n">{% if state.today_title %}1{% else %}0{% endif %}</p>
+    <p class="meta">{{ state.today_title or "no quest running" }}</p>
+  </a>
+  <a class="card" href="/applications">
+    <p class="label">4 · Applications</p>
+    <p class="n">{{ state.applications }}</p>
+    <p class="meta">tailored</p>
+  </a>
+</div>
+{% endblock %}
