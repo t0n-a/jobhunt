@@ -11,6 +11,7 @@
   <form method="post" action="/today/energy" class="energy">
     {% for level in ["low", "normal", "high"] %}
       <button type="submit" name="energy" value="{{ level }}"
+              data-busy="{{ level }}"
               aria-pressed="{{ 'true' if energy.value == level else 'false' }}">{{ level }}</button>
     {% endfor %}
   </form>

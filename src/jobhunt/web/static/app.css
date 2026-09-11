@@ -108,6 +108,8 @@ button.danger { border-color: transparent; background: none; color: var(--err); 
 button.danger:hover { background: var(--surface-2); }
 .actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin: .75rem 0 0; }
 .actions form { margin: 0; }
+.actions > details { flex-basis: 100%; margin: 0; }
+.actions > details > form { margin-top: .6rem; }
 
 /* ---------- indicators ---------- */
 .indicator { display: none; color: var(--ink-soft); font-size: .88rem; }

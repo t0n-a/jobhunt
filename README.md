@@ -46,7 +46,7 @@ Then open http://localhost:8000. Both `config.yaml` and `.env` are gitignored.
 
 ## First Run, In Order
 
-Then open http://localhost:8000. The Home page shows the four stages and names the one thing to do next. Everything in this system is downstream of **confirmed evidence atoms**, so the order matters more than it looks:
+The Home page shows the four stages and names the one thing to do next. Everything in this system is downstream of **confirmed evidence atoms**, so the order matters more than it looks:
 
 1. **Put something in the profile.** Import a CV, your GitHub, or a course list at `/import`, or answer questions at `/interview`.
 2. **Confirm the atoms at `/atoms`.** Imported atoms arrive *unconfirmed* — they are unreviewed model output, and nothing downstream will touch them until you have read each one. This is the step people skip.

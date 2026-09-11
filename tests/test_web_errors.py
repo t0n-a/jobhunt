@@ -36,3 +36,10 @@ def test_htmx_and_api_clients_keep_json(client):
 
     plain = client.get("/jobs/999")
     assert plain.json() == {"detail": "No such job"}
+
+
+def test_unknown_route_gets_the_error_page_too(client):
+    response = client.get("/no-such-page", headers={"Accept": "text/html"})
+
+    assert response.status_code == 404
+    assert 'class="tabs"' in response.text

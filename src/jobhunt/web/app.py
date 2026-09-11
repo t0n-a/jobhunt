@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from jobhunt.coach.engine import Coach
 from jobhunt.coach.models import Energy
@@ -84,8 +85,8 @@ def create_app(config: Config) -> FastAPI:
             response.delete_cookie(FLASH_COOKIE, path="/")
         return response
 
-    @app.exception_handler(HTTPException)
-    async def html_errors(request: Request, exc: HTTPException):
+    @app.exception_handler(StarletteHTTPException)
+    async def html_errors(request: Request, exc: StarletteHTTPException):
         """Browsers get the error inside the layout; HTMX and API clients keep JSON.
 
         The default handler's JSON is what every existing test asserts on, so
