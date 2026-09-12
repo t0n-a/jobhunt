@@ -1,11 +1,11 @@
 import pytest
 from jsonschema import Draft202012Validator
 
+from jobhunt.counselor.actions import ACTION_SCHEMA
 from jobhunt.matching.score import SCORE_SCHEMA
 from jobhunt.profile.importers.coursework import COURSEWORK_SCHEMA
 from jobhunt.profile.importers.cv import CV_ATOM_SCHEMA
 from jobhunt.profile.importers.github import REPO_ATOM_SCHEMA
-from jobhunt.profile.interview import ATOM_SCHEMA
 
 SCHEMAS_AND_EXAMPLES = [
     (
@@ -48,18 +48,11 @@ SCHEMAS_AND_EXAMPLES = [
         },
     ),
     (
-        "ATOM_SCHEMA",
-        ATOM_SCHEMA,
+        "ACTION_SCHEMA",
+        ACTION_SCHEMA,
         {
-            "atoms": [
-                {
-                    "kind": "project",
-                    "title": "Distributed cache",
-                    "description": "Built distributed cache in Go.",
-                    "skills": ["Go", "Distributed Systems"],
-                    "metrics": "sub-millisecond latency",
-                }
-            ]
+            "action": "ask",
+            "text": "What did you build?",
         },
     ),
 ]

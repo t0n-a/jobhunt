@@ -46,7 +46,7 @@ def run_scan_command(config) -> str:
     line = " ".join(parts)
     if result.scoring_skipped:
         line += f"\n  Scoring skipped: {result.scoring_skipped}."
-        line += "\n  Build your profile first: run `jobhunt serve` and use /interview."
+        line += "\n  Build your profile first: run `jobhunt serve` and use /counselor."
     return line
 
 

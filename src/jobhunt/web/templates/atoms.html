@@ -3,7 +3,7 @@
 {% block content %}
 {% if not atoms %}
   <p class="empty">No evidence yet. Start with the
-    <a href="/interview">interview</a> or <a href="/import">import</a> a CV.</p>
+    <a href="/counselor">counselor</a> or <a href="/import">import</a> a CV.</p>
 {% else %}
   {% set pending = atoms | rejectattr("confirmed") | list | length %}
   <p class="meta">{{ atoms | length - pending }} confirmed

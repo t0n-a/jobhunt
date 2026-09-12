@@ -107,7 +107,7 @@ def score_job(job: Job, atoms: list[EvidenceAtom], llm: LLMProvider, *, notes: s
     if not atoms:
         raise EmptyProfileError(
             "Cannot score against an empty profile. Confirm at least one evidence "
-            "atom first — run the interview or import a CV, then confirm the atoms."
+            "atom first — talk to the counselor or import a CV, then confirm the atoms."
         )
 
     profile = profile_summary(atoms) + (f"\n\n{notes}" if notes else "")

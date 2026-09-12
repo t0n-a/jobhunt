@@ -39,7 +39,7 @@ def build_profile(
     if not atoms:
         raise EmptyProfileError(
             "Cannot build a LinkedIn profile with no confirmed evidence. Confirm at "
-            "least one atom first — run the interview or import a CV, then confirm."
+            "least one atom first — talk to the counselor or import a CV, then confirm."
         )
 
     keywords, keyword_source = target_keywords(session)

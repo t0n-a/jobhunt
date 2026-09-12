@@ -35,7 +35,6 @@ from jobhunt.matching.score import EmptyProfileError, score_job
 from jobhunt.profile.importers.coursework import import_coursework
 from jobhunt.profile.importers.cv import import_cv
 from jobhunt.profile.importers.github import import_github
-from jobhunt.profile.interview import InterviewSession, harvest, next_question, record_answer
 from jobhunt.profile.models import EvidenceAtom
 from jobhunt.profile.store import AtomStore
 from jobhunt.tailor.models import Application, delete_bullet, edit_bullet, iter_bullets
@@ -205,89 +204,6 @@ def create_app(config: Config) -> FastAPI:
 
         store.add_many(atoms)
         return _imported(len(atoms))
-
-    @app.get("/interview")
-    def interview_page(request: Request):
-        with Session(app.state.engine) as session:
-            sessions = session.exec(select(InterviewSession)).all()
-        return templates.TemplateResponse(
-            request, "interview.html", {"sessions": list(sessions), "current": None}
-        )
-
-    @app.post("/interview")
-    def interview_start(
-        request: Request,
-        topic: str = Form(...),
-        llm: LLMProvider = Depends(get_llm),
-    ):
-        with Session(app.state.engine) as db:
-            interview = InterviewSession(topic=topic)
-            with _importer_errors():
-                next_question(interview, llm)
-            db.add(interview)
-            db.commit()
-            db.refresh(interview)
-            interview_id = interview.id
-        return RedirectResponse(f"/interview/{interview_id}", status_code=303)
-
-    @app.get("/interview/{interview_id}")
-    def interview_detail(request: Request, interview_id: int):
-        with Session(app.state.engine) as db:
-            current = db.get(InterviewSession, interview_id)
-            sessions = list(db.exec(select(InterviewSession)).all())
-        if current is None:
-            raise HTTPException(status_code=404, detail="No such interview")
-        return templates.TemplateResponse(
-            request, "interview.html", {"sessions": sessions, "current": current}
-        )
-
-    @app.post("/interview/{interview_id}/answer")
-    def interview_answer(
-        request: Request,
-        interview_id: int,
-        answer: str = Form(...),
-        llm: LLMProvider = Depends(get_llm),
-    ):
-        with Session(app.state.engine) as db:
-            interview = db.get(InterviewSession, interview_id)
-            if interview is None:
-                raise HTTPException(status_code=404, detail="No such interview")
-            try:
-                record_answer(interview, answer)
-            except ValueError as exc:
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
-            db.add(interview)
-            db.commit()
-            db.refresh(interview)
-
-            with _importer_errors():
-                next_question(interview, llm)
-            db.add(interview)
-            db.commit()
-            db.refresh(interview)
-            return templates.TemplateResponse(
-                request, "partials/interview_turn.html", {"current": interview}
-            )
-
-    @app.post("/interview/{interview_id}/harvest")
-    def interview_harvest(
-        interview_id: int,
-        store: AtomStore = Depends(get_store),
-        llm: LLMProvider = Depends(get_llm),
-    ):
-        with Session(app.state.engine) as db:
-            interview = db.get(InterviewSession, interview_id)
-            if interview is None:
-                raise HTTPException(status_code=404, detail="No such interview")
-            with _importer_errors():
-                atoms = harvest(interview, llm)
-            AtomStore(db).add_many(atoms)
-            db.add(interview)
-            db.commit()
-        response = RedirectResponse("/atoms", status_code=303)
-        if len(atoms) == 0:
-            return flash(response, "Nothing to extract yet — answer at least one question.", "warn")
-        return flash(response, f"{len(atoms)} atoms extracted — confirm them below.")
 
     @app.post("/atoms/{atom_id}/confirm")
     def atom_confirm(request: Request, atom_id: int, store: AtomStore = Depends(get_store)):
