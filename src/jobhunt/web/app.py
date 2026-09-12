@@ -16,6 +16,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from jobhunt.coach.engine import Coach
 from jobhunt.coach.models import Energy
 from jobhunt.config import Config
+from jobhunt.counselor.scoring import scoring_block
 from jobhunt.db import create_engine_for, init_db
 from jobhunt.growth.gaps import compute_gaps
 from jobhunt.jobs.models import Job, Score
@@ -362,7 +363,7 @@ def create_app(config: Config) -> FastAPI:
             job = JobStore(db).add_manual(title, company, description, url)
             atoms = AtomStore(db).confirmed_only()
             with _importer_errors():
-                score = score_job(job, atoms, llm)
+                score = score_job(job, atoms, llm, notes=scoring_block(db))
             db.add(score)
             db.commit()
             title, company = job.title, job.company
@@ -376,7 +377,7 @@ def create_app(config: Config) -> FastAPI:
                 raise HTTPException(status_code=404, detail="No such job")
             atoms = AtomStore(db).confirmed_only()
             with _importer_errors():
-                score = score_job(job, atoms, llm)
+                score = score_job(job, atoms, llm, notes=scoring_block(db))
             for old in db.exec(select(Score).where(Score.job_id == job_id)).all():
                 db.delete(old)
             db.add(score)

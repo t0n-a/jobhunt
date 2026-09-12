@@ -62,6 +62,7 @@ Rules:
 Roles this candidate is aiming at, to shape emphasis where the evidence
 honestly supports it:
 {keywords}
+{goals}
 
 Candidate: {name}
 Location: {location}
@@ -79,6 +80,7 @@ def compose_profile(
     llm: LLMProvider,
     *,
     profile: ProfileConfig,
+    goals: str = "",
 ) -> dict:
     """Draft every field from the shortlist.
 
@@ -97,6 +99,7 @@ def compose_profile(
             projects_limit=field_spec("projects").limit,
             skills_limit=field_spec("skills").limit,
             keywords=", ".join(keywords) or "none yet — write for the evidence itself",
+            goals=goals,
             name=profile.name,
             location=profile.location,
             evidence=evidence_block(shortlist),
