@@ -1,0 +1,15 @@
+<div id="exchange">
+{% if user_turn %}{% with turn = user_turn %}{% include "partials/counselor_turn.html" %}{% endwith %}{% endif %}
+{% if turn %}{% include "partials/counselor_turn.html" %}{% endif %}
+{% if apology %}<div class="msg counselor apology"><p>{{ apology }}</p></div>{% endif %}
+</div>
+<div id="chips" hx-swap-oob="true" class="chips">
+  {% for chip in chips %}
+    <button type="button" hx-post="/counselor/say" hx-vals='{"text": {{ chip | tojson }}}'
+            hx-target="#transcript" hx-swap="beforeend" hx-indicator="#thinking">{{ chip }}</button>
+  {% endfor %}
+  {% if ended %}
+    <button type="button" class="primary" hx-post="/counselor/continue"
+            hx-target="#transcript" hx-swap="beforeend" hx-indicator="#thinking">Keep going</button>
+  {% endif %}
+</div>

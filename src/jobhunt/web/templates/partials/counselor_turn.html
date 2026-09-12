@@ -1,0 +1,43 @@
+{% set action = turn.action or {} %}
+{% set visible = action.get("then", action) %}
+{% if turn.role == "user" %}
+  <div class="msg user" id="turn-{{ turn.id }}"><p>{{ turn.text }}</p></div>
+{% elif action.get("action") == "end_sitting" %}
+  <div class="msg counselor" id="turn-{{ turn.id }}">
+    <div class="callout">
+      <strong>That's a good place to stop.</strong>
+      <p>{{ action.summary }}</p>
+      {% if action.next_time %}<p class="meta">Next time: {{ action.next_time }}</p>{% endif %}
+    </div>
+  </div>
+{% else %}
+  <div class="msg counselor" id="turn-{{ turn.id }}">
+    {% if action.get("action") == "note" %}
+      <p class="noted">noted: {{ action.text }}</p>
+    {% endif %}
+    <p>{{ turn.text }}</p>
+    {% if visible.get("action") == "propose_atom" %}
+      {% set atom = visible.atom %}
+      {% if turn.proposal_state == "accepted" %}
+        <p class="meta">Recorded: <strong>{{ atom.title }}</strong> — <a href="/atoms#atom-{{ turn.atom_id }}">confirm it on Evidence</a>.</p>
+      {% elif turn.proposal_state == "rejected" %}
+        <p class="meta">Not recorded.</p>
+      {% else %}
+        <form class="card proposal" hx-post="/counselor/proposals/{{ turn.id }}/accept"
+              hx-target="#turn-{{ turn.id }}" hx-swap="outerHTML">
+          <p class="meta">{{ atom.kind }}</p>
+          <input type="text" name="title" value="{{ atom.title }}">
+          <textarea name="description" rows="3">{{ atom.description }}</textarea>
+          <input type="text" name="skills" value="{{ atom.skills | join(', ') }}" placeholder="skills, comma-separated">
+          <input type="text" name="metrics" value="{{ atom.metrics or '' }}" placeholder="metrics (only what you said)">
+          <p class="meta because">because you said: “{{ visible.because }}”</p>
+          <div class="actions">
+            <button type="submit" class="primary">Accept</button>
+            <button type="button" class="danger" hx-post="/counselor/proposals/{{ turn.id }}/reject"
+                    hx-target="#turn-{{ turn.id }}" hx-swap="outerHTML" hx-indicator="#thinking">Not quite</button>
+          </div>
+        </form>
+      {% endif %}
+    {% endif %}
+  </div>
+{% endif %}
