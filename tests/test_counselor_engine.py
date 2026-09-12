@@ -199,3 +199,12 @@ def test_window_is_the_last_twenty_turns(db, config):
     respond(db, llm, "now", config=config)
     assert "USER: t9" not in llm.prompts[0] and "COUNSELOR: t10" not in llm.prompts[0]
     assert "USER: t11" in llm.prompts[0] and "USER: now" in llm.prompts[0]
+
+
+def test_endless_look_ups_end_in_an_apology_after_a_bounded_number_of_calls(db, config):
+    lk = {"action": "look_up", "tool": "gap", "args": {"skill": "Docker"}}
+    llm = FakeProvider([lk] * 20)
+    reply = respond(db, llm, "hi", config=config)
+    assert reply.turn is None and reply.text == APOLOGY
+    assert len(llm.prompts) == 6
+    assert [t.role for t in db.exec(select(Turn)).all()] == ["user"]

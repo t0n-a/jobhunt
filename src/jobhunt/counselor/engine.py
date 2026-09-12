@@ -3,7 +3,9 @@
 The loop: build the briefing, ask the model for an action, run look-ups and
 re-ask (at most two), then commit whatever terminal action came back. A
 response the parser rejects gets one retry; a second failure is an apology the
-user sees but the transcript never records.
+user sees but the transcript never records. A model that keeps asking for look-ups
+is cut off after MAX_LOOKUPS + 1 calls per attempt, so a turn never costs more
+than PARSE_ATTEMPTS × (MAX_LOOKUPS + 1) calls.
 """
 
 from dataclasses import dataclass
@@ -80,6 +82,7 @@ def _store_turn(session: Session, conversation: Conversation, turn: Turn) -> Tur
 def _write_note(
     session: Session, conversation: Conversation, note: Note, source_turn_id: int | None
 ) -> None:
+    # A close with no matching open note is a silent no-op: the model may have reworded the thread.
     if note.close:
         for existing in session.exec(
             select(CounselorNote).where(
@@ -152,7 +155,7 @@ def respond(session: Session, llm: LLMProvider, user_text: str | None, *, config
     lookups: list[tuple[LookUp, str]] = []
 
     for _attempt in range(PARSE_ATTEMPTS):
-        while True:
+        for _call in range(MAX_LOOKUPS + 1):
             raw = llm.complete(render(briefing, turns, lookups), schema=ACTION_SCHEMA)
             try:
                 action = parse_action(raw)
