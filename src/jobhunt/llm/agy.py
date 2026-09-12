@@ -166,7 +166,15 @@ class AgyProvider:
 
                 response_val = parsed.get("response")
                 if not isinstance(response_val, str) or not response_val.strip():
-                    raise LLMError("agy returned an empty response")
+                    # Headless agy auto-denies any tool the model reaches for and
+                    # says so only on stderr; without it this is indistinguishable
+                    # from a model that said nothing.
+                    reason = result.stderr.strip()
+                    raise LLMError(
+                        f"agy returned an empty response: {reason}"
+                        if reason
+                        else "agy returned an empty response"
+                    )
 
                 return _unwrap_response(response_val)
 

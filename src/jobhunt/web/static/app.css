@@ -186,3 +186,24 @@ summary { cursor: pointer; font-weight: 600; color: var(--ink-soft); }
 .prose { white-space: pre-line; }
 .diff-removed { text-decoration: line-through; color: var(--ink-soft); }
 .diff-added { background: var(--ok-bg); color: var(--ok); border-radius: 3px; padding: 0 .15rem; }
+
+/* ---------- counselor ---------- */
+.strip { margin-bottom: 1rem; }
+.chat { display: grid; gap: .8rem; }
+#transcript { display: grid; gap: .6rem; }
+#exchange { display: contents; }
+.msg { max-width: 85%; padding: .7rem .95rem; border-radius: var(--radius); }
+.msg p { margin: 0 0 .4rem; }
+.msg p:last-child { margin-bottom: 0; }
+.msg.user { justify-self: end; background: var(--surface-2); }
+.msg.counselor { justify-self: start; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.msg.apology { color: var(--ink-soft); font-style: italic; }
+.noted { color: var(--ink-soft); font-size: .85rem; margin: 0 0 .3rem; }
+.proposal { margin: .6rem 0 0; padding: .8rem .9rem; }
+.proposal .because { font-style: italic; }
+.chips { display: flex; flex-wrap: wrap; gap: .4rem; min-height: 1px; }
+.chips button { border-radius: 999px; padding: .4rem .8rem; font-size: .88rem; }
+.composer { margin: 0; }
+.notes { margin-top: 1.5rem; }
+.note .head p { margin: 0; flex: 1 1 auto; }
+

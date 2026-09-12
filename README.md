@@ -6,7 +6,7 @@ All five phases are built: the profile subsystem, job discovery with scoring, th
 
 ## Status
 
-- **Phase 1 (Complete):** Evidence-atom store, guided LLM interview, CV/GitHub/coursework importers, and local web UI.
+- **Phase 1 (Complete):** Evidence-atom store, the counselor (originally a guided interview), CV/GitHub/coursework importers, and local web UI.
 - **Phase 2 (Complete):** Nine job sources, dedupe into canonical jobs, LLM scoring with track tagging, and a ranked inbox.
 - **Phase 3 (Complete):** The skill-gap coach, converting aggregate gaps into concrete daily tasks.
 - **Phase 4 (Complete):** Resume tailoring with verifiable facts and ATS self-checking.
@@ -48,7 +48,7 @@ Then open http://localhost:8000. Both `config.yaml` and `.env` are gitignored.
 
 The Home page shows the four stages and names the one thing to do next. Everything in this system is downstream of **confirmed evidence atoms**, so the order matters more than it looks:
 
-1. **Put something in the profile.** Import a CV, your GitHub, or a course list at `/import`, or answer questions at `/interview`.
+1. **Put something in the profile.** Import a CV, your GitHub, or a course list at `/import`, or talk to the counselor at `/counselor`.
 2. **Confirm the atoms at `/atoms`.** Imported atoms arrive *unconfirmed* — they are unreviewed model output, and nothing downstream will touch them until you have read each one. This is the step people skip.
 3. **`uv run jobhunt scan`.** Finds and scores jobs against what you confirmed. Start it and walk away; the first run is slow.
 4. **Then everything else works:** `/jobs` to see ranked matches, `/gaps` and `/today` for daily tasks, "Tailor a resume for this" on any job, and `/linkedin` for profile text.
@@ -75,7 +75,7 @@ Configured in `.env`:
 
 Four ways to populate the profile, all reachable from the web UI:
 
-1. **Guided Interview (`/interview`):** Asks follow-up questions to mine specifics (architecture decisions, bottlenecks, metrics) you have not written down. This is the highest-value path when your CV is thin.
+1. **Counselor (`/counselor`):** One ongoing conversation. The counselor reads your atoms, the gaps in your scored jobs and your GitHub, asks one question at a time, and proposes an evidence atom the moment you say something CV-worthy — you accept, edit, or reject it in the chat. It also keeps notes (goals, constraints, preferences) that the job scorer and the LinkedIn text use; you can see and delete them on the page. This is the highest-value path when your CV is thin.
 2. **CV Import (`/import`):** Parses `.pdf`, `.docx`, or `.txt` resumes into structured atoms.
 3. **GitHub Import (`/import`):** Scans non-fork public repositories (forks are ignored since a fork is not evidence of your own work) and extracts project atoms.
 4. **Coursework Import (`/import`):** Turns a pasted course list or transcript into education atoms. The prompt is deliberately conservative — a course is weaker evidence than a project, and generic non-technical courses are skipped.
@@ -142,12 +142,18 @@ Fields longer than LinkedIn accepts are flagged rather than cut. The limits are 
 
 **Not yet built:** posting, the post queue, and outreach drafts.
 
+### Counselor
+
+The counselor is not an interviewer with a topic box. It decides what to ask from what the system already knows: atoms with no numbers get probed, skills your best-fit jobs want get asked about, repositories no atom covers get pulled up. Each turn the model answers with one structured action — ask, look something up, propose an atom, write a note, or stop — and the engine runs it; there is no free-form generation between you and the database.
+
+Proposed atoms quote your own words and arrive unconfirmed, like everything else a model writes. Notes of kind goal and constraint are appended to the scoring prompt ("Lower fit_score for a job that violates a stated constraint"), so telling the counselor "no on-site in Lisbon" shapes every job scored afterwards — newly scanned jobs and any job you re-score — and a wrong note would too, which is why they are listed on the page with a Forget button. Jobs already scored keep their score until you press Re-score on them.
+
 ## Repository Layout
 
 - `src/jobhunt/config.py`: Configuration models and YAML loading.
 - `src/jobhunt/db.py`: SQLite engine and session lifecycle.
 - `src/jobhunt/llm/`: Provider abstraction (`agy`, OpenAI-compatible, fake) and disk cache.
-- `src/jobhunt/profile/`: Models, atom store, importers (CV, GitHub, coursework), and interview engine.
+- `src/jobhunt/profile/`: Models, atom store, importers (CV, GitHub, coursework).
 - `src/jobhunt/sources/`: One adapter per job board, plus ATS board discovery.
 - `src/jobhunt/jobs/`: Raw postings, canonical jobs, dedupe, and the job store.
 - `src/jobhunt/matching/`: LLM scoring, track tagging, and skill-name canonicalisation.
@@ -155,6 +161,7 @@ Fields longer than LinkedIn accepts are flagged rather than cut. The limits are 
 - `src/jobhunt/coach/`: Quest engine, daily task selection, GitHub verification, Telegram push.
 - `src/jobhunt/tailor/`: Keyword extraction, atom shortlisting, composition, the fabrication verifier, LaTeX rendering, and the ATS self-check.
 - `src/jobhunt/linkedin/`: Field registry and limits, profile versions, composition, the approval gate, and the per-field diff.
+- `src/jobhunt/counselor/`: The counselor — briefing, action schema, tools, turn loop, proposals, and the notes block the scorer reads.
 - `src/jobhunt/scan.py`: Scan orchestration with per-source isolation and deadlines.
 - `src/jobhunt/web/`: FastAPI app, Jinja2 templates, HTMX partials, the Home page state, flash messages.
 

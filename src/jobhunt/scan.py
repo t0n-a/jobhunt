@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from sqlmodel import Session, select
 
 from jobhunt.config import SourcesConfig
+from jobhunt.counselor.scoring import scoring_block
 from jobhunt.jobs.models import Job, Score
 from jobhunt.jobs.store import JobStore
 from jobhunt.llm import LLMError, LLMProvider
@@ -150,6 +151,7 @@ def run_scan(
         # Confirmed atoms only: scoring against unreviewed model output would
         # rank the candidate on claims they never checked.
         atoms = AtomStore(session).confirmed_only()
+        notes = scoring_block(session)
 
         if not atoms:
             # Every job would fail identically; say it once, clearly, instead of
@@ -187,7 +189,7 @@ def run_scan(
             if already is not None:
                 continue
             try:
-                score = score_job(job, atoms, llm)
+                score = score_job(job, atoms, llm, notes=notes)
             except LLMError as exc:
                 logger.warning("scoring failed for job %s: %s", job_id, exc)
                 continue

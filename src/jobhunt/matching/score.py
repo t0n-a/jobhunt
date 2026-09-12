@@ -58,6 +58,7 @@ Rules:
   on-call, a required security clearance, an expired listing). Leave empty when
   there are none; do not invent concerns.
 - "rationale" is one or two factual sentences. No encouragement, no filler.
+- Lower fit_score for a job that violates a stated constraint. Do not raise fit_score for a goal — goals decide track, not fit.
 
 Job posting:
 ---
@@ -93,7 +94,7 @@ def job_summary(job: Job) -> str:
     )
 
 
-def score_job(job: Job, atoms: list[EvidenceAtom], llm: LLMProvider) -> Score:
+def score_job(job: Job, atoms: list[EvidenceAtom], llm: LLMProvider, *, notes: str = "") -> Score:
     """Score one job against the confirmed profile.
 
     Only confirmed atoms should reach this function: scoring the candidate
@@ -106,10 +107,12 @@ def score_job(job: Job, atoms: list[EvidenceAtom], llm: LLMProvider) -> Score:
     if not atoms:
         raise EmptyProfileError(
             "Cannot score against an empty profile. Confirm at least one evidence "
-            "atom first — run the interview or import a CV, then confirm the atoms."
+            "atom first — talk to the counselor or import a CV, then confirm the atoms."
         )
+
+    profile = profile_summary(atoms) + (f"\n\n{notes}" if notes else "")
     response = llm.complete(
-        PROMPT.format(posting=job_summary(job), profile=profile_summary(atoms)),
+        PROMPT.format(posting=job_summary(job), profile=profile),
         schema=SCORE_SCHEMA,
     )
     if not isinstance(response, dict):

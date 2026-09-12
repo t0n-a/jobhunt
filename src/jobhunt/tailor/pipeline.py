@@ -36,7 +36,7 @@ def tailor_job(
     if not atoms:
         raise EmptyProfileError(
             "Cannot tailor a resume with no confirmed evidence. Confirm at least "
-            "one atom first — run the interview or import a CV, then confirm."
+            "one atom first — talk to the counselor or import a CV, then confirm."
         )
 
     keywords = extract_keywords(job, llm, limit=limit)

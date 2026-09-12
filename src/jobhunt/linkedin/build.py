@@ -9,6 +9,7 @@ the single commit, so the database cannot hold a field that was never checked.
 from sqlmodel import Session
 
 from jobhunt.config import ProfileConfig
+from jobhunt.counselor.scoring import goals_block
 from jobhunt.linkedin.compose import compose_profile
 from jobhunt.linkedin.fields import field_spec, over_limit
 from jobhunt.linkedin.keywords import target_keywords
@@ -38,12 +39,14 @@ def build_profile(
     if not atoms:
         raise EmptyProfileError(
             "Cannot build a LinkedIn profile with no confirmed evidence. Confirm at "
-            "least one atom first — run the interview or import a CV, then confirm."
+            "least one atom first — talk to the counselor or import a CV, then confirm."
         )
 
     keywords, keyword_source = target_keywords(session)
     shortlist = shortlist_atoms(atoms, keywords, limit=limit) or atoms[:limit]
-    document = compose_profile(shortlist, keywords, llm, profile=profile)
+    document = compose_profile(
+        shortlist, keywords, llm, profile=profile, goals=goals_block(session)
+    )
 
     by_id = {atom.id: atom for atom in shortlist}
     fields, dropped = _verify(document, by_id)

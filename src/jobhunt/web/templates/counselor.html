@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Counselor — jobhunt{% endblock %}
+{% block content %}
+<p class="meta strip">
+  {{ accepted }} atom{{ "" if accepted == 1 else "s" }} recorded from this conversation
+  · {{ open_threads }} open thread{{ "" if open_threads == 1 else "s" }}
+  {%- if days is not none %} · last talked {% if days == 0 %}today{% else %}{{ days }} day{{ "" if days == 1 else "s" }} ago{% endif %}{% endif %}
+</p>
+
+<div class="chat">
+  <div id="transcript">
+    {% for turn in turns %}{% include "partials/counselor_turn.html" %}{% endfor %}
+    {% if apology %}<div class="msg counselor apology"><p>{{ apology }}</p></div>{% endif %}
+  </div>
+
+  <div id="chips" class="chips">
+    {% for chip in chips %}
+      <button type="button" hx-post="/counselor/say" hx-vals='{"text": {{ chip | tojson }}}'
+              hx-target="#transcript" hx-swap="beforeend" hx-indicator="#thinking">{{ chip }}</button>
+    {% endfor %}
+    {% if ended %}
+      <button type="button" class="primary" hx-post="/counselor/continue"
+              hx-target="#transcript" hx-swap="beforeend" hx-indicator="#thinking">Keep going</button>
+    {% endif %}
+  </div>
+
+  <form class="composer" hx-post="/counselor/say" hx-target="#transcript" hx-swap="beforeend"
+        hx-indicator="#thinking" hx-disabled-elt="find button, find textarea"
+        hx-on::after-request="if(event.detail.successful) this.reset()">
+    <textarea name="text" rows="3" maxlength="4000" placeholder="Your answer" required></textarea>
+    <div class="actions">
+      <button type="submit" class="primary">Send</button>
+      <button type="button" hx-post="/counselor/stop" hx-target="#transcript" hx-swap="beforeend"
+              hx-indicator="#thinking">Stop for today</button>
+      <span id="thinking" class="indicator">thinking…</span>
+    </div>
+  </form>
+</div>
+
+<details class="notes">
+  <summary>What I've noted about you</summary>
+  <div id="notes">{% include "partials/counselor_notes.html" %}</div>
+</details>
+{% endblock %}

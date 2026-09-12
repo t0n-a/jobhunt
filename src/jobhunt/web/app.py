@@ -2,6 +2,7 @@ import os
 import shutil
 from collections import Counter
 from contextlib import contextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -16,6 +17,11 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from jobhunt.coach.engine import Coach
 from jobhunt.coach.models import Energy
 from jobhunt.config import Config
+from jobhunt.counselor.engine import get_or_create_conversation, recent_turns, respond
+from jobhunt.counselor.models import NOTE_KINDS, CounselorNote, Turn
+from jobhunt.counselor.proposals import accept as accept_proposal
+from jobhunt.counselor.proposals import reject as reject_proposal
+from jobhunt.counselor.scoring import open_notes, scoring_block
 from jobhunt.db import create_engine_for, init_db
 from jobhunt.growth.gaps import compute_gaps
 from jobhunt.jobs.models import Job, Score
@@ -29,7 +35,7 @@ from jobhunt.matching.score import EmptyProfileError, score_job
 from jobhunt.profile.importers.coursework import import_coursework
 from jobhunt.profile.importers.cv import import_cv
 from jobhunt.profile.importers.github import import_github
-from jobhunt.profile.interview import InterviewSession, harvest, next_question, record_answer
+from jobhunt.profile.models import EvidenceAtom
 from jobhunt.profile.store import AtomStore
 from jobhunt.tailor.models import Application, delete_bullet, edit_bullet, iter_bullets
 from jobhunt.tailor.pipeline import mark_applied, render_application, tailor_job
@@ -199,89 +205,6 @@ def create_app(config: Config) -> FastAPI:
         store.add_many(atoms)
         return _imported(len(atoms))
 
-    @app.get("/interview")
-    def interview_page(request: Request):
-        with Session(app.state.engine) as session:
-            sessions = session.exec(select(InterviewSession)).all()
-        return templates.TemplateResponse(
-            request, "interview.html", {"sessions": list(sessions), "current": None}
-        )
-
-    @app.post("/interview")
-    def interview_start(
-        request: Request,
-        topic: str = Form(...),
-        llm: LLMProvider = Depends(get_llm),
-    ):
-        with Session(app.state.engine) as db:
-            interview = InterviewSession(topic=topic)
-            with _importer_errors():
-                next_question(interview, llm)
-            db.add(interview)
-            db.commit()
-            db.refresh(interview)
-            interview_id = interview.id
-        return RedirectResponse(f"/interview/{interview_id}", status_code=303)
-
-    @app.get("/interview/{interview_id}")
-    def interview_detail(request: Request, interview_id: int):
-        with Session(app.state.engine) as db:
-            current = db.get(InterviewSession, interview_id)
-            sessions = list(db.exec(select(InterviewSession)).all())
-        if current is None:
-            raise HTTPException(status_code=404, detail="No such interview")
-        return templates.TemplateResponse(
-            request, "interview.html", {"sessions": sessions, "current": current}
-        )
-
-    @app.post("/interview/{interview_id}/answer")
-    def interview_answer(
-        request: Request,
-        interview_id: int,
-        answer: str = Form(...),
-        llm: LLMProvider = Depends(get_llm),
-    ):
-        with Session(app.state.engine) as db:
-            interview = db.get(InterviewSession, interview_id)
-            if interview is None:
-                raise HTTPException(status_code=404, detail="No such interview")
-            try:
-                record_answer(interview, answer)
-            except ValueError as exc:
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
-            db.add(interview)
-            db.commit()
-            db.refresh(interview)
-
-            with _importer_errors():
-                next_question(interview, llm)
-            db.add(interview)
-            db.commit()
-            db.refresh(interview)
-            return templates.TemplateResponse(
-                request, "partials/interview_turn.html", {"current": interview}
-            )
-
-    @app.post("/interview/{interview_id}/harvest")
-    def interview_harvest(
-        interview_id: int,
-        store: AtomStore = Depends(get_store),
-        llm: LLMProvider = Depends(get_llm),
-    ):
-        with Session(app.state.engine) as db:
-            interview = db.get(InterviewSession, interview_id)
-            if interview is None:
-                raise HTTPException(status_code=404, detail="No such interview")
-            with _importer_errors():
-                atoms = harvest(interview, llm)
-            AtomStore(db).add_many(atoms)
-            db.add(interview)
-            db.commit()
-        response = RedirectResponse("/atoms", status_code=303)
-        if len(atoms) == 0:
-            return flash(response, "Nothing to extract yet — answer at least one question.", "warn")
-        return flash(response, f"{len(atoms)} atoms extracted — confirm them below.")
-
     @app.post("/atoms/{atom_id}/confirm")
     def atom_confirm(request: Request, atom_id: int, store: AtomStore = Depends(get_store)):
         try:
@@ -362,7 +285,7 @@ def create_app(config: Config) -> FastAPI:
             job = JobStore(db).add_manual(title, company, description, url)
             atoms = AtomStore(db).confirmed_only()
             with _importer_errors():
-                score = score_job(job, atoms, llm)
+                score = score_job(job, atoms, llm, notes=scoring_block(db))
             db.add(score)
             db.commit()
             title, company = job.title, job.company
@@ -376,7 +299,7 @@ def create_app(config: Config) -> FastAPI:
                 raise HTTPException(status_code=404, detail="No such job")
             atoms = AtomStore(db).confirmed_only()
             with _importer_errors():
-                score = score_job(job, atoms, llm)
+                score = score_job(job, atoms, llm, notes=scoring_block(db))
             for old in db.exec(select(Score).where(Score.job_id == job_id)).all():
                 db.delete(old)
             db.add(score)
@@ -723,5 +646,181 @@ def create_app(config: Config) -> FastAPI:
                 raise HTTPException(status_code=404, detail="No such version")
             context = _linkedin_view(db, version, readonly=True)
             return templates.TemplateResponse(request, "linkedin.html", context)
+
+    # --- counselor ---------------------------------------------------------
+
+    def _chips_of(turn: Turn | None) -> list[str]:
+        if not turn or not turn.action:
+            return []
+        visible = turn.action.get("then", turn.action) or {}
+        return list(visible.get("quick_replies") or [])
+
+    def _counselor_context(db: Session) -> dict:
+        conversation = get_or_create_conversation(db)
+        turns = recent_turns(db, conversation, limit=200)
+        last = turns[-1] if turns else None
+        last_action = (
+            (last.action or {}).get("action") if last and last.role == "counselor" else None
+        )
+        chips = _chips_of(last if last and last.role == "counselor" else None)
+        notes = open_notes(db, NOTE_KINDS)
+        accepted = sum(1 for t in turns if t.proposal_state == "accepted")
+        days = None
+        if conversation.last_turn_at is not None:
+            last_at = conversation.last_turn_at
+            if last_at.tzinfo is None:
+                last_at = last_at.replace(tzinfo=UTC)
+            days = (datetime.now(UTC) - last_at).days
+
+        atom_ids = [t.atom_id for t in turns if t.atom_id is not None]
+        atoms_by_turn = {}
+        if atom_ids:
+            by_id = {
+                a.id: a
+                for a in db.exec(select(EvidenceAtom).where(EvidenceAtom.id.in_(atom_ids))).all()
+            }  # type: ignore[attr-defined]
+            atoms_by_turn = {t.id: by_id[t.atom_id] for t in turns if t.atom_id in by_id}
+
+        return {
+            "turns": turns,
+            "chips": chips,
+            "ended": last_action == "end_sitting",
+            "notes": notes,
+            "accepted": accepted,
+            "open_threads": sum(1 for n in notes if n.kind == "thread"),
+            "days": days,
+            "atoms_by_turn": atoms_by_turn,
+        }
+
+    def _reply_partial(request: Request, db: Session, reply):
+        return templates.TemplateResponse(
+            request,
+            "partials/counselor_exchange.html",
+            {
+                "user_turn": reply.user_turn,
+                "turn": reply.turn,
+                "apology": reply.text if reply.turn is None else None,
+                "chips": _chips_of(reply.turn),
+                "ended": bool(
+                    reply.turn and (reply.turn.action or {}).get("action") == "end_sitting"
+                ),
+            },
+        )
+
+    def _respond_or_error(db: Session, llm: LLMProvider, text: str | None):
+        try:
+            with _importer_errors():
+                return respond(db, llm, text, config=config)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.get("/counselor")
+    def counselor_page(request: Request, llm: LLMProvider = Depends(get_llm)):
+        with Session(app.state.engine) as db:
+            conversation = get_or_create_conversation(db)
+            spoken = db.exec(
+                select(Turn).where(
+                    Turn.conversation_id == conversation.id, Turn.role == "counselor"
+                )
+            ).first()
+            if spoken is None:
+                opener = _respond_or_error(db, llm, None)
+                apology = opener.text if opener.turn is None else None
+            else:
+                apology = None
+            context = _counselor_context(db)
+            context["apology"] = apology
+            return templates.TemplateResponse(request, "counselor.html", context)
+
+    @app.post("/counselor/say")
+    def counselor_say(request: Request, text: str = Form(...), llm: LLMProvider = Depends(get_llm)):
+        with Session(app.state.engine) as db:
+            reply = _respond_or_error(db, llm, text)
+            return _reply_partial(request, db, reply)
+
+    @app.post("/counselor/stop")
+    def counselor_stop(request: Request, llm: LLMProvider = Depends(get_llm)):
+        with Session(app.state.engine) as db:
+            return _reply_partial(
+                request, db, _respond_or_error(db, llm, "I'd like to stop for today.")
+            )
+
+    @app.post("/counselor/continue")
+    def counselor_continue(request: Request, llm: LLMProvider = Depends(get_llm)):
+        with Session(app.state.engine) as db:
+            return _reply_partial(request, db, _respond_or_error(db, llm, None))
+
+    @app.post("/counselor/proposals/{turn_id}/accept")
+    def counselor_accept(
+        request: Request,
+        turn_id: int,
+        title: str = Form(""),
+        description: str = Form(""),
+        skills: str = Form(""),
+        metrics: str = Form(""),
+    ):
+        with Session(app.state.engine) as db:
+            try:
+                atom = accept_proposal(
+                    db,
+                    turn_id,
+                    title=title.strip() or None,
+                    description=description.strip() or None,
+                    skills=[s.strip() for s in skills.split(",") if s.strip()]
+                    if skills.strip()
+                    else None,
+                    metrics=metrics.strip() or None,
+                )
+            except KeyError as exc:
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+            except ValueError as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+            turn = db.get(Turn, turn_id)
+            return templates.TemplateResponse(
+                request,
+                "partials/counselor_turn.html",
+                {"turn": turn, "atoms_by_turn": {turn_id: atom}},
+            )
+
+    @app.post("/counselor/proposals/{turn_id}/reject")
+    def counselor_reject(request: Request, turn_id: int, llm: LLMProvider = Depends(get_llm)):
+        with Session(app.state.engine) as db:
+            turn = db.get(Turn, turn_id)
+            if turn is None:
+                raise HTTPException(status_code=404, detail="Turn not found")
+            if turn.proposal_state != "open":
+                raise HTTPException(status_code=409, detail="Turn is not open")
+            reply = _respond_or_error(db, llm, "Not quite — that isn't right.")
+            try:
+                reject_proposal(db, turn_id)
+            except KeyError as exc:
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+            except ValueError as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+            rejected = db.get(Turn, turn_id)
+            card = templates.get_template("partials/counselor_turn.html").render(
+                turn=rejected, request=request, atoms_by_turn={}
+            )
+            exchange = _reply_partial(request, db, reply)
+            # The rejected card replaces itself (hx-swap outerHTML on the card), and the
+            # exchange rides along out-of-band so the transcript grows in the same response.
+            # Relies on counselor_exchange.html opening with exactly <div id="exchange">; a mismatch leaves the transcript un-appended.
+            body = card + exchange.body.decode("utf-8").replace(
+                '<div id="exchange">', '<div id="transcript" hx-swap-oob="beforeend">', 1
+            )
+            return HTMLResponse(body)
+
+    @app.post("/counselor/notes/{note_id}/close")
+    def counselor_close_note(request: Request, note_id: int):
+        with Session(app.state.engine) as db:
+            note = db.get(CounselorNote, note_id)
+            if note is None:
+                raise HTTPException(status_code=404, detail="No such note")
+            note.status = "closed"
+            db.add(note)
+            db.commit()
+            return templates.TemplateResponse(
+                request, "partials/counselor_notes.html", {"notes": open_notes(db, NOTE_KINDS)}
+            )
 
     return app

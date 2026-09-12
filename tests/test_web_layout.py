@@ -30,7 +30,7 @@ def test_nav_lists_every_section_in_pipeline_order(client):
         "Applications",
         "LinkedIn",
         "Evidence",
-        "Interview",
+        "Counselor",
         "Import",
     ]
     positions = [html.index(f">{label}</a>") for label in labels]

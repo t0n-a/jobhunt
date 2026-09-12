@@ -10,7 +10,6 @@ from jobhunt.config import Config, LLMConfig, ProfileConfig
 from jobhunt.db import create_engine_for, init_db
 from jobhunt.llm import FakeProvider
 from jobhunt.profile.importers import cv as cv_mod
-from jobhunt.profile.interview import InterviewSession
 from jobhunt.profile.models import AtomKind, EvidenceAtom, Provenance
 from jobhunt.profile.store import AtomStore
 from jobhunt.web.app import create_app
@@ -53,17 +52,6 @@ def test_import_page_renders(make_client):
     client = make_client([])
 
     assert client.get("/import").status_code == 200
-
-
-def test_interview_page_renders(make_client):
-    client = make_client(["Q1"])
-
-    assert client.get("/interview").status_code == 200
-
-    client.post("/interview", data={"topic": "Zephyr URL shortener"}, follow_redirects=True)
-    response = client.get("/interview")
-    assert response.status_code == 200
-    assert "Zephyr URL shortener" in response.text
 
 
 def test_cv_upload_creates_atoms(make_client):
@@ -201,140 +189,6 @@ def test_coursework_import_creates_atoms(make_client):
     assert "Distributed Systems" in response.text
 
 
-def test_starting_an_interview_shows_the_first_question(make_client):
-    client = make_client(["What did you build?"])
-
-    response = client.post("/interview", data={"topic": "URL shortener"}, follow_redirects=True)
-
-    assert "What did you build?" in response.text
-
-
-def test_interview_start_maps_llm_error_to_502(make_client):
-    client = make_client([])
-    response = client.post("/interview", data={"topic": "T"})
-    assert response.status_code == 502
-
-
-def test_answering_advances_to_the_next_question(make_client):
-    client = make_client(["Q1", "Q2"])
-    client.post("/interview", data={"topic": "T"}, follow_redirects=True)
-
-    response = client.post("/interview/1/answer", data={"answer": "A1"})
-
-    assert response.status_code == 200
-    assert "Q2" in response.text
-
-
-def test_answer_is_saved_even_if_next_question_fails(make_client):
-    client = make_client(["Q1"])
-    client.post("/interview", data={"topic": "T"}, follow_redirects=True)
-
-    response = client.post("/interview/1/answer", data={"answer": "Saved answer"})
-    assert response.status_code == 502
-
-    with Session(client.engine) as session:
-        stored = session.get(InterviewSession, 1)
-        assert stored is not None
-        assert len(stored.turns) == 1
-        assert stored.turns[0]["answer"] == "Saved answer"
-
-
-def test_harvest_creates_atoms_and_redirects(make_client):
-    client = make_client(
-        [
-            "Q1",
-            "Q2",
-            {
-                "atoms": [
-                    {
-                        "kind": "project",
-                        "title": "Harvested",
-                        "description": "D",
-                        "skills": [],
-                        "metrics": None,
-                    }
-                ]
-            },
-        ]
-    )
-    client.post("/interview", data={"topic": "T"}, follow_redirects=True)
-    client.post("/interview/1/answer", data={"answer": "A1"})
-
-    response = client.post("/interview/1/harvest", follow_redirects=True)
-
-    assert "Harvested" in response.text
-
-
-def test_harvest_twice_does_not_create_duplicate_atoms(make_client):
-    client = make_client(
-        [
-            "Q1",
-            "Q2",
-            {
-                "atoms": [
-                    {
-                        "kind": "project",
-                        "title": "Harvested",
-                        "description": "D",
-                        "skills": [],
-                        "metrics": None,
-                    }
-                ]
-            },
-        ]
-    )
-    client.post("/interview", data={"topic": "T"}, follow_redirects=True)
-    client.post("/interview/1/answer", data={"answer": "A1"})
-
-    res1 = client.post("/interview/1/harvest", follow_redirects=True)
-    assert res1.status_code == 200
-    assert "Harvested" in res1.text
-
-    # Second harvest call must be a no-op that redirects cleanly without duplicating atoms
-    res2 = client.post("/interview/1/harvest", follow_redirects=True)
-    assert res2.status_code == 200
-
-    with Session(client.engine) as session:
-        atoms = AtomStore(session).list()
-        assert len(atoms) == 1
-        assert atoms[0].title == "Harvested"
-
-
-def test_harvest_failure_leaves_interview_retryable(make_client, monkeypatch):
-    client = make_client(
-        [
-            "Q1",
-            "Q2",
-            {
-                "atoms": [
-                    {
-                        "kind": "project",
-                        "title": "Harvested",
-                        "description": "D",
-                        "skills": [],
-                        "metrics": None,
-                    }
-                ]
-            },
-        ]
-    )
-    client.post("/interview", data={"topic": "T"}, follow_redirects=True)
-    client.post("/interview/1/answer", data={"answer": "A1"})
-
-    def _fail_add_many(self, atoms):
-        raise RuntimeError("store failed")
-
-    monkeypatch.setattr(AtomStore, "add_many", _fail_add_many)
-
-    with pytest.raises(RuntimeError, match="store failed"):
-        client.post("/interview/1/harvest")
-
-    with Session(client.engine) as session:
-        interview = session.get(InterviewSession, 1)
-        assert interview is not None
-        assert interview.status == "open"
-
-
 def test_confirm_marks_atom_confirmed(make_client):
     client = make_client([])
     atom = seed_atom(client)
@@ -402,18 +256,6 @@ def test_edit_unknown_atom_returns_404(make_client):
         data={"title": "Nonexistent", "description": "D", "skills": "Python"},
     )
     assert response.status_code == 404
-
-
-def test_answering_twice_returns_400(make_client, monkeypatch):
-    monkeypatch.setattr("jobhunt.profile.interview.MAX_TURNS", 1)
-    client = make_client(["Q1"])
-    client.post("/interview", data={"topic": "T"}, follow_redirects=True)
-
-    res1 = client.post("/interview/1/answer", data={"answer": "A1"})
-    assert res1.status_code == 200
-
-    res2 = client.post("/interview/1/answer", data={"answer": "A2"})
-    assert res2.status_code == 400
 
 
 @respx.mock

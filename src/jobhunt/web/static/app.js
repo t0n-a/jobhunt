@@ -7,3 +7,11 @@ document.addEventListener('submit', function (event) {
   button.textContent = button.dataset.busy || 'Working…';
   setTimeout(function () { button.disabled = true; }, 0);
 });
+
+// The transcript grows at the bottom; keep the newest turn in view.
+document.addEventListener('htmx:afterSwap', function (event) {
+  if (event.target && event.target.id === 'transcript') {
+    var last = event.target.lastElementChild;
+    if (last && last.scrollIntoView) last.scrollIntoView({ block: 'end', behavior: 'smooth' });
+  }
+});

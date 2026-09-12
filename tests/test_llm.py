@@ -435,3 +435,21 @@ def test_agy_provider_exhausts_retries_and_raises(monkeypatch):
         provider.complete("hello")
 
     assert call_count == 3
+
+
+def test_agy_provider_reports_why_a_response_was_empty(monkeypatch):
+    """A headless tool denial produces a SUCCESS envelope with an empty response and
+    the reason on stderr. The error must carry that reason, or the failure is
+    indistinguishable from a model that said nothing."""
+    envelope = {"conversation_id": "conv-1", "status": "SUCCESS", "response": ""}
+
+    class Result:
+        returncode = 0
+        stdout = json.dumps(envelope)
+        stderr = 'jetski: no output produced — a tool required the "command" permission'
+
+    monkeypatch.setattr("jobhunt.llm.agy.subprocess.run", lambda *args, **kwargs: Result())
+
+    provider = AgyProvider(model="m", binary="agy", retries=0)
+    with pytest.raises(LLMError, match='required the "command" permission'):
+        provider.complete("x", schema={"type": "object"})
