@@ -1,4 +1,4 @@
-"""The one prompt. Persona rules are the spec's, verbatim; the action list is
+"""The one prompt. Persona rules are the spec's, plus the no-tools preamble and the "not recorded until accepted" rule that the first live run forced; the action list is
 the schema in prose so the model knows what each field is for."""
 
 from jobhunt.counselor.actions import LookUp

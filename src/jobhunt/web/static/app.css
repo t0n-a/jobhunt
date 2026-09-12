@@ -191,6 +191,7 @@ summary { cursor: pointer; font-weight: 600; color: var(--ink-soft); }
 .strip { margin-bottom: 1rem; }
 .chat { display: grid; gap: .8rem; }
 #transcript { display: grid; gap: .6rem; }
+#exchange { display: contents; }
 .msg { max-width: 85%; padding: .7rem .95rem; border-radius: var(--radius); }
 .msg p { margin: 0 0 .4rem; }
 .msg p:last-child { margin-bottom: 0; }

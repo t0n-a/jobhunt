@@ -190,6 +190,13 @@ def test_over_length_message_is_refused_before_any_call(db, config):
     assert llm.prompts == []
 
 
+def test_blank_message_is_refused_before_any_call(db, config):
+    llm = FakeProvider([ASK])
+    with pytest.raises(ValueError):
+        respond(db, llm, "   ", config=config)
+    assert llm.prompts == []
+
+
 def test_window_is_the_last_twenty_turns(db, config):
     conv = get_or_create_conversation(db)
     for i in range(30):

@@ -134,6 +134,8 @@ def _commit(
 def respond(session: Session, llm: LLMProvider, user_text: str | None, *, config: Config) -> Reply:
     if user_text is not None and len(user_text) > MAX_USER_CHARS:
         raise ValueError(f"Message is longer than {MAX_USER_CHARS} characters")
+    if user_text is not None and not user_text.strip():
+        raise ValueError("Message is empty")
 
     conversation = get_or_create_conversation(session)
     # The briefing's "days since" and "first conversation" must describe the

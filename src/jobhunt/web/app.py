@@ -724,8 +724,13 @@ def create_app(config: Config) -> FastAPI:
                 )
             ).first()
             if spoken is None:
-                _respond_or_error(db, llm, None)
-            return templates.TemplateResponse(request, "counselor.html", _counselor_context(db))
+                opener = _respond_or_error(db, llm, None)
+                apology = opener.text if opener.turn is None else None
+            else:
+                apology = None
+            context = _counselor_context(db)
+            context["apology"] = apology
+            return templates.TemplateResponse(request, "counselor.html", context)
 
     @app.post("/counselor/say")
     def counselor_say(request: Request, text: str = Form(...), llm: LLMProvider = Depends(get_llm)):
@@ -780,13 +785,18 @@ def create_app(config: Config) -> FastAPI:
     @app.post("/counselor/proposals/{turn_id}/reject")
     def counselor_reject(request: Request, turn_id: int, llm: LLMProvider = Depends(get_llm)):
         with Session(app.state.engine) as db:
+            turn = db.get(Turn, turn_id)
+            if turn is None:
+                raise HTTPException(status_code=404, detail="Turn not found")
+            if turn.proposal_state != "open":
+                raise HTTPException(status_code=409, detail="Turn is not open")
+            reply = _respond_or_error(db, llm, "Not quite — that isn't right.")
             try:
                 reject_proposal(db, turn_id)
             except KeyError as exc:
                 raise HTTPException(status_code=404, detail=str(exc)) from exc
             except ValueError as exc:
                 raise HTTPException(status_code=409, detail=str(exc)) from exc
-            reply = _respond_or_error(db, llm, "Not quite — that isn't right.")
             rejected = db.get(Turn, turn_id)
             card = templates.get_template("partials/counselor_turn.html").render(
                 turn=rejected, request=request, atoms_by_turn={}

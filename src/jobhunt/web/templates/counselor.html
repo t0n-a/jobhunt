@@ -10,9 +10,10 @@
 <div class="chat">
   <div id="transcript">
     {% for turn in turns %}{% include "partials/counselor_turn.html" %}{% endfor %}
+    {% if apology %}<div class="msg counselor apology"><p>{{ apology }}</p></div>{% endif %}
   </div>
 
-  <div id="chips" hx-swap-oob="true" class="chips">
+  <div id="chips" class="chips">
     {% for chip in chips %}
       <button type="button" hx-post="/counselor/say" hx-vals='{"text": {{ chip | tojson }}}'
               hx-target="#transcript" hx-swap="beforeend" hx-indicator="#thinking">{{ chip }}</button>

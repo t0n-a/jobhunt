@@ -6,7 +6,7 @@ All five phases are built: the profile subsystem, job discovery with scoring, th
 
 ## Status
 
-- **Phase 1 (Complete):** Evidence-atom store, guided LLM interview, CV/GitHub/coursework importers, and local web UI.
+- **Phase 1 (Complete):** Evidence-atom store, the counselor (originally a guided interview), CV/GitHub/coursework importers, and local web UI.
 - **Phase 2 (Complete):** Nine job sources, dedupe into canonical jobs, LLM scoring with track tagging, and a ranked inbox.
 - **Phase 3 (Complete):** The skill-gap coach, converting aggregate gaps into concrete daily tasks.
 - **Phase 4 (Complete):** Resume tailoring with verifiable facts and ATS self-checking.
@@ -146,7 +146,7 @@ Fields longer than LinkedIn accepts are flagged rather than cut. The limits are 
 
 The counselor is not an interviewer with a topic box. It decides what to ask from what the system already knows: atoms with no numbers get probed, skills your best-fit jobs want get asked about, repositories no atom covers get pulled up. Each turn the model answers with one structured action — ask, look something up, propose an atom, write a note, or stop — and the engine runs it; there is no free-form generation between you and the database.
 
-Proposed atoms quote your own words and arrive unconfirmed, like everything else a model writes. Notes of kind goal and constraint are appended to the scoring prompt ("Lower fit_score for a job that violates a stated constraint"), so telling the counselor "no on-site in Lisbon" changes the ranking on the next scan — and a wrong note would too, which is why they are listed on the page with a Forget button.
+Proposed atoms quote your own words and arrive unconfirmed, like everything else a model writes. Notes of kind goal and constraint are appended to the scoring prompt ("Lower fit_score for a job that violates a stated constraint"), so telling the counselor "no on-site in Lisbon" shapes every job scored afterwards — newly scanned jobs and any job you re-score — and a wrong note would too, which is why they are listed on the page with a Forget button. Jobs already scored keep their score until you press Re-score on them.
 
 ## Repository Layout
 
