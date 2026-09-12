@@ -188,3 +188,18 @@ def test_provider_failure_is_a_502(make_client):
     client = make_client([ASK])
     client.get("/counselor")
     assert client.post("/counselor/say", data={"text": "hi"}).status_code == 502
+
+
+def test_accept_leaves_the_models_draft_untouched(make_client):
+    client = make_client([ASK, PROPOSE])
+    client.get("/counselor")
+    client.post("/counselor/say", data={"text": "x"})
+    with Session(client.engine) as db:
+        turn_id = db.exec(select(Turn).where(Turn.proposal_state == "open")).one().id
+    card = client.post(f"/counselor/proposals/{turn_id}/accept", data={"title": "Edited title"})
+    assert "Edited title" in card.text
+    with Session(client.engine) as db:
+        turn = db.get(Turn, turn_id)
+        assert turn.action["atom"]["title"] == "Shortener"
+    page = client.get("/counselor")
+    assert "Edited title" in page.text

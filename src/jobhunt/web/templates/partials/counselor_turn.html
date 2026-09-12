@@ -19,7 +19,8 @@
     {% if visible.get("action") == "propose_atom" %}
       {% set atom = visible.atom %}
       {% if turn.proposal_state == "accepted" %}
-        <p class="meta">Recorded: <strong>{{ atom.title }}</strong> — <a href="/atoms#atom-{{ turn.atom_id }}">confirm it on Evidence</a>.</p>
+        {% set recorded = (atoms_by_turn or {}).get(turn.id) %}
+        <p class="meta">Recorded: <strong>{{ recorded.title if recorded else atom.title }}</strong> — <a href="/atoms#atom-{{ turn.atom_id }}">confirm it on Evidence</a>.</p>
       {% elif turn.proposal_state == "rejected" %}
         <p class="meta">Not recorded.</p>
       {% else %}

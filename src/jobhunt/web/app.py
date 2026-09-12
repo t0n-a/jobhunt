@@ -36,6 +36,7 @@ from jobhunt.profile.importers.coursework import import_coursework
 from jobhunt.profile.importers.cv import import_cv
 from jobhunt.profile.importers.github import import_github
 from jobhunt.profile.interview import InterviewSession, harvest, next_question, record_answer
+from jobhunt.profile.models import EvidenceAtom
 from jobhunt.profile.store import AtomStore
 from jobhunt.tailor.models import Application, delete_bullet, edit_bullet, iter_bullets
 from jobhunt.tailor.pipeline import mark_applied, render_application, tailor_job
@@ -754,6 +755,16 @@ def create_app(config: Config) -> FastAPI:
             if last_at.tzinfo is None:
                 last_at = last_at.replace(tzinfo=UTC)
             days = (datetime.now(UTC) - last_at).days
+
+        atom_ids = [t.atom_id for t in turns if t.atom_id is not None]
+        atoms_by_turn = {}
+        if atom_ids:
+            by_id = {
+                a.id: a
+                for a in db.exec(select(EvidenceAtom).where(EvidenceAtom.id.in_(atom_ids))).all()
+            }  # type: ignore[attr-defined]
+            atoms_by_turn = {t.id: by_id[t.atom_id] for t in turns if t.atom_id in by_id}
+
         return {
             "turns": turns,
             "chips": chips,
@@ -762,6 +773,7 @@ def create_app(config: Config) -> FastAPI:
             "accepted": accepted,
             "open_threads": sum(1 for n in notes if n.kind == "thread"),
             "days": days,
+            "atoms_by_turn": atoms_by_turn,
         }
 
     def _reply_partial(request: Request, db: Session, reply):
@@ -843,25 +855,10 @@ def create_app(config: Config) -> FastAPI:
             except ValueError as exc:
                 raise HTTPException(status_code=409, detail=str(exc)) from exc
             turn = db.get(Turn, turn_id)
-            if turn and turn.action:
-                import copy
-
-                new_action = copy.deepcopy(turn.action)
-                target = new_action.get("then", new_action)
-                if "atom" in target:
-                    target["atom"].update(
-                        {
-                            "title": atom.title,
-                            "description": atom.description,
-                            "skills": atom.skills,
-                            "metrics": atom.metrics,
-                        }
-                    )
-                turn.action = new_action
-                db.add(turn)
-                db.commit()
             return templates.TemplateResponse(
-                request, "partials/counselor_turn.html", {"turn": turn}
+                request,
+                "partials/counselor_turn.html",
+                {"turn": turn, "atoms_by_turn": {turn_id: atom}},
             )
 
     @app.post("/counselor/proposals/{turn_id}/reject")
@@ -876,11 +873,12 @@ def create_app(config: Config) -> FastAPI:
             reply = _respond_or_error(db, llm, "Not quite — that isn't right.")
             rejected = db.get(Turn, turn_id)
             card = templates.get_template("partials/counselor_turn.html").render(
-                turn=rejected, request=request
+                turn=rejected, request=request, atoms_by_turn={}
             )
             exchange = _reply_partial(request, db, reply)
             # The rejected card replaces itself (hx-swap outerHTML on the card), and the
             # exchange rides along out-of-band so the transcript grows in the same response.
+            # Relies on counselor_exchange.html opening with exactly <div id="exchange">; a mismatch leaves the transcript un-appended.
             body = card + exchange.body.decode("utf-8").replace(
                 '<div id="exchange">', '<div id="transcript" hx-swap-oob="beforeend">', 1
             )
