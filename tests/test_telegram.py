@@ -63,14 +63,15 @@ def test_updates_error_is_empty():
 @respx.mock
 def test_discover_chat_id():
     result = [
-        {"update_id": 1, "message": {"chat": {"id": 11}}},
-        {"update_id": 2, "message": {"chat": {"id": 22}}},
+        {"update_id": 1, "message": {"chat": {"id": 11, "type": "private"}, "text": "123456"}},
+        {"update_id": 2, "message": {"chat": {"id": 22, "type": "group"}, "text": "123456"}},
+        {"update_id": 3, "message": {"chat": {"id": 33, "type": "private"}, "text": "nope"}},
     ]
     respx.post(f"https://api.telegram.org/bot{TOKEN}/getUpdates").respond(
         200, json={"ok": True, "result": result}
     )
     with httpx.Client() as http:
-        assert discover_chat_id(TOKEN, http) == "22"
+        assert discover_chat_id(TOKEN, http, "123456") == "11"
 
 
 def test_queue_message_shape():

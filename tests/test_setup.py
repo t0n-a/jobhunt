@@ -2,6 +2,7 @@ import os
 import stat
 
 import httpx
+import pytest
 import respx
 import yaml
 from dotenv import dotenv_values
@@ -31,8 +32,17 @@ class Script:
         return self.secrets.pop(0)
 
 
+CODE = "123456"
+
+
 def updates(chat_id=4242):
-    return {"ok": True, "result": [{"update_id": 1, "message": {"chat": {"id": chat_id}, "text": "hi"}}]}
+    message = {"chat": {"id": chat_id, "type": "private"}, "text": CODE}
+    return {"ok": True, "result": [{"update_id": 1, "message": message}]}
+
+
+@pytest.fixture(autouse=True)
+def fixed_code(monkeypatch):
+    monkeypatch.setattr("jobhunt.setup._new_code", lambda: CODE)
 
 
 def run(tmp_path, asks, secrets, result=None):
@@ -93,7 +103,7 @@ def test_chat_id_discovered(tmp_path):
 def test_no_message_leaves_chat_id_unset(tmp_path):
     s = run(tmp_path, FULL, [KEY, TOKEN], result={"ok": True, "result": []})
     assert not dotenv_values(tmp_path / ".env").get("TELEGRAM_CHAT_ID")
-    assert any("No message found" in m for m in s.said)
+    assert any("code was not found" in m for m in s.said)
 
 
 def test_answers_written(tmp_path):
@@ -122,3 +132,12 @@ def test_max_salary_below_min_is_reasked(tmp_path):
     s = run(tmp_path, asks, [KEY, TOKEN])
     assert load_answers(tmp_path / "answers.yaml").salary_max_eur == 60000
     assert any("at least 40000" in m for m in s.said)
+
+
+def test_a_stranger_without_the_code_is_not_bound(tmp_path):
+    stranger = {"ok": True, "result": [
+        {"update_id": 2, "message": {"chat": {"id": 666, "type": "private"}, "text": "hi"}},
+        {"update_id": 1, "message": {"chat": {"id": 4242, "type": "private"}, "text": CODE}},
+    ]}
+    run(tmp_path, FULL, [KEY, TOKEN], result=stranger)
+    assert dotenv_values(tmp_path / ".env")["TELEGRAM_CHAT_ID"] == "4242"

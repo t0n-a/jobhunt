@@ -51,11 +51,15 @@ class TelegramClient:
             pass
 
 
-def discover_chat_id(token: str, http: httpx.Client) -> str | None:
+def discover_chat_id(token: str, http: httpx.Client, code: str) -> str | None:
+    """The private chat that sent exactly `code`: anyone can message a bot, so the newest
+    message alone could bind a stranger's chat as the one the bot obeys."""
     updates = TelegramClient(token, "", http).updates(None)
     for update in sorted(updates, key=lambda u: u.get("update_id", 0), reverse=True):
-        if "message" in update:
-            return str(update["message"]["chat"]["id"])
+        message = update.get("message") or {}
+        chat = message.get("chat") or {}
+        if chat.get("type") == "private" and (message.get("text") or "").strip() == code:
+            return str(chat["id"])
     return None
 
 

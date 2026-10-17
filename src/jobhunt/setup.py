@@ -1,6 +1,7 @@
 """First-run setup: config.yaml, .env keys, Telegram chat id, standard answers."""
 
 import os
+import secrets
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,6 +20,10 @@ KEY_WARNING = (
     "prompts and responses to improve its products, and your CV and profile are in those "
     "prompts. Use a paid key if that is not acceptable."
 )
+def _new_code() -> str:
+    return f"{secrets.randbelow(900_000) + 100_000}"
+
+
 AI_STUDIO_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
 
@@ -78,11 +83,13 @@ def setup_keys(root: Path, p: Prompter, http: httpx.Client) -> None:
             put("TELEGRAM_BOT_TOKEN", token)
     token = dotenv_values(env).get("TELEGRAM_BOT_TOKEN")
     if token and missing("TELEGRAM_CHAT_ID"):
-        p.ask("Send any message to your new bot, then press Enter.")
-        if chat_id := discover_chat_id(token, http):
+        code = _new_code()
+        p.ask(f"Send this code to your new bot from your own Telegram account: {code}\n"
+              "Then press Enter.")
+        if chat_id := discover_chat_id(token, http, code):
             put("TELEGRAM_CHAT_ID", chat_id)
         else:
-            p.say("No message found. Run jobhunt setup again after messaging the bot.")
+            p.say("The code was not found. Run jobhunt setup again and send the new code.")
 
 
 def _ask_field(label: str, annotation, p: Prompter, minimum: int | None = None):
