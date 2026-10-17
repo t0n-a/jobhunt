@@ -89,14 +89,6 @@ tbody tr[aria-selected="true"] td:first-child { box-shadow: inset 3px 0 0 var(--
 .card { padding: 24px; border-radius: 24px; }
 .map h2 { font-size: 15px; }
 .needs:empty { display: none; }
-.views { display: flex; flex-wrap: wrap; gap: 6px; border-bottom: 1px solid var(--line); }
-.views button { display: inline-flex; align-items: center; gap: 8px; background: none; border: 0; border-bottom: 3px solid transparent; padding: 8px 6px 10px; margin-right: 14px; font-size: 18px; font-weight: 700; color: var(--ink-soft); cursor: pointer; white-space: nowrap; }
-.views button:hover { color: var(--ink); }
-.views button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--focus); }
-.views .n { font-size: 14px; font-weight: 600; color: var(--ink-soft); }
-.views .alert { font-size: 13px; font-weight: 800; background: var(--blocked); color: var(--pill-ink); border-radius: 99px; padding: 1px 10px; }
-.list .top { display: block; } .list .sub { margin: 2px 0 0; color: var(--ink-soft); font-size: 13px; }
-.nx { font-size: 12px; color: var(--ink-soft); margin-top: 2px; white-space: nowrap; }
 .needs h2 { font-size: 20px; font-weight: 800; margin: 0 0 10px; display: flex; align-items: center; gap: 10px; }
 .needs h2 span { background: var(--blocked); color: var(--pill-ink); border-radius: 99px; padding: 0 10px; font-size: 15px; }
 .needs .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px; }
@@ -149,10 +141,9 @@ kbd { font: inherit; border: 1px solid var(--line); border-radius: 5px; padding:
   <button class="paste">+ Paste a job</button></header>
 <div class="wrap">
   <div class="left">
-    <div class="views" role="tablist" id="views"></div>
     <section class="needs" id="needs" aria-label="Needs you"></section>
-    <section class="panel list"><div class="top"><h2 id="listh"></h2><p class="sub" id="listsub"></p></div>
-      <table><thead><tr><th>Role</th><th>Fit</th><th class="col-st" id="col3"></th></tr></thead><tbody id="rows"></tbody></table></section>
+    <section class="panel list"><div class="top"><h2>Ranked</h2><div class="filters" id="filters"></div></div>
+      <table><thead><tr><th>Role</th><th>Fit</th><th class="col-st">Status</th></tr></thead><tbody id="rows"></tbody></table></section>
   </div>
   <div class="right">
     <section class="panel card" id="card" aria-live="polite"></section>
@@ -166,36 +157,29 @@ kbd { font: inherit; border: 1px solid var(--line); border-radius: 5px; padding:
 const C = s => `var(--${s})`;
 const hours = a => parseFloat(a) * ({ m: 1 / 60, h: 1, d: 24 }[a.slice(-1)]);
 const X = j => 500 - Math.min(hours(j.age), 168) / 168 * 450, Y = f => 225 - (f - 40) / 60 * 210;
-const TODO = ["found", "ranked"];
-let view = null, sel = null;
+let filter = null, sel = JOBS[0].id;
 const HOT = { blocked: ["var(--blocked)", "var(--blocked-bg)"], waiting: ["var(--waiting)", "var(--waiting-bg)"] };
 const hotvars = s => HOT[s] ? `--c:${HOT[s][0]};--cbg:${HOT[s][1]}` : `--c:${C(s)}`;
-const inView = (j, v = view) => (v === "todo") === TODO.includes(j.status);
-const hot = () => JOBS.filter(j => HOT[j.status]).sort((a, b) => (b.status === "blocked") - (a.status === "blocked"));
-// rows under the tab: To apply = whole ranking; In progress = everything moving that isn't already a Needs-you card
-const visible = () => JOBS.filter(j => inView(j) && !HOT[j.status]).sort((a, b) => b.fit - a.fit);
+const visible = () => JOBS.filter(j => !filter || j.status === filter);
 const grid = [40, 60, 80, 100].map(f => `<line x1="40" x2="510" y1="${Y(f)}" y2="${Y(f)}"/><text x="8" y="${Y(f) + 4}">${f}</text>`).join("");
 function render() {
-  const nav = [...hot(), ...visible()];
-  if (!nav.some(j => j.id === sel) && nav[0]) sel = nav[0].id;
+  const v = visible(); if (!v.some(j => j.id === sel) && v[0]) sel = v[0].id;
   chart.innerHTML = `<rect class="band" x="40" y="${Y(100)}" width="470" height="${Y(80) - Y(100)}" rx="6"/><g class="grid">${grid}</g>
     <text x="40" y="246">7 days ago</text><text x="482" y="246">now</text>` +
-    JOBS.map(j => `<g class="pt${j.id === sel ? " on" : ""}${inView(j) ? "" : " dim"}" data-id="${j.id}" tabindex="0" aria-label="${j.title}, fit ${j.fit}">
+    JOBS.map(j => `<g class="pt${j.id === sel ? " on" : ""}${filter && j.status !== filter ? " dim" : ""}" data-id="${j.id}" tabindex="0" aria-label="${j.title}, fit ${j.fit}">
       <circle class="halo" cx="${X(j)}" cy="${Y(j.fit)}" r="13"/>${j.flag ? `<circle class="ring" cx="${X(j)}" cy="${Y(j.fit)}" r="10"/>` : ""}
       <circle class="dot" cx="${X(j)}" cy="${Y(j.fit)}" r="${j.id === sel ? 8 : 6}" fill="${C(j.status)}"/></g>`).join("");
-  const nProg = JOBS.filter(j => inView(j, "prog")).length, nTodo = JOBS.length - nProg, h = hot();
-  views.innerHTML = `<button role="tab" aria-selected="${view === "prog"}" data-v="prog">In progress <span class="n">${nProg}</span>${h.length ? `<span class="alert">${h.length} need you</span>` : ""}</button>
-    <button role="tab" aria-selected="${view === "todo"}" data-v="todo">To apply <span class="n">${nTodo}</span></button>`;
-  needs.innerHTML = view === "prog" && h.length ? `<h2>Needs you <span>${h.length}</span></h2><div class="cards">` + h.map(j => `<article class="need" data-id="${j.id}" style="${hotvars(j.status)}" aria-selected="${j.id === sel}">
+  const n = s => JOBS.filter(j => j.status === s).length;
+  filters.innerHTML = `<button aria-pressed="${!filter}" data-f="">All ${JOBS.length}</button>` +
+    STAGES.filter(n).map(s => `<button class="dotc" style="--c:${C(s)}" aria-pressed="${filter === s}" data-f="${s}">${STAGE_LABEL[s]} ${n(s)}</button>`).join("");
+  const hot = JOBS.filter(j => HOT[j.status]).sort((a, b) => (a.status === "blocked" ? -1 : 0) - (b.status === "blocked" ? -1 : 0));
+  needs.innerHTML = hot.length ? `<h2>Needs you <span>${hot.length}</span></h2><div class="cards">` + hot.map(j => `<article class="need" data-id="${j.id}" style="${hotvars(j.status)}" aria-selected="${j.id === sel}">
     <span class="lbl">${STAGE_LABEL[j.status]}</span><span class="t">${j.title}</span><span class="c">${j.company} · fit ${j.fit}</span>
     ${j.flag ? `<span class="r">⚠ ${j.flag.text}: ${j.flag.why}</span>` : ""}<button>${j.next} →</button></article>`).join("") + "</div>" : "";
-  listh.textContent = view === "todo" ? "Ranked, not applied yet" : "Moving along";
-  listsub.textContent = view === "todo" ? "Best fit first. Pick one to draft an application." : "Drafted or sent. Nothing for you to do until a date comes up.";
-  col3.textContent = view === "todo" ? "Status" : "Next";
-  rows.innerHTML = visible().map(j => `<tr data-id="${j.id}" aria-selected="${j.id === sel}" style="--c:${C(j.status)}">
+  rows.innerHTML = v.map(j => `<tr data-id="${j.id}" aria-selected="${j.id === sel}" class="${HOT[j.status] ? "hot" : ""}" style="${hotvars(j.status)}">
     <td class="role"><div class="t">${j.flag ? '<span class="flagmark" title="Has unverified text">!</span>' : ""}${j.title}</div><div class="c">${j.company} · ${j.where}</div></td>
     <td class="fitcell"><div class="fitbar"><span><i style="--p:${j.fit}"></i></span><b>${j.fit}</b></div></td>
-    <td class="col-st">${view === "todo" ? `<span class="st dotc">${STAGE_LABEL[j.status]}</span>` : `<span class="st dotc">${STAGE_LABEL[j.status]}</span><div class="nx">${j.next}</div>`}</td></tr>`).join("");
+    <td class="col-st"><span class="st dotc${HOT[j.status] ? " hot" : ""}">${STAGE_LABEL[j.status]}</span></td></tr>`).join("");
   const j = JOBS.find(j => j.id === sel);
   card.innerHTML = !j ? "<p>Nothing here.</p>" : `<div class="head"><div><span class="chip dotc" style="--c:${C(j.status)}">${STAGE_LABEL[j.status]}</span>
     <h1>${j.title}</h1><p class="co">${j.company}</p></div>
@@ -206,21 +190,20 @@ function render() {
     <div class="controls"><button>Pass</button><button>Later</button><button class="go">${j.next} →</button></div>
     <p class="keys"><kbd>↑</kbd> <kbd>↓</kbd> move · <kbd>Enter</kbd> next action</p>`;
 }
-const pick = e => { const t = e.target.closest("[data-id]"); if (t) { sel = +t.dataset.id; const j = JOBS.find(j => j.id === sel); if (!inView(j)) view = TODO.includes(j.status) ? "todo" : "prog"; render(); if (innerWidth <= 900 && e.currentTarget === rows) card.scrollIntoView({ behavior: "smooth" }); } };
+const pick = e => { const t = e.target.closest("[data-id]"); if (t) { sel = +t.dataset.id; render(); if (innerWidth <= 900 && e.currentTarget === rows) card.scrollIntoView({ behavior: "smooth" }); } };
 chart.onclick = pick; rows.onclick = pick; needs.onclick = pick;
 chart.onkeydown = e => e.key === "Enter" && pick(e);
-views.onclick = e => { const b = e.target.closest("button"); if (b) { view = b.dataset.v; sel = null; render(); } };
+filters.onclick = e => { const b = e.target.closest("button"); if (b) { filter = b.dataset.f || null; render(); } };
 addEventListener("keydown", e => {
   if (e.key === "Enter" && e.target === document.body) return card.querySelector(".go")?.click();
   if (!["ArrowUp", "ArrowDown"].includes(e.key) || e.target.closest("svg")) return;
-  const v = [...(view === "prog" ? hot() : []), ...visible()], i = v.findIndex(j => j.id === sel);
+  const v = visible(), i = v.findIndex(j => j.id === sel);
   const nx = v[Math.max(0, Math.min(v.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)))];
   if (nx) { e.preventDefault(); sel = nx.id; render(); rows.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" }); }
 });
 const root = document.documentElement;
 root.dataset.theme = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
 theme.onclick = () => root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
-view = hot().length ? "prog" : "todo";
 render();
 </script>
 </body>
