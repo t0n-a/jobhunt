@@ -121,3 +121,8 @@ def test_radio_group_fills(base, tmp_path):
 def test_http_error_is_error(base, tmp_path):
     r = _run(base, tmp_path, "limited")
     assert (r.status, r.reason) == ("error", "http 429")
+
+
+def test_a_captcha_injected_after_load_stops_before_submit(base, tmp_path):
+    r = _run(base, tmp_path, "late_captcha.html")
+    assert r.status == "stopped" and "captcha" in r.reason

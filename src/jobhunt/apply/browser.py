@@ -200,8 +200,15 @@ def run_form(
                 return done("stopped", "no submit button")
             if not submit:
                 if wait_for_human:
-                    page.wait_for_event("close", timeout=0)
+                    try:
+                        page.wait_for_event("close", timeout=0)
+                    except PlaywrightError:  # the candidate closed the whole window, not the tab
+                        pass
                 return FormRun("ready")
+            # Captcha scripts can arrive after load (on focus, on fill): look again before clicking.
+            late = obstacles(page)
+            if late and not allow_obstacles:
+                return done("stopped", "obstacle: " + ", ".join(late))
             btn.click()
             try:
                 page.wait_for_function(
