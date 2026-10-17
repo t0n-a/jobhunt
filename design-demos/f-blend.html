@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>F · Blend</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&display=swap" rel="stylesheet">
+<style>
+/* Hallmark · macrostructure: Workbench (A) + fit map (E) + focus card (D) · tone: calm-technical · theme: Midnight, Bricolage */
+:root {
+  --paper: oklch(15% 0.03 265); --panel: oklch(19% 0.035 265); --panel-2: oklch(23% 0.04 265);
+  --ink: oklch(94% 0.01 265); --ink-soft: oklch(72% 0.03 265); --line: oklch(30% 0.04 265);
+  --glow: oklch(45% 0.12 265 / .35); --focus: oklch(85% 0.14 85); --sel: oklch(85% 0.14 85 / .12);
+  --found: oklch(72% 0.03 265); --ranked: oklch(75% 0.13 230); --drafted: oklch(74% 0.15 305);
+  --waiting: oklch(85% 0.15 85); --sent: oklch(78% 0.15 160); --blocked: oklch(68% 0.2 25);
+  --flag: oklch(72% 0.19 25); --flag-bg: oklch(68% 0.2 25 / .14);
+  --bar: oklch(75% 0.13 230); --bar-bg: oklch(30% 0.04 265); --go: oklch(85% 0.15 85); --go-ink: oklch(18% 0.03 265);
+  --font: "Bricolage Grotesque", system-ui, sans-serif; --ease-out: cubic-bezier(.2,.8,.2,1);
+}
+/* light tokens; data-theme is set from the OS preference on load */
+:root[data-theme="light"] {
+  --paper: oklch(97% 0.008 265); --panel: oklch(100% 0 0); --panel-2: oklch(96% 0.01 265);
+  --ink: oklch(22% 0.03 265); --ink-soft: oklch(46% 0.03 265); --line: oklch(89% 0.015 265);
+  --glow: oklch(82% 0.08 265 / .35); --focus: oklch(50% 0.2 265); --sel: oklch(50% 0.2 265 / .08);
+  --found: oklch(55% 0.03 265); --ranked: oklch(52% 0.14 235); --drafted: oklch(50% 0.17 305);
+  --waiting: oklch(62% 0.15 70); --sent: oklch(52% 0.14 160); --blocked: oklch(52% 0.2 25);
+  --flag: oklch(50% 0.2 25); --flag-bg: oklch(52% 0.2 25 / .08);
+  --bar: oklch(55% 0.14 235); --bar-bg: oklch(92% 0.015 265); --go: oklch(25% 0.04 265); --go-ink: oklch(98% 0 0);
+}
+* { box-sizing: border-box; }
+html, body { overflow-x: clip; }
+body { margin: 0; color: var(--ink); font: 15px/1.5 var(--font); font-variant-numeric: tabular-nums;
+  background: radial-gradient(60rem 40rem at 30% -10%, var(--glow), transparent 70%), var(--paper); min-height: 100dvh; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+button { font: inherit; color: inherit; }
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; padding: 16px 24px; }
+header b { font-size: 22px; font-weight: 800; letter-spacing: -.01em; }
+header nav { display: flex; flex-wrap: wrap; gap: 2px; }
+header nav a { color: var(--ink-soft); text-decoration: none; padding: 6px 10px; border-radius: 8px; font-weight: 500; }
+header nav a:hover { color: var(--ink); background: var(--panel-2); }
+header nav a[aria-current] { color: var(--ink); background: var(--panel-2); }
+header .paste { margin-left: auto; border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 7px 14px; cursor: pointer; font-weight: 600; }
+header .paste:hover { border-color: var(--ink-soft); }
+.wrap { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 20px; padding: 0 24px 40px; align-items: start; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; }
+.left { display: grid; gap: 20px; }
+.map { padding: 16px 16px 10px; }
+.map h2, .list h2 { font-size: 17px; font-weight: 700; margin: 0; }
+.map .sub { margin: 0 0 4px; color: var(--ink-soft); font-size: 13px; }
+svg { width: 100%; height: auto; display: block; overflow: visible; }
+svg .grid line { stroke: var(--line); }
+svg text { fill: var(--ink-soft); font: 500 11px var(--font); }
+svg .band { fill: var(--glow); }
+svg g.pt { cursor: pointer; }
+svg circle.dot { stroke: var(--panel); stroke-width: 2; }
+svg circle.halo { fill: none; stroke: var(--focus); stroke-width: 2; opacity: 0; }
+svg g.pt.on circle.halo { opacity: 1; }
+svg g.pt.dim { opacity: .2; }
+svg .ring { fill: none; stroke: var(--flag); stroke-dasharray: 3 3; stroke-width: 1.5; }
+.list { overflow: hidden; }
+.list .top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.filters button { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: none; border-radius: 99px; padding: 3px 10px; font-size: 13px; cursor: pointer; color: var(--ink-soft); white-space: nowrap; }
+.filters button:hover { color: var(--ink); border-color: var(--ink-soft); }
+.filters button[aria-pressed="true"] { color: var(--ink); border-color: var(--ink); background: var(--panel-2); }
+.dotc::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--c); box-shadow: 0 0 8px var(--c); flex: none; }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-size: 12px; font-weight: 500; color: var(--ink-soft); padding: 8px 16px; }
+td { padding: 9px 16px; border-top: 1px solid var(--line); vertical-align: middle; }
+tbody tr { cursor: pointer; }
+tbody tr:hover td { background: var(--panel-2); }
+tbody tr[aria-selected="true"] td { background: var(--sel); }
+tbody tr[aria-selected="true"] td:first-child { box-shadow: inset 3px 0 0 var(--focus); }
+.role { min-width: 0; max-width: 0; width: 100%; }
+.role div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.role .t { font-weight: 600; }
+.role .c { color: var(--ink-soft); font-size: 13px; }
+.flagmark { color: var(--flag); font-weight: 800; margin-right: 4px; }
+.fitcell { width: 150px; }
+.fitbar { display: flex; align-items: center; gap: 10px; }
+.fitbar span { flex: 1; min-width: 90px; height: 8px; border-radius: 9px; background: var(--bar-bg); overflow: hidden; }
+.fitbar span i { display: block; height: 100%; width: calc(var(--p) * 1%); background: var(--bar); border-radius: inherit; }
+.fitbar b { width: 2ch; text-align: right; font-weight: 700; }
+.st { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; white-space: nowrap; }
+.card { position: sticky; top: 16px; padding: 24px; border-radius: 24px; }
+.card .head { display: flex; justify-content: space-between; align-items: start; gap: 16px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 99px; font-weight: 600; font-size: 13px; background: var(--panel-2); }
+.ring-score { --p: 50; width: 84px; aspect-ratio: 1; border-radius: 50%; flex: none; display: grid; place-items: center;
+  background: radial-gradient(closest-side, var(--panel) 76%, transparent 78%), conic-gradient(var(--bar) calc(var(--p) * 1%), var(--bar-bg) 0); }
+.ring-score b { display: block; font-size: 26px; font-weight: 800; line-height: 1; text-align: center; }
+.ring-score small { display: block; font-size: 11px; color: var(--ink-soft); text-align: center; }
+.card h1 { font-size: clamp(24px, 3vw, 34px); line-height: 1.08; font-weight: 800; letter-spacing: -.02em; margin: 12px 0 4px; overflow-wrap: anywhere; }
+.card .co { font-size: 17px; color: var(--ink-soft); margin: 0 0 14px; }
+.facts { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; padding: 0; list-style: none; }
+.facts li { border: 1px dashed var(--line); border-radius: 10px; padding: 3px 10px; font-size: 13px; }
+.why { font-size: 16px; margin: 0 0 14px; }
+.flag { background: var(--flag-bg); border: 1.5px solid var(--flag); border-radius: 14px; padding: 10px 14px; margin: 0 0 14px; }
+.flag b { color: var(--flag); display: block; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+.flag mark { background: none; color: var(--ink); text-decoration: underline wavy var(--flag); text-underline-offset: 3px; }
+.controls { display: grid; grid-template-columns: auto auto 1fr; gap: 8px; }
+.controls button { border-radius: 14px; padding: 11px 14px; border: 1px solid var(--line); background: var(--panel-2); cursor: pointer; font-weight: 600; white-space: nowrap; transition: transform .12s var(--ease-out); }
+.controls button:hover { transform: translateY(-1px); border-color: var(--ink-soft); }
+.controls button:active { transform: translateY(1px); }
+.controls .go { background: var(--go); color: var(--go-ink); border-color: transparent; font-weight: 800; overflow: hidden; text-overflow: ellipsis; }
+.keys { margin: 12px 0 0; font-size: 12px; color: var(--ink-soft); }
+kbd { font: inherit; border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; }
+.theme { position: fixed; right: 16px; bottom: 16px; border: 1px solid var(--line); background: var(--panel); border-radius: 99px; padding: 6px 12px; cursor: pointer; font-size: 13px; }
+@media (max-width: 900px) {
+  .wrap { grid-template-columns: minmax(0, 1fr); padding: 0 16px 60px; } header { padding: 14px 16px; }
+  .card { position: static; } .fitbar span { min-width: 48px; } .col-st { display: none; }
+}
+@media (max-width: 480px) { .controls { grid-template-columns: 1fr 1fr; } .controls .go { grid-column: 1 / -1; } .keys { display: none; } }
+@media (prefers-reduced-motion: reduce) { .controls button { transition: none; } }
+</style>
+</head>
+<body>
+<header><b>jobhunt</b>
+  <nav><a href="#">Home</a><a href="#">Today</a><a href="#" aria-current="page">Jobs</a><a href="#">Gaps</a><a href="#">Applications</a><a href="#">Evidence</a><a href="#">Counselor</a></nav>
+  <button class="paste">+ Paste a job</button></header>
+<div class="wrap">
+  <div class="left">
+    <section class="panel map"><h2>Where your matches sit</h2><p class="sub">Up is better fit, right is fresher. Dashed ring: text needs checking.</p>
+      <svg id="chart" viewBox="0 0 520 250" role="img" aria-label="Jobs plotted by fit and freshness"></svg></section>
+    <section class="panel list"><div class="top"><h2>Ranked</h2><div class="filters" id="filters"></div></div>
+      <table><thead><tr><th>Role</th><th>Fit</th><th class="col-st">Status</th></tr></thead><tbody id="rows"></tbody></table></section>
+  </div>
+  <section class="panel card" id="card" aria-live="polite"></section>
+</div>
+<button class="theme" id="theme">Light / dark</button>
+<script src="data.js"></script>
+<script>
+const C = s => `var(--${s})`;
+const hours = a => parseFloat(a) * ({ m: 1 / 60, h: 1, d: 24 }[a.slice(-1)]);
+const X = j => 500 - Math.min(hours(j.age), 168) / 168 * 450, Y = f => 225 - (f - 40) / 60 * 210;
+let filter = null, sel = JOBS[0].id;
+const visible = () => JOBS.filter(j => !filter || j.status === filter);
+const grid = [40, 60, 80, 100].map(f => `<line x1="40" x2="510" y1="${Y(f)}" y2="${Y(f)}"/><text x="8" y="${Y(f) + 4}">${f}</text>`).join("");
+function render() {
+  const v = visible(); if (!v.some(j => j.id === sel) && v[0]) sel = v[0].id;
+  chart.innerHTML = `<rect class="band" x="40" y="${Y(100)}" width="470" height="${Y(80) - Y(100)}" rx="6"/><g class="grid">${grid}</g>
+    <text x="40" y="246">7 days ago</text><text x="482" y="246">now</text>` +
+    JOBS.map(j => `<g class="pt${j.id === sel ? " on" : ""}${filter && j.status !== filter ? " dim" : ""}" data-id="${j.id}" tabindex="0" aria-label="${j.title}, fit ${j.fit}">
+      <circle class="halo" cx="${X(j)}" cy="${Y(j.fit)}" r="13"/>${j.flag ? `<circle class="ring" cx="${X(j)}" cy="${Y(j.fit)}" r="10"/>` : ""}
+      <circle class="dot" cx="${X(j)}" cy="${Y(j.fit)}" r="${j.id === sel ? 8 : 6}" fill="${C(j.status)}"/></g>`).join("");
+  const n = s => JOBS.filter(j => j.status === s).length;
+  filters.innerHTML = `<button aria-pressed="${!filter}" data-f="">All ${JOBS.length}</button>` +
+    STAGES.filter(n).map(s => `<button class="dotc" style="--c:${C(s)}" aria-pressed="${filter === s}" data-f="${s}">${STAGE_LABEL[s]} ${n(s)}</button>`).join("");
+  rows.innerHTML = v.map(j => `<tr data-id="${j.id}" aria-selected="${j.id === sel}">
+    <td class="role"><div class="t">${j.flag ? '<span class="flagmark" title="Has unverified text">!</span>' : ""}${j.title}</div><div class="c">${j.company} · ${j.where}</div></td>
+    <td class="fitcell"><div class="fitbar"><span><i style="--p:${j.fit}"></i></span><b>${j.fit}</b></div></td>
+    <td class="col-st"><span class="st dotc" style="--c:${C(j.status)}">${STAGE_LABEL[j.status]}</span></td></tr>`).join("");
+  const j = JOBS.find(j => j.id === sel);
+  card.innerHTML = !j ? "<p>Nothing here.</p>" : `<div class="head"><div><span class="chip dotc" style="--c:${C(j.status)}">${STAGE_LABEL[j.status]}</span>
+    <h1>${j.title}</h1><p class="co">${j.company}</p></div>
+    <div class="ring-score" style="--p:${j.fit}"><div><b>${j.fit}</b><small>fit</small></div></div></div>
+    <ul class="facts"><li>${j.where}</li><li>${j.track}</li><li>seniority: ${j.seniority}</li><li>found ${j.age} ago</li></ul>
+    <p class="why">${j.rationale || "Not scored yet. Score it to see why it might fit."}</p>
+    ${j.flag ? `<div class="flag"><b>Check this before it goes out</b><mark>${j.flag.text}</mark>: ${j.flag.why}</div>` : ""}
+    <div class="controls"><button>Pass</button><button>Later</button><button class="go">${j.next} →</button></div>
+    <p class="keys"><kbd>↑</kbd> <kbd>↓</kbd> move · <kbd>Enter</kbd> next action</p>`;
+}
+const pick = e => { const t = e.target.closest("[data-id]"); if (t) { sel = +t.dataset.id; render(); if (innerWidth <= 900 && e.currentTarget === rows) card.scrollIntoView({ behavior: "smooth" }); } };
+chart.onclick = pick; rows.onclick = pick;
+chart.onkeydown = e => e.key === "Enter" && pick(e);
+filters.onclick = e => { const b = e.target.closest("button"); if (b) { filter = b.dataset.f || null; render(); } };
+addEventListener("keydown", e => {
+  if (e.key === "Enter" && e.target === document.body) return card.querySelector(".go")?.click();
+  if (!["ArrowUp", "ArrowDown"].includes(e.key) || e.target.closest("svg")) return;
+  const v = visible(), i = v.findIndex(j => j.id === sel);
+  const nx = v[Math.max(0, Math.min(v.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)))];
+  if (nx) { e.preventDefault(); sel = nx.id; render(); rows.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" }); }
+});
+const root = document.documentElement;
+root.dataset.theme = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+theme.onclick = () => root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
+render();
+</script>
+</body>
+</html>
