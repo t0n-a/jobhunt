@@ -138,6 +138,15 @@ class OutreachConfig(BaseModel):
     followup_days: int = 7
 
 
+class GrowthConfig(BaseModel):
+    # Growth refresh runs at most this often.
+    refresh_days: int = 7
+    # GitHub shows six pinned repos.
+    max_pins: int = 6
+    # A cert one job mentions is noise.
+    min_cert_jobs: int = 2
+
+
 class Config(BaseModel):
     profile: ProfileConfig
     llm: LLMConfig = Field(default_factory=LLMConfig)
@@ -145,6 +154,7 @@ class Config(BaseModel):
     ranking: RankingConfig = Field(default_factory=RankingConfig)
     autopilot: AutopilotConfig = Field(default_factory=AutopilotConfig)
     outreach: OutreachConfig = Field(default_factory=OutreachConfig)
+    growth: GrowthConfig = Field(default_factory=GrowthConfig)
     data_dir: Path = Path("./data")
     answers_path: Path = Path("answers.yaml")
 

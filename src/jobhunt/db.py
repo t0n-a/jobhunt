@@ -21,6 +21,7 @@ def init_db(engine) -> None:
     """Create all tables. Importing models registers them on SQLModel.metadata."""
     import jobhunt.coach.models
     import jobhunt.counselor.models
+    import jobhunt.growth.models
     import jobhunt.jobs.models
     import jobhunt.linkedin.models
     import jobhunt.outreach.models
