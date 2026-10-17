@@ -6,7 +6,7 @@ import respx
 from sqlmodel import Session
 
 from jobhunt.apply.form import GREENHOUSE_API, FormField
-from jobhunt.apply.plan import FormPlan
+from jobhunt.apply.plan import FormPlan, Planned, save_plan
 from jobhunt.apply.prepare import assisted_apply, prepare_plan
 from jobhunt.config import Config, ProfileConfig
 from jobhunt.db import create_engine_for, init_db
@@ -114,3 +114,16 @@ def test_assisted_apply_reuses_saved_plan(tmp_path, http):
     run = runner("ready")
     assisted_apply(s, app, cfg, None, http, runner=run, ask=lambda q: "n", scan=lambda u: None)
     assert run.calls
+
+
+
+def test_assisted_apply_does_not_replan_a_reviewed_plan(tmp_path, http, monkeypatch):
+    import jobhunt.apply.prepare as prep
+
+    s, cfg = make(tmp_path, LEVER)
+    app = s.get(Application, 1)
+    save_plan(s, app, FormPlan(filled=[Planned("email", "reviewed@example.com", "profile")]))
+    monkeypatch.setattr(prep, "prepare_plan", lambda *a, **k: pytest.fail("re-planned"))
+    run = runner("ready")
+    assisted_apply(s, app, cfg, None, http, runner=run, ask=lambda q: "", scan=lever_scan)
+    assert run.calls  # opened the form with the stored plan; prepare_plan would have failed

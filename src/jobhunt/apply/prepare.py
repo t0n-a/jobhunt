@@ -94,9 +94,10 @@ def assisted_apply(
         return f"#{n} is {application.status}; nothing to apply."
     job = session.get(Job, application.job_id)
     target = detect_ats(job.url)
-    plan = prepare_plan(session, application, config, llm, http, scan=scan) if target else None
-    if plan is None and target and application.form_plan:
-        plan = FormPlan.from_json(application.form_plan)
+    # The stored plan is what the candidate reviewed; only plan afresh when there is none.
+    plan = FormPlan.from_json(application.form_plan) if target and application.form_plan else None
+    if plan is None and target:
+        plan = prepare_plan(session, application, config, llm, http, scan=scan)
     if target is None or plan is None:
         return f"No supported form for #{n}. Apply here: {job.url}"
     result = runner(
