@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync
+      - name: Lint
+        run: uv run ruff check
+      # The form-filling tests drive a real headless Chromium against local fixture pages.
+      - name: Install Chromium for Playwright
+        run: uv run playwright install --with-deps chromium
+      - name: Tests (no network; live tests are deselected by default)
+        run: uv run pytest -q

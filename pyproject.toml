@@ -1,9 +1,19 @@
 [project]
 name = "jobhunt"
 version = "0.1.0"
-description = "Local-first job search agent with a skill-gap coaching loop"
+description = "Local-first job-search assistant: finds and ranks jobs, tailors applications from verified evidence, pre-fills forms, drafts outreach"
+readme = "README.md"
 requires-python = ">=3.12,<3.13"
 license = { text = "MIT" }
+authors = [{ name = "t0n-a" }]
+keywords = ["job-search", "resume", "ats", "telegram-bot", "llm", "local-first"]
+classifiers = [
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Environment :: Web Environment",
+    "Topic :: Office/Business",
+]
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
@@ -19,6 +29,10 @@ dependencies = [
     "python-jobspy==1.3.0",
     "playwright==1.63.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/t0n-a/jobhunt"
+Issues = "https://github.com/t0n-a/jobhunt/issues"
 
 [project.scripts]
 jobhunt = "jobhunt.cli:main"

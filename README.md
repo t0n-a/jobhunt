@@ -1,23 +1,41 @@
 # jobhunt
 
-jobhunt is a local-first job-search agent. It finds and scores job postings, tailors an ATS-parseable resume per application, and converts aggregate skill gaps into one concrete, auto-verified daily task that earns a real resume line. Existing open-source tools (such as career-ops, autopilot-jobhunt, and Resume Matcher) handle discovery and tailoring, but none close the loop from skill gap to daily task to verified evidence.
+[![CI](https://github.com/t0n-a/jobhunt/actions/workflows/ci.yml/badge.svg)](https://github.com/t0n-a/jobhunt/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-All five phases are built: the profile subsystem, job discovery with scoring, the daily skill-gap coach, resume tailoring, and LinkedIn profile buildout. Phase 5 covers the profile text only — posting is not built, and the Status section says exactly where the line falls.
+**A local-first job-search assistant that does the volume and leaves you the decisions.**
 
-## Status
+jobhunt finds jobs worldwide, ranks them with pay first, tailors a resume and cover letter per application from
+facts you have confirmed, pre-fills the real application form, drafts recruiter messages, and tells you what to
+learn next. It runs on your own machine with your own keys and talks to you through a private Telegram bot.
 
-- **Phase 1 (Complete):** Evidence-atom store, the counselor (originally a guided interview), CV/GitHub/coursework importers, and local web UI.
-- **Phase 2 (Complete):** Nine job sources, dedupe into canonical jobs, LLM scoring with track tagging, and a ranked inbox.
-- **Phase 3 (Complete):** The skill-gap coach, converting aggregate gaps into concrete daily tasks.
-- **Phase 4 (Complete):** Resume tailoring with verifiable facts and ATS self-checking.
-- **Phase 5 (Partially built):** LinkedIn profile buildout — generate, verify and approve the profile text.
-- **Phase 5, remaining:** post queue, posting via the official API, outreach drafts. Needs a registered LinkedIn app.
+## What it does
 
-## Core Concept: Evidence Atoms
+- **Finds and ranks jobs.** LinkedIn and Indeed (logged-out, via JobSpy), Greenhouse/Lever/Ashby boards, remote
+  boards and Hacker News. Duplicates are merged across sources; senior roles, wrong-language postings and closed
+  listings are dropped before any LLM call; the shortlist is sorted by pay (posted or a labelled estimate), then fit.
+- **Tailors every application from evidence.** Your profile is a set of confirmed facts ("evidence atoms"). Each
+  resume bullet must trace to one; anything the model invents is dropped and shown to you with the reason.
+- **Queues them for you.** Each day the best matches are tailored and sent to Telegram with Yes/No buttons, then
+  tracked from sent → replied → interview → offer, with follow-up reminders and a daily digest.
+- **Pre-fills the real form.** `jobhunt apply --id N` opens the Greenhouse/Lever/Ashby form in a browser, filled
+  from your profile and standard answers; you check it and click submit.
+- **Drafts outreach.** Short, specific, evidence-checked messages and connection notes to the recruiter the posting
+  names (or one found by web search), sent to Telegram for you to copy. Nobody is contacted twice.
+- **Grows your profile.** Suggests private repos worth making public (after a secret scan of their whole history),
+  drafts evidence-backed READMEs, suggests pins and certifications that matched jobs ask for, and turns skill gaps
+  into one daily task with no streaks.
 
-The profile store does not hold a traditional monolithic resume. Instead, it stores discrete **evidence atoms**: granular, bullet-worthy facts (projects, roles, coursework, technical achievements), each tagged with skills and a provenance (`interview`, `cv`, `github`, `coursework`, `quest`, `manual`).
+## Safety by design
 
-Downstream tailoring selects and rephrases existing atoms for a specific job; it never invents them. Because the user must defend every bullet point in an interview, fabrication is treated as a correctness bug. All LLM-generated atoms enter the database as unconfirmed and must be reviewed before use.
+- **No lying.** Every claim in a CV, letter, form answer, message or README traces to confirmed evidence; unverifiable
+  text is dropped, never sent.
+- **You stay in the loop.** Nothing is sent in your name without your yes. Autopilot is off until you switch it on
+  after enough clean approvals, and even then it only submits forms with no login and no captcha.
+- **It never gets around protections.** No captcha bypass, no password typing, no action through your LinkedIn
+  account; LinkedIn is read logged-out and is best-effort.
+- **Your data stays local.** SQLite on your disk; only LLM calls leave the machine (the free Gemini tier may use
+  prompts for training, and setup says so).
 
 ## Requirements
 
@@ -29,12 +47,13 @@ Downstream tailoring selects and rephrases existing atoms for a specific job; it
   sudo apt install latexmk texlive-latex-recommended poppler-utils
   ```
   Without them, everything works except the PDF step.
-- **LLM provider:** Antigravity CLI (`agy`) by default (see LLM Provider below).
+- **LLM provider:** a free Google AI Studio key (what `jobhunt setup` configures), any OpenAI-compatible endpoint, or the Antigravity CLI (see LLM Provider below).
+- **Optional:** a Telegram bot (for the queue and digest), `gh` (profile growth), and Playwright's Chromium (form filling; `jobhunt setup` offers to install it).
 
 ## Setup
 
 ```
-git clone <repo> && cd jobhunt
+git clone https://github.com/t0n-a/jobhunt.git && cd jobhunt
 uv python install 3.12 && uv python pin 3.12
 uv sync
 cp config.example.yaml config.yaml
@@ -95,6 +114,8 @@ Configured in `.env`:
 - `GITHUB_TOKEN`: Optional but recommended. The GitHub importer makes `1 + N` API calls (one for repo metadata plus one per README). Unauthenticated requests allow only 60 requests per hour, hitting the limit for profiles with ~30 repositories. Setting a token raises the rate limit to 5,000 requests per hour.
 - `OPENAI_BASE_URL` and `OPENAI_API_KEY`: required when `llm.provider` is `openai_compat`.
 - `ITJOBS_API_KEY`: optional. A free key from itjobs.pt/api enables ITJobs.pt, Portugal's largest IT board. Without it that source is skipped.
+- `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`: the bot that carries the queue, digest and commands (`jobhunt setup` finds the chat id).
+- `TAVILY_API_KEY`: optional. Free plan at tavily.com, no card; enables recruiter web search for outreach.
 
 ## Using It
 
@@ -181,7 +202,7 @@ Nothing is published. LinkedIn exposes no write API for profile fields, so you c
 
 Fields longer than LinkedIn accepts are flagged rather than cut. The limits are recorded in `src/jobhunt/linkedin/fields.py`; LinkedIn does not publish them formally, so if one is wrong, that is the one line to change.
 
-**Not yet built:** posting, the post queue, and outreach drafts.
+**Not built:** posting to LinkedIn (there is no API for it). Outreach drafts are covered under Outreach above.
 
 ### Counselor
 
@@ -208,25 +229,27 @@ Once a week (`growth.refresh_days`, 7 by default; never while paused or with no 
 - `src/jobhunt/sources/`: One adapter per job board, plus ATS board discovery.
 - `src/jobhunt/jobs/`: Raw postings, canonical jobs, dedupe, and the job store.
 - `src/jobhunt/matching/`: LLM scoring, track tagging, and skill-name canonicalisation.
-- `src/jobhunt/growth/`: Gap aggregation across scored jobs, fit-weighted.
+- `src/jobhunt/growth/`: Gap aggregation, plus GitHub profile growth (repo audit, README drafts, pin and certification suggestions).
 - `src/jobhunt/coach/`: Quest engine, daily task selection, GitHub verification, Telegram push.
 - `src/jobhunt/tailor/`: Keyword extraction, atom shortlisting, composition, the fabrication verifier, LaTeX rendering, and the ATS self-check.
 - `src/jobhunt/linkedin/`: Field registry and limits, profile versions, composition, the approval gate, and the per-field diff.
 - `src/jobhunt/counselor/`: The counselor — briefing, action schema, tools, turn loop, proposals, and the notes block the scorer reads.
 - `src/jobhunt/scan.py`: Scan orchestration with per-source isolation and deadlines.
 - `src/jobhunt/web/`: FastAPI app, Jinja2 templates, HTMX partials, the Home page state, flash messages.
+- `src/jobhunt/ranking/`: Rule-based triage (level, language, visa, pay) and the pay-first shortlist.
+- `src/jobhunt/apply/`: Tracker, follow-ups, queue and trust, Telegram commands, daily run and digest, ATS detection, form planning, the Playwright form filler and the autopilot gate.
+- `src/jobhunt/outreach/`: Contacts from postings (and optional web search), evidence-checked drafts, the contact log.
+- `src/jobhunt/telegram.py`, `src/jobhunt/setup.py`, `src/jobhunt/timers.py`: the bot, first-run setup, systemd timers.
 
 ## Known Limitations
 
-Written down rather than left to be rediscovered:
-
-- `docs/superpowers/phase5-known-limitations.md` — the LinkedIn buildout: entry-level diffs mis-pair after an entry is dropped, an empty profile returns a 502 from the tailoring route (the LinkedIn route handles the same case properly), and smaller items.
-- `docs/superpowers/phase1-known-limitations.md` — the profile subsystem's original gaps, three of which Phase 2 closed.
-
-Two things worth knowing before you rely on this:
-
-- **The LinkedIn buildout has never been run against a live model.** Its tests all use a fake provider, so the approval gate and the verifier are proven, but the quality of what the real model writes is not.
-- **The design documents in `docs/superpowers/` are the reasoning**, not marketing. If you want to know why something works the way it does — particularly why fabrication is treated as a correctness bug — the specs argue it out.
+- **Autopilot rarely submits.** Greenhouse, Lever and Ashby forms carry invisible captchas, and jobhunt stops at
+  any captcha by design. Assisted apply is the everyday path.
+- **LinkedIn discovery is best-effort.** It reads public listings logged-out; LinkedIn may rate-limit or block a run,
+  and the digest says so.
+- **Live-model quality is only partly tested.** The test suite uses a fake provider, so the verifiers and approval
+  gates are proven, but the quality of what a real model writes is not.
+- **Pay estimates are coarse.** A small per-country table, always labelled "estimated".
 
 ## Development
 
@@ -245,6 +268,15 @@ Two things worth knowing before you rely on this:
   uv run ruff check src tests
   uv run ruff format src tests
   ```
+
+## Contributing and security
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
+
+## Responsible use
+
+You are responsible for how you use jobhunt: respect each site's terms, keep volumes sensible, and only send what
+you would put your name to. The tool is built to make spraying hard; please don't work around that.
 
 ## Licence
 
