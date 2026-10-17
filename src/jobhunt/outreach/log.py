@@ -1,8 +1,10 @@
 """Who gets an outreach draft, the stored drafts, their status, and which follow-ups are due."""
 
 import logging
+import os
 from datetime import UTC, datetime, timedelta
 
+import httpx
 from sqlmodel import Session, select
 
 from jobhunt.config import Config
@@ -12,6 +14,7 @@ from jobhunt.llm import LLMProvider
 from jobhunt.outreach.contacts import contact_for
 from jobhunt.outreach.draft import draft_followup, draft_outreach
 from jobhunt.outreach.models import Contact, Outreach
+from jobhunt.outreach.search import search_recruiters
 from jobhunt.profile.store import AtomStore
 from jobhunt.ranking.shortlist import shortlist
 from jobhunt.state import get_state, is_paused, set_state
@@ -83,10 +86,18 @@ def _contacted(session: Session, contact: Contact) -> bool:
     )
 
 
-def _eligible(session: Session, job: Job) -> Contact | None:
+_HTTP = httpx.Client()
+
+
+def _search():
+    key = os.environ.get("TAVILY_API_KEY")
+    return (lambda company: search_recruiters(company, api_key=key, http=_HTTP)) if key else None
+
+
+def _eligible(session: Session, job: Job, config: Config) -> Contact | None:
     if normalize(job.company) in _open_companies(session):
         return None
-    contact = contact_for(session, job)
+    contact = contact_for(session, job, search=_search(), monthly_cap=config.outreach.search_per_month)
     return None if _contacted(session, contact) else contact
 
 
@@ -108,7 +119,7 @@ def candidates(session: Session, config: Config) -> list[Job]:
         company = normalize(job.company)
         if int(get_state(session, _fail_key(job), "0") or 0) >= MAX_DRAFT_ATTEMPTS:
             continue
-        if company in companies or _eligible(session, job) is None:
+        if company in companies or _eligible(session, job, config) is None:
             continue
         companies.add(company)  # one draft per company per run
         out.append(job)
@@ -123,7 +134,7 @@ def draft_for_run(session: Session, config: Config, llm: LLMProvider) -> list[Ou
         return []
     stored: list[Outreach] = []
     for job in candidates(session, config)[: config.outreach.per_run]:
-        contact = _eligible(session, job)  # re-check: earlier drafts this run may have used it
+        contact = _eligible(session, job, config)  # re-check: earlier drafts this run may have used it
         if contact is None:
             continue
         result = draft_outreach(job, contact, atoms, llm, profile=config.profile)

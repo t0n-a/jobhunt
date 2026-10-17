@@ -202,3 +202,12 @@ def test_outreach_message_shows_email_contact():
     contact = SimpleNamespace(name="Ana", role=None, profile_url=None, email="ana.lopes@acme.com")
     (header, _), _ = outreach_message(o, job, contact, "http://web")
     assert "Email: ana.lopes@acme.com" in header.splitlines()
+
+
+def test_outreach_header_flags_searched_contacts():
+    o = SimpleNamespace(id=5, kind="message", text="Hi")
+    job = SimpleNamespace(title="Dev", company="Acme")
+    contact = SimpleNamespace(name="Ana", role=None, profile_url=None, source="search")
+    assert "Found by web search: check this is the right person" in outreach_message(o, job, contact, "w")[0][0]
+    contact.source = "posting"
+    assert "web search" not in outreach_message(o, job, contact, "w")[0][0]
