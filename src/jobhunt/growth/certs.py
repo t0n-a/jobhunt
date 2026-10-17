@@ -27,7 +27,7 @@ CERT_TABLE: dict[str, Cert] = {
     "psm1": _c("PSM I", r"\bPSM\s*(I\b|1\b)|professional\s+scrum\s+master", 185, "the free Scrum Guide and Scrum.org open assessments"),
     "istqb": _c("ISTQB Foundation", r"\bISTQB\b", 200, "the free ISTQB syllabus"),
     "security-plus": _c("CompTIA Security+", r"security\+|comptia\s+security", 370, "Professor Messer free videos"),
-    "oracle-java": _c("Oracle Java SE Developer", r"oracle\s+certified.*java|java\s+se\s+\d*\s*(developer|programmer)", 230, "the Oracle Java tutorials"),
+    "oracle-java": _c("Oracle Java SE Developer", r"oracle\s+certified[^.\n]{0,40}java|\bOCP\b[^.\n]{0,20}java|java[^.\n]{0,20}\bOCP\b|java\s+se\s+\d+\s+certified", 230, "the Oracle Java tutorials"),
     "gh-foundations": _c("GitHub Foundations", r"github\s+foundations", 90, "GitHub Skills; free for students"),
     "fcc": _c("freeCodeCamp certifications", r"freecodecamp", 0, "freeCodeCamp itself"),
 }

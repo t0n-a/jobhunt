@@ -118,3 +118,12 @@ def test_paused_or_no_username_skips(session, tmp_path):
     assert suggest.refresh(session, gh, cfg(user=""), now=NOW, workdir=tmp_path) == []
     set_paused(session, True)
     assert suggest.refresh(session, gh, cfg(), now=NOW, workdir=tmp_path) == []
+
+
+
+def test_java_developer_requirement_is_not_a_cert():
+    from jobhunt.growth.certs import CERT_TABLE
+
+    pat = CERT_TABLE["oracle-java"].pattern
+    assert not pat.search("We need a Java SE 17 developer with Spring.")
+    assert pat.search("Oracle Certified Professional, Java SE 17 Developer preferred")
