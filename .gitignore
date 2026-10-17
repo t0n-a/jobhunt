@@ -8,3 +8,6 @@ output/
 config.yaml
 .superpowers/
 answers.yaml
+
+# Internal planning docs (specs, plans, handoffs): kept locally, never published.
+docs/superpowers/
