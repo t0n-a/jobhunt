@@ -1,6 +1,6 @@
 /* Hallmark · macrostructure: Workbench (list + sticky card + fit map) · tone: calm-technical
  * theme: Midnight (light and dark follow prefers-color-scheme) · font: Bricolage Grotesque
- * The system is written down in design.md; change it there first. */
+ * The system is written down in docs/design.md; change it there first. */
 
 /* ---------- tokens ---------- */
 :root {

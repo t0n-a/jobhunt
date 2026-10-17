@@ -50,30 +50,37 @@ learn next. It runs on your own machine with your own keys and talks to you thro
 - **LLM provider:** a free Google AI Studio key (what `jobhunt setup` configures), any OpenAI-compatible endpoint, or the Antigravity CLI (see LLM Provider below).
 - **Optional:** a Telegram bot (for the queue and digest), `gh` (profile growth), and Playwright's Chromium (form filling; `jobhunt setup` offers to install it).
 
-## Setup
+## Quick start
 
-```
+```bash
 git clone https://github.com/t0n-a/jobhunt.git && cd jobhunt
 uv python install 3.12 && uv python pin 3.12
 uv sync
-cp config.example.yaml config.yaml
-cp .env.example .env
-uv run jobhunt serve
+uv run jobhunt setup     # guided; press Enter to skip any step
+uv run jobhunt serve     # then open http://localhost:8000
 ```
 
-Then open http://localhost:8000. Both `config.yaml` and `.env` are gitignored. On a fresh install,
-`uv run jobhunt setup` (below) does the copying and filling for you.
+`setup` asks, in order: your name, email and location; a free AI Studio key (read the training warning first); a Telegram bot token from @BotFather, then a one-time code you send to your bot so only your chat is bound; your standard answers (work authorisation, salary range, and so on); the path to your CV, which it imports and walks you through confirming fact by fact; whether to install the browser that fills application forms (about 150 MB); and whether to install the daily and 5-minute timers. Rerunning keeps what exists. The only step you need to try the app is the AI Studio key; everything else can wait.
 
-## Guided Setup
+To set things up by hand instead: `cp config.example.yaml config.yaml && cp .env.example .env`, then fill them in (see LLM Provider and Environment Variables below). Both files are gitignored, and so is `data/`, where your database lives.
 
-```bash
-uv sync
-uv run jobhunt setup
-```
+## Trying it out
 
-`setup` asks, in order: your name, email and location; a free AI Studio key (read the training warning first); a Telegram bot token from @BotFather, then a one-time code you send to your bot so only your chat is bound; your standard answers (work authorisation, salary range, and so on); the path to your CV, which it imports and walks you through confirming fact by fact; whether to install the browser that fills application forms (about 150 MB); and whether to install the daily and 5-minute timers. Press Enter to skip any step; rerunning keeps what exists.
+If you are here to test jobhunt, this path touches every page in about half an hour (most of it waiting on the first scan):
 
-Telegram commands: yes N, no N (queue), sent N (you applied), replied N, interview N, offer N, rejected N, done N (follow-up sent), osent N, oskip N, oreplied N (outreach), pause, resume, status, autopilot on|off, unblock HOST (lift a blocked ATS host), publish N, approve N, decline N (GitHub profile suggestions; publish makes a private repo public and is refused if a secret is found). "yes" means *you* apply, using the prepared PDF, then send `sent N`. Autopilot is off until you switch it on after enough clean approvals.
+1. `uv run jobhunt setup` with an AI Studio key and your CV; skip Telegram if you like.
+2. Open http://localhost:8000. **Home** names the next step at each stage.
+3. **Evidence** (`/atoms`): confirm the facts imported from your CV. Nothing else works until some are confirmed.
+4. **Counselor** (`/counselor`): chat for a few turns; it should ask about things your CV is vague on and offer to record them.
+5. `uv run jobhunt scan`, then **Jobs** (`/jobs`): ranked matches with a fit bar; click one for its card.
+6. On a job, **Tailor a resume** and read the **Application** page: which lines came from your evidence, which were dropped and why.
+7. **Gaps** and **Today**: pick a skill gap and look at the task it gives you.
+
+What is useful to report: anything confusing, anything that looks broken (light and dark mode, phone width), anything the model wrote that isn't true of you, and anywhere it refused to do something you expected it to. Open a GitHub issue, or send the steps and a screenshot. Nothing is ever sent or submitted without you pressing a button, so testing with your real CV is safe; your data stays in `data/` on your machine.
+
+## Telegram
+
+Commands: yes N, no N (queue), sent N (you applied), replied N, interview N, offer N, rejected N, done N (follow-up sent), osent N, oskip N, oreplied N (outreach), pause, resume, status, autopilot on|off, unblock HOST (lift a blocked ATS host), publish N, approve N, decline N (GitHub profile suggestions; publish makes a private repo public and is refused if a secret is found). "yes" means *you* apply, using the prepared PDF, then send `sent N`. Autopilot is off until you switch it on after enough clean approvals.
 
 Timers can be installed later with `uv run jobhunt install-timers`; run `loginctl enable-linger $USER` so they fire while you are logged out.
 
@@ -100,7 +107,7 @@ Steps 3 onward all **refuse to run** against an empty profile rather than produc
 
 ## LLM Provider
 
-The default provider is `agy`, running Google Gemini models via the Antigravity CLI. Configure `llm.provider`, `llm.model`, and `llm.binary` in `config.yaml`.
+`jobhunt setup` configures a free Google AI Studio key (below). Without it, `config.example.yaml` defaults to `agy`, running Google Gemini models via the Antigravity CLI. Configure `llm.provider`, `llm.model`, and `llm.binary` in `config.yaml`.
 
 - **WSL Path Translation:** When jobhunt runs inside WSL and uses the Windows binary (`agy.exe`), the provider automatically translates temporary JSON-schema paths using `wslpath -w` so the Windows binary can read them.
 - **OpenAI Compatible API:** Set `llm.provider: openai_compat` with `OPENAI_BASE_URL` and `OPENAI_API_KEY` in `.env` to use any OpenAI-compatible endpoint (OpenRouter, Gemini, a local server) instead of the Antigravity CLI.

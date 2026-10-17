@@ -1,4 +1,4 @@
-{#- One application's status pill, same vocabulary as the Jobs page (design.md). -#}
+{#- One application's status pill, same vocabulary as the Jobs page (docs/design.md). -#}
 {%- set s = application.status -%}
 {%- set plan = application.form_plan or {} -%}
 {%- set blocked = s in ('drafted', 'queued') and (plan.get('unknown') or [])|selectattr('required')|list -%}
