@@ -4,7 +4,7 @@
 {% block content %}
 <h2>{{ job.title if job }} — {{ job.company if job }}</h2>
 <p>
-  <span class="pill{% if application.status == 'applied' %} ok{% endif %}">{{ application.status }}</span>
+  <span class="pill{% if application.status in ('sent', 'replied', 'interview', 'offer') %} ok{% endif %}">{{ application.status }}</span>
   {%- if application.coverage is not none %} <span class="pill">{{ application.coverage }}% keyword coverage</span>{% endif %}
 </p>
 

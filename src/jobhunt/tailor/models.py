@@ -35,6 +35,21 @@ class Application(SQLModel, table=True):
     pdf_path: str | None = None
     coverage: float | None = None
     missing_keywords: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    channel: str = "manual"
+    bullets_at_draft: int | None = None
+    trust_credit: bool = False
+
+
+class ApplicationEvent(SQLModel, table=True):
+    """One entry in an application's history: a status change, or a note such as a follow-up."""
+
+    __tablename__ = "application_event"
+
+    id: int | None = Field(default=None, primary_key=True)
+    application_id: int = Field(foreign_key="application.id")
+    kind: str
+    at: datetime = Field(default_factory=_now)
+    note: str = ""
 
 
 def iter_bullets(resume_json: dict) -> list[tuple[int, dict]]:

@@ -162,7 +162,7 @@ def test_marking_applied_records_it(make_client):
 
     client.post("/applications/1/applied", follow_redirects=True)
 
-    assert "applied" in client.get("/applications").text.casefold()
+    assert "sent" in client.get("/applications").text.casefold()
 
 
 def test_tailoring_without_confirmed_evidence_is_a_clear_error(make_client, tmp_path):

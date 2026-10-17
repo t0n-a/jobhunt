@@ -221,5 +221,5 @@ def test_mark_applied_records_when(session):
 
     updated = mark_applied(session, application)
 
-    assert updated.status == "applied"
+    assert updated.status == "sent"
     assert updated.applied_at is not None

@@ -12,7 +12,7 @@
             {{ jobs[application.job_id].title if application.job_id in jobs else "Job" }}
             — {{ jobs[application.job_id].company if application.job_id in jobs else "" }}
           </a></h3>
-          <span class="pill{% if application.status == 'applied' %} ok{% endif %}">{{ application.status }}</span>
+          <span class="pill{% if application.status in ('sent', 'replied', 'interview', 'offer') %} ok{% endif %}">{{ application.status }}</span>
         </div>
         <p class="meta">
           {% if application.coverage is not none %}{{ application.coverage }}% keyword coverage{% endif %}

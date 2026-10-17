@@ -19,10 +19,14 @@ def init_db(engine) -> None:
     import jobhunt.jobs.models
     import jobhunt.linkedin.models
     import jobhunt.profile.models
+    import jobhunt.state
     import jobhunt.tailor.models  # noqa: F401  (registers tables)
 
     SQLModel.metadata.create_all(engine)
     ensure_columns(engine)
+    # One-off rename of the pre-tracker status; a no-op once no row says 'applied'.
+    with engine.begin() as conn:
+        conn.exec_driver_sql("UPDATE application SET status='sent' WHERE status='applied'")
 
 
 def ensure_columns(engine) -> list[str]:
