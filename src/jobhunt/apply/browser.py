@@ -257,6 +257,10 @@ def _run_form(
                 return done("stopped", "no submit button")
             if not submit:
                 if wait_for_human:
+                    # Said while the window is open: these are the fields the candidate fills now.
+                    if left:
+                        print(left)
+                    print("Check the form, submit it yourself, then close the browser window.")
                     try:
                         page.wait_for_event("close", timeout=0)
                     except PlaywrightError:  # the candidate closed the whole window, not the tab

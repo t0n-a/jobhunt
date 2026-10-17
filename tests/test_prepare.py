@@ -168,11 +168,3 @@ def test_assisted_apply_refuses_a_row_left_mid_autopilot_submit(tmp_path, http):
     out = assisted_apply(s, app, cfg, None, http, runner=run, ask=lambda q: "y", scan=lever_scan)
     assert not run.calls
     assert "autopilot may already have sent this" in out
-
-
-def test_assisted_apply_prints_what_is_left_for_you(tmp_path, http, capsys):
-    s, cfg = make(tmp_path, LEVER)
-    assisted_apply(s, s.get(Application, 1), cfg, None, http,
-                   runner=runner("ready", "left for you: question_2"),
-                   ask=lambda q: "", scan=lever_scan)
-    assert "left for you: question_2" in capsys.readouterr().out
