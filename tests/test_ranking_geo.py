@@ -29,7 +29,7 @@ def test_outside_eu_needs_sponsorship_or_pay():
 
 
 def test_negated_sponsorship_is_not_sponsorship():
-    assert not mentions_sponsorship("We are unable to sponsor visas for this role.")
+    assert not mentions_sponsorship("We are unable to offer visa sponsorship for this role.")
     assert not mentions_sponsorship("No visa sponsorship available.")
     assert mentions_sponsorship("Relocation package and visa sponsorship provided.")
 
@@ -44,3 +44,17 @@ def test_negation_after_the_hit_negates_it():
 def test_sponsor_phrasing_without_negation_is_detected():
     assert mentions_sponsorship("We are able to sponsor your visa.")
     assert mentions_sponsorship("We sponsor visas for this role.")
+
+
+def test_us_alias_in_remote_locations_but_not_inside_words():
+    for loc in ("Remote - US", "US Remote", "Remote (US)", "Austin, US"):
+        assert country_of(loc) == "US"
+    assert country_of("Brussels, Belgium") == "BE"
+    assert country_of("Australia") == "AU"
+    assert country_of("Russia") is None or country_of("Russia") != "US"
+
+
+def test_negation_does_not_cross_clause_punctuation():
+    assert mentions_sponsorship("We sponsor visas, no remote work")
+    assert mentions_sponsorship("Visa sponsorship available, not for contractors")
+    assert not mentions_sponsorship("We are unable to offer visa sponsorship.")

@@ -51,3 +51,12 @@ def test_skips_a_bonus_to_find_the_real_salary():
 
 def test_period_word_far_from_the_number_does_not_count():
     assert parse_salary("We pay EUR 3000 sometimes." + " " * 40 + "Offices open every day") is None
+
+
+def test_large_amounts_that_are_not_pay_are_skipped():
+    assert parse_salary("We closed a $500k seed round.") is None
+    assert parse_salary("$20,000 signing bonus") is None
+    assert parse_salary("Learning budget of €12,000") is None
+    assert parse_salary("$30,000 MRR") is None
+    assert parse_salary("We raised $2M") is None
+    assert parse_salary("raised $50,000 in funding. Salary €45,000 per year").low == 45000

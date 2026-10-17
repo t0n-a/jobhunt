@@ -71,6 +71,19 @@ _MILLIONS = re.compile(r"\s?(?:m|mm|million|b|bn|billion)\b", re.IGNORECASE)
 _PERIOD_NEAR = 25  # characters after the number in which its period word must appear
 
 
+_NOT_PAY = re.compile(
+    r"bonus|seed|round|raised|funding|budget|mrr|arr|revenue|equity|customers|users|valuation",
+    re.IGNORECASE,
+)
+
+
+def _not_pay(text: str, m: re.Match) -> bool:
+    """A bare large amount sitting next to money-that-is-not-pay words (same sentence)."""
+    after = re.split(r"[.!?\n]", text[m.end() : m.end() + 30])[0]
+    before = re.split(r"[.!?\n]", text[max(0, m.start() - 30) : m.start()])[-1]
+    return bool(_NOT_PAY.search(after) or _NOT_PAY.search(before))
+
+
 def parse_salary(text: str | None) -> Salary | None:
     """First currency amount that reads as pay: not millions, in range, with a period or >= 10k."""
     if not text:
@@ -88,7 +101,7 @@ def parse_salary(text: str | None) -> Salary | None:
         period_match = _PERIOD.search(text, m.end(), m.end() + _PERIOD_NEAR)
         if period_match:
             period = _PERIOD_WORDS.get(period_match.group(0).lower(), "year")  # "p.a." is a year
-        elif low >= 10_000:
+        elif low >= 10_000 and not _not_pay(text, m):
             period = "year"
         else:
             continue

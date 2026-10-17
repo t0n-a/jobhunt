@@ -298,6 +298,7 @@ _BY_COUNTRY = {
     ],
 }
 _ALIASES = {name: code for code, names in _BY_COUNTRY.items() for name in names}
+_ALIASES["us"] = "US"  # locations only; word-bounded by _ALIAS_RE, so "Brussels" is safe
 # Longest first, so "northern ireland" beats "ireland"; lookarounds, not \b, so "u.s." works.
 _ALIAS_RE = re.compile(
     "(?<!\\w)("
@@ -391,8 +392,9 @@ def country_of(location: str | None) -> str | None:
 
 def mentions_sponsorship(text: str) -> bool:
     for m in _SPONSOR_HIT.finditer(text):
-        before = re.split(r"[.!?;\n]", text[max(0, m.start() - 40) : m.start()])[-1]
-        after = re.split(r"[.!?;\n]", text[m.end() : m.end() + 40])[0]
+        # The label form "Visa sponsorship: unavailable" keeps its colon; commas and semicolons cut.
+        before = re.split(r"[.!?;,:\n]", text[max(0, m.start() - 40) : m.start()])[-1]
+        after = re.split(r"[.!?;,\n]", text[m.end() : m.end() + 40])[0]
         if not (_NEGATION.search(before) or _NEGATION.search(after)):
             return True
     return False
