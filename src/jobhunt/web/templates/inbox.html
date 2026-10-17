@@ -84,7 +84,7 @@
           <form method="post" action="/jobs/{{ job.id }}/tailor" class="inline">
             <button type="submit" class="primary" data-busy="Tailoring…">Tailor a resume →</button>
           </form>
-        {% elif st.key not in ('queued', 'closed') %}
+        {% elif st.key not in ('approved', 'closed') %}
           <a class="button primary" href="{{ st.href }}">{{ st.next }} →</a>
         {% endif %}
       </div>

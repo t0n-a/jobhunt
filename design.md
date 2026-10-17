@@ -22,7 +22,7 @@ Light and dark both follow `prefers-color-scheme` (light is the base, dark overr
 | `--ink`, `--ink-soft` | text, secondary text |
 | `--focus` | focus ring, selected row edge (amber in dark, indigo in light) |
 | `--bar`, `--bar-bg` | fit bar and fit ring |
-| `--st-unscored` `--st-ranked` `--st-queued` `--st-waiting` `--st-sent` `--st-blocked` `--st-closed` | one colour per status |
+| `--st-unscored` `--st-ranked` `--st-drafted` `--st-waiting` `--st-sent` `--st-blocked` `--st-closed` | one colour per status |
 | `--waiting-bg`, `--blocked-bg` | tinted rows and cards for the two states that need the user |
 | `--flag`, `--flag-bg` | unverified / flagged text |
 | `--ok`, `--ok-bg` | success flashes, verified marks |
@@ -34,9 +34,10 @@ Every job shows exactly one status and one next action (`jobhunt.web.inbox.job_s
 |---|---|---|---|
 | unscored | unscored | found, not scored | open it |
 | ranked | ranked | scored, no application | tailor a resume |
-| blocked | blocked | drafted, but the form has required questions with no answer | answer them |
-| waiting | needs your yes | drafted, waiting for the user's review | review and approve |
-| queued | queued | approved, waiting to send | none |
+| drafted | drafted | the user tailored it and has not sent it | finish and apply |
+| blocked | blocked | drafted or queued, but the form has required questions with no answer | answer them |
+| waiting | needs your yes | autopilot tailored it (status `queued`) and waits for approve / skip | approve or skip |
+| approved | approved | approved, waiting to send | none |
 | sent | sent / replied / interview / offer | out the door | view it |
 | closed | rejected / ghosted / skipped | finished | none |
 

@@ -29,9 +29,13 @@ def test_scored_without_application_is_ranked_and_points_at_the_job():
     assert (st.key, st.href) == ("ranked", "/jobs/7")
 
 
-def test_drafted_application_waits_for_the_user():
-    st = job_state(JOB, score(), app())
+def test_queued_application_waits_for_the_users_yes():
+    st = job_state(JOB, score(), app("queued"))
     assert (st.key, st.label, st.href) == ("waiting", "needs your yes", "/applications/3")
+
+
+def test_drafted_application_is_the_users_to_finish():
+    assert job_state(JOB, score(), app()).key == "drafted"
 
 
 def test_required_unanswered_form_question_blocks():
@@ -42,7 +46,12 @@ def test_required_unanswered_form_question_blocks():
 
 def test_only_optional_unknowns_do_not_block():
     plan = {"filled": [], "unknown": [field(False)], "dropped": []}
-    assert job_state(JOB, score(), app(form_plan=plan)).key == "waiting"
+    assert job_state(JOB, score(), app("queued", form_plan=plan)).key == "waiting"
+
+
+def test_queued_with_a_required_unknown_is_blocked_too():
+    plan = {"filled": [], "unknown": [field(True)], "dropped": []}
+    assert job_state(JOB, score(), app("queued", form_plan=plan)).key == "blocked"
 
 
 def test_user_written_bullets_count_as_unverified():
@@ -50,7 +59,7 @@ def test_user_written_bullets_count_as_unverified():
 
 
 def test_later_statuses():
-    assert job_state(JOB, score(), app("approved")).key == "queued"
+    assert job_state(JOB, score(), app("approved")).key == "approved"
     assert job_state(JOB, score(), app("interview")).label == "interview"
     assert job_state(JOB, score(), app("interview")).key == "sent"
     assert job_state(JOB, score(), app("ghosted")).key == "closed"

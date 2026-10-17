@@ -21,7 +21,7 @@
   --pill-ink: oklch(99% 0 0);
   --st-unscored: oklch(55% 0.03 265);
   --st-ranked: oklch(52% 0.14 235);
-  --st-queued: oklch(50% 0.17 305);
+  --st-drafted: oklch(50% 0.17 305);
   --st-waiting: oklch(62% 0.15 70);
   --st-sent: oklch(52% 0.14 160);
   --st-blocked: oklch(52% 0.2 25);
@@ -65,7 +65,7 @@
     --pill-ink: oklch(18% 0.03 265);
     --st-unscored: oklch(72% 0.03 265);
     --st-ranked: oklch(75% 0.13 230);
-    --st-queued: oklch(74% 0.15 305);
+    --st-drafted: oklch(74% 0.15 305);
     --st-waiting: oklch(85% 0.15 85);
     --st-sent: oklch(78% 0.15 160);
     --st-blocked: oklch(68% 0.2 25);
@@ -196,7 +196,7 @@ a.card:hover { border-color: var(--ink-soft); }
 /* ---------- status ---------- */
 .st { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; white-space: nowrap; --c: var(--st-unscored); }
 .st::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--c); box-shadow: 0 0 8px var(--c); flex: none; }
-.st.ranked { --c: var(--st-ranked); } .st.queued { --c: var(--st-queued); } .st.waiting { --c: var(--st-waiting); }
+.st.ranked { --c: var(--st-ranked); } .st.drafted { --c: var(--st-drafted); } .st.approved { --c: var(--st-sent); } .st.waiting { --c: var(--st-waiting); }
 .st.sent { --c: var(--st-sent); } .st.blocked { --c: var(--st-blocked); } .st.closed { --c: var(--st-closed); }
 .st.hot { background: var(--c); color: var(--pill-ink); padding: 3px 10px 3px 8px; border-radius: 99px; font-weight: 700; }
 .st.hot::before { background: var(--pill-ink); box-shadow: none; }
@@ -294,7 +294,7 @@ table.jobs tr[aria-selected="true"] td:first-child { box-shadow: inset 3px 0 0 v
 .map text { fill: var(--ink-soft); font: 500 11px var(--font); }
 .map .band { fill: var(--glow); }
 .map .pt { --c: var(--st-unscored); }
-.map .pt.ranked { --c: var(--st-ranked); } .map .pt.queued { --c: var(--st-queued); } .map .pt.waiting { --c: var(--st-waiting); }
+.map .pt.ranked { --c: var(--st-ranked); } .map .pt.drafted { --c: var(--st-drafted); } .map .pt.approved { --c: var(--st-sent); } .map .pt.waiting { --c: var(--st-waiting); }
 .map .pt.sent { --c: var(--st-sent); } .map .pt.blocked { --c: var(--st-blocked); } .map .pt.closed { --c: var(--st-closed); }
 .map .dot { fill: var(--c); stroke: var(--panel); stroke-width: 2; }
 .map .halo { fill: none; stroke: var(--focus); stroke-width: 2; }
@@ -395,7 +395,7 @@ table.jobs tr[aria-selected="true"] td:first-child { box-shadow: inset 3px 0 0 v
 .notes-list .k { grid-column: 1 / -1; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--c, var(--ink-soft)); }
 .notes-list .k.goal { --c: var(--st-sent); } .notes-list .k.constraint { --c: var(--st-blocked); }
 .notes-list .k.preference { --c: var(--st-ranked); } .notes-list .k.thread { --c: var(--st-waiting); }
-.notes-list .k.observation { --c: var(--st-queued); }
+.notes-list .k.observation { --c: var(--st-drafted); }
 .notes-list p { margin: 0; font-size: 14px; }
 .notes-list button { padding: 4px 8px; font-size: 12px; border-color: transparent; background: none; color: var(--ink-soft); opacity: 0; }
 .notes-list li:hover button, .notes-list button:focus-visible { opacity: 1; }

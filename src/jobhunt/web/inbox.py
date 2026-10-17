@@ -16,7 +16,7 @@ _SENT = ("sent", "replied", "interview", "offer")
 
 @dataclass(frozen=True)
 class JobState:
-    key: str  # unscored | ranked | blocked | waiting | queued | sent | closed
+    key: str  # unscored | ranked | drafted | blocked | waiting | approved | sent | closed
     label: str
     next: str
     href: str  # where the next action happens
@@ -32,15 +32,18 @@ def job_state(job: Job, score: Score | None, application: Application | None) ->
     app_id, status = application.id, application.status
     href = f"/applications/{app_id}"
     unverified = sum(1 for _, b in iter_bullets(application.resume_json) if b.get("source") == "user")
-    if status == "drafted":
+    if status in ("drafted", "queued"):
         plan = FormPlan.from_json(application.form_plan) if application.form_plan else None
         missing = [f for f in plan.unknown if f.required] if plan else []
         if missing:
             noun = "question" if len(missing) == 1 else "questions"
             return JobState("blocked", "blocked", f"Answer {len(missing)} form {noun}", href, unverified, app_id)
-        return JobState("waiting", "needs your yes", "Review and approve", href, unverified, app_id)
-    if status in ("queued", "approved"):
-        return JobState("queued", "queued", "Nothing to do", href, unverified, app_id)
+    if status == "queued":  # autopilot tailored it and is waiting for approve or skip
+        return JobState("waiting", "needs your yes", "Approve or skip", href, unverified, app_id)
+    if status == "drafted":  # the user started it and has not sent it yet
+        return JobState("drafted", "drafted", "Finish and apply", href, unverified, app_id)
+    if status == "approved":
+        return JobState("approved", "approved", "Waiting to send", href, unverified, app_id)
     if status in _SENT:
         return JobState("sent", status, "View application", href, unverified, app_id)
     # rejected, ghosted, skipped
