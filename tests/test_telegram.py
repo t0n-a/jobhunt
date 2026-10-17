@@ -28,6 +28,14 @@ TOKEN = "123:SECRET"
         ("interview 3", ("interview", 3)),
         ("offer 3", ("offer", 3)),
         ("rejected 3", ("rejected", 3)),
+        ("autopilot on", ("autopilot", "on")),
+        ("/Autopilot OFF", ("autopilot", "off")),
+        ("autopilot", None),
+        ("unblock jobs.lever.co", ("unblock", "jobs.lever.co")),
+        ("/unblock Jobs.Lever.co", ("unblock", "jobs.lever.co")),
+        ("unblock a/b", None),
+        ("unblock", None),
+        ("autopilot maybe", None),
         ("yes", None),
         ("hello", None),
         ("sent twelve", None),
@@ -106,3 +114,29 @@ def test_queue_message_strips_control_and_bidi_characters():
     assert "\u202e" not in text and "\u2066" not in text and "\x07" not in text
     assert "\u200e" not in text
     assert "Devevil @ Acmex" in text
+
+
+def test_queue_message_autopilot_note():
+    app = SimpleNamespace(id=1)
+    job = SimpleNamespace(title="T", company="C", location="", url="u")
+    text, _ = queue_message(app, job, None, None, "http://w", "autopilot stopped: captcha")
+    assert text.endswith("\nAutopilot: stopped: captcha")
+
+
+def test_stopped_note_is_cleaned_and_capped():
+    from types import SimpleNamespace
+
+    app = SimpleNamespace(id=1)
+    job = SimpleNamespace(title="Dev", company="A", location=None, url="u")
+    text, _ = queue_message(app, job, None, None, "http://x", note="autopilot stopped: field \u202eevil" + "x" * 500)
+    line = text.splitlines()[-1]
+    assert "\u202e" not in line and len(line) <= len("Autopilot: ") + 200
+
+
+def test_queue_message_shows_autopilot_notes():
+    app = SimpleNamespace(id=1)
+    job = SimpleNamespace(title="Dev", company="A", location=None, url="http://j")
+    t, _ = queue_message(app, job, None, None, "w", "autopilot stopped: captcha")
+    assert "Autopilot: stopped: captcha" in t
+    t, _ = queue_message(app, job, None, None, "w", "autopilot error: X - it may have gone through")
+    assert "Autopilot: error: X - it may have gone through" in t

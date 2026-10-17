@@ -52,11 +52,21 @@ uv sync
 uv run jobhunt setup
 ```
 
-`setup` asks, in order: your name, email and location; a free AI Studio key (read the training warning first); a Telegram bot token from @BotFather, then a one-time code you send to your bot so only your chat is bound; your standard answers (work authorisation, salary range, and so on); the path to your CV, which it imports and walks you through confirming fact by fact; and whether to install the daily and 5-minute timers. Press Enter to skip any step; rerunning keeps what exists.
+`setup` asks, in order: your name, email and location; a free AI Studio key (read the training warning first); a Telegram bot token from @BotFather, then a one-time code you send to your bot so only your chat is bound; your standard answers (work authorisation, salary range, and so on); the path to your CV, which it imports and walks you through confirming fact by fact; whether to install the browser that fills application forms (about 150 MB); and whether to install the daily and 5-minute timers. Press Enter to skip any step; rerunning keeps what exists.
 
-Telegram commands: yes N, no N (queue), sent N (you applied), replied N, interview N, offer N, rejected N, done N (follow-up sent), pause, resume, status. "yes" means *you* apply, using the prepared PDF, then send `sent N`. Autopilot stays off in this version.
+Telegram commands: yes N, no N (queue), sent N (you applied), replied N, interview N, offer N, rejected N, done N (follow-up sent), pause, resume, status, autopilot on|off, unblock HOST (lift a blocked ATS host). "yes" means *you* apply, using the prepared PDF, then send `sent N`. Autopilot is off until you switch it on after enough clean approvals.
 
 Timers can be installed later with `uv run jobhunt install-timers`; run `loginctl enable-linger $USER` so they fire while you are logged out.
+
+## Applying
+
+Each daily run reads the form of every newly queued application (Greenhouse, Lever and Ashby) and plans its answers from your profile, `answers.yaml`, the tailored PDF and cover letter, and confirmed evidence. The plan shows on the review page under "Form answers"; anything it can't answer is left for you.
+
+At your computer, `uv run jobhunt apply --id N` opens the real form in a visible browser, already filled. You check it and click submit yourself, then answer the prompt to mark it sent. It needs a desktop session.
+
+Autopilot rarely fires: these ATSs use invisible captchas, and jobhunt won't get past them. Those applications stay with you, and assisted apply is the usual route.
+
+Autopilot is off by default. Once you have approved enough applications by hand (`trust_target`, 10 by default), send `autopilot on` on Telegram to switch it on; before that it refuses and says how many approvals are left. While it is on, jobhunt submits a queued application without you only when all of these hold: its fit is at least `autopilot_fit` (85 by default); its ATS is in `ats_allowlist` (Greenhouse, Lever and Ashby); the form needs no login and shows no captcha; every question is answered from your profile or standard answers (a form with an answer drafted from your evidence goes to you instead); the site is not blocked; and today's count is under `daily_cap` (10 by default). Greenhouse, Lever and Ashby currently use invisible captchas, so most applications stay in your queue, and `jobhunt apply --id N` is the usual way through them. Each application is tried at most once: a form that stops stays with you. To allow more per day, raise `daily_cap` under `autopilot:` in `config.yaml` (the commented block in `config.example.yaml` shows the keys). Send `autopilot off` to stop it.
 
 ## First Run, In Order
 

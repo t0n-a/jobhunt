@@ -2,13 +2,14 @@ from datetime import UTC, datetime, timedelta
 
 from sqlmodel import Session, select
 
+from jobhunt.apply.autopilot import autopilot_on, sent_today
 from jobhunt.apply.followup import followups_due
 from jobhunt.apply.queue import autopilot_available, trust_count
 from jobhunt.apply.tracker import funnel
 from jobhunt.config import Config
 from jobhunt.jobs.models import Job
 from jobhunt.ranking.shortlist import _clean
-from jobhunt.state import is_paused
+from jobhunt.state import blocked_hosts, is_paused
 from jobhunt.tailor.models import Application, ApplicationEvent
 
 # Keeps the Telegram message short; the web UI lists everything.
@@ -20,6 +21,11 @@ def _label(session: Session, application_id: int) -> str:
     job = session.get(Job, application.job_id) if application else None
     title, company = (_clean(job.title), _clean(job.company)) if job else ("?", "?")
     return f"#{application_id} {title} @ {company}"
+
+
+def _via(session: Session, application_id: int) -> str:
+    application = session.get(Application, application_id)
+    return " (autopilot)" if application and application.channel == "autopilot" else ""
 
 
 def _section(header: str, lines: list[str]) -> list[str]:
@@ -48,7 +54,7 @@ def build_digest(
         for e in session.exec(select(ApplicationEvent).where(ApplicationEvent.kind == "sent"))
         if e.at.replace(tzinfo=UTC) >= since
     }
-    out += _section("Sent in the last day", [_label(session, i) for i in sorted(sent)])
+    out += _section("Sent in the last day", [_label(session, i) + _via(session, i) for i in sorted(sent)])
 
     queued = session.exec(select(Application).where(Application.status == "queued")).all()
     out += _section(
@@ -76,4 +82,10 @@ def build_digest(
     cfg = config.autopilot
     note = "; autopilot can now be switched on" if autopilot_available(session, cfg) else ""
     out.append(f"Trust: {trust_count(session)}/{cfg.trust_target} clean approvals{note}")
+    if autopilot_on(session):
+        out += [f"Autopilot blocked: {b.host} ({_clean(b.reason)})" for b in blocked_hosts(session)[:5]]
+    out.append(
+        f"Autopilot: {'on' if autopilot_on(session) else 'off'}, "
+        f"{sent_today(session, now)}/{cfg.daily_cap} today"
+    )
     return "\n".join(out)

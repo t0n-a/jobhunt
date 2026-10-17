@@ -38,6 +38,8 @@ class Application(SQLModel, table=True):
     channel: str = "manual"
     bullets_at_draft: int | None = None
     trust_credit: bool = False
+    # Planned form answers (apply.plan.FormPlan.to_json); None means not planned yet.
+    form_plan: dict | None = Field(default=None, sa_column=Column(JSON, nullable=True))
     # First time the candidate opened the review page; trust only counts after this.
     reviewed_at: datetime | None = None
 

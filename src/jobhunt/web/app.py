@@ -16,6 +16,7 @@ from sqlmodel import Session, select
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from jobhunt.apply import queue
+from jobhunt.apply.plan import FormPlan
 from jobhunt.apply.tracker import NEXT_STATUSES, next_statuses, set_status
 from jobhunt.coach.engine import Coach
 from jobhunt.coach.models import Energy
@@ -456,6 +457,9 @@ def create_app(config: Config) -> FastAPI:
                     "next_statuses": next_statuses(application.status),
                     "job": job,
                     "bullets": iter_bullets(application.resume_json),
+                    "form_plan": FormPlan.from_json(application.form_plan)
+                    if application.form_plan
+                    else None,
                 },
             )
 

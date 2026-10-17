@@ -191,3 +191,37 @@ def test_yes_reply_points_at_the_pdf_only_when_there_is_one(session):
     session.commit()
     _, client = tick(session, msg(2, "yes 2"))
     assert "PDF and answers: http://127.0.0.1:8000/applications/2" in client.sent[0]
+
+
+def test_yes_mentions_assisted_apply_when_planned(session):
+    from jobhunt.apply.form import FormField
+    from jobhunt.apply.plan import FormPlan
+
+    app = session.get(Application, 1)
+    app.form_plan = FormPlan(unknown=[FormField("q", "Why?", "text", True)]).to_json()
+    session.add(app)
+    session.commit()
+    _, client = tick(session, msg(1, "yes 1"))
+    assert "At your computer: uv run jobhunt apply --id 1 opens the form already filled." in client.sent[0]
+    assert "(1 question(s) left for you.)" in client.sent[0]
+
+
+def test_autopilot_command_and_status(session):
+    reply = commands.handle_command(session, "autopilot", "on", CONFIG, NOW)
+    assert reply == "Not yet: autopilot needs 10 clean approvals; you have 0."
+    assert commands.handle_command(session, "status", None, CONFIG, NOW).endswith("Autopilot: off.")
+    easy = CONFIG.model_copy(update={"autopilot": CONFIG.autopilot.model_copy(update={"trust_target": 0})})
+    assert commands.handle_command(session, "autopilot", "on", easy, NOW).startswith("Autopilot is on.")
+    assert commands.handle_command(session, "status", None, easy, NOW).endswith("Autopilot: on.")
+    assert commands.handle_command(session, "autopilot", "off", easy, NOW) == "Autopilot is off."
+    assert "autopilot on|off" in HELP
+
+
+def test_unblock_lifts_a_blocked_host(session):
+    from jobhunt.state import block_host, is_blocked
+
+    block_host(session, "jobs.lever.co", "x")
+    assert commands.handle_command(session, "unblock", "jobs.lever.co", CONFIG, NOW) == "Unblocked jobs.lever.co."
+    assert not is_blocked(session, "jobs.lever.co")
+    assert commands.handle_command(session, "unblock", "jobs.lever.co", CONFIG, NOW) == "jobs.lever.co was not blocked."
+    assert "unblock" in HELP

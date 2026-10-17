@@ -140,3 +140,82 @@ def test_no_llm_skips_tailoring_but_sends_the_digest(engine, monkeypatch):
     assert calls == []
     assert "Tailoring stopped: No LLM key; tailoring skipped. Run jobhunt setup." in digest
     assert client.sent
+
+
+def test_daily_prepares_plans_for_new_queue_items(engine, monkeypatch):
+    fake_tailor(monkeypatch, engine)
+    seen = []
+    monkeypatch.setattr(daily, "prepare_plan", lambda s, a, c, llm, http: seen.append(a.id))
+    go(engine, FakeClient())
+    assert seen == [1, 2]
+
+
+def test_daily_survives_a_failing_plan(engine, monkeypatch):
+    fake_tailor(monkeypatch, engine)
+    seen = []
+
+    def boom(s, a, c, llm, http):
+        seen.append(a.id)
+        raise RuntimeError("x")
+
+    monkeypatch.setattr(daily, "prepare_plan", boom)
+    client = FakeClient()
+    out = go(engine, client)
+    assert seen == [1, 2] and client.sent[-1] == (out, None)
+
+
+def test_autosubmit_runs_and_submitted_rows_are_not_queued(engine, monkeypatch):
+    fake_tailor(monkeypatch, engine)
+
+    def fake(session, config, *, now):
+        set_status(session, session.get(Application, 1), "sent")
+
+    monkeypatch.setattr(daily, "autosubmit", fake)
+    client = FakeClient()
+    go(engine, client)
+    assert len(client.sent) == 2  # one queue message + digest
+    assert client.sent[0][0].startswith("#2 ")
+
+
+def test_autosubmit_failure_does_not_skip_the_queue_messages(engine, monkeypatch):
+    fake_tailor(monkeypatch, engine)
+
+    def boom(*a, **k):
+        raise RuntimeError("x")
+
+    monkeypatch.setattr(daily, "autosubmit", boom)
+    client = FakeClient()
+    go(engine, client)
+    assert len(client.sent) == 3  # two queue messages + digest
+
+
+def test_autosubmit_skipped_when_paused(engine, monkeypatch):
+    fake_tailor(monkeypatch, engine)
+    called = []
+    monkeypatch.setattr(daily, "autosubmit", lambda *a, **k: called.append(1))
+    with Session(engine) as s:
+        set_paused(s, True)
+    go(engine, FakeClient())
+    assert called == []
+
+
+def test_stopped_note_is_in_queue_message(engine, monkeypatch):
+    fake_tailor(monkeypatch, engine)
+    monkeypatch.setattr(daily, "autosubmit", lambda *a, **k: None)
+    with Session(engine) as s:
+        add_event(s, s.get(Application, 1), "queued", note="autopilot stopped: captcha")
+    client = FakeClient()
+    go(engine, client)
+    assert client.sent[0][0].endswith("Autopilot: stopped: captcha")
+    assert "Autopilot:" not in client.sent[1][0]
+
+
+def test_error_note_is_in_queue_message(engine, monkeypatch):
+    fake_tailor(monkeypatch, engine)
+    monkeypatch.setattr(daily, "autosubmit", lambda *a, **k: None)
+    note = "autopilot error: Error - it may have gone through; check before applying again"
+    with Session(engine) as s:
+        add_event(s, s.get(Application, 1), "queued", note=note)
+    client = FakeClient()
+    go(engine, client)
+    assert client.sent[0][0].endswith("Autopilot: error: Error - it may have gone through; check before applying again")
