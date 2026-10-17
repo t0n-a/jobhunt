@@ -154,7 +154,7 @@ Once a day jobhunt drafts a short message to a recruiter or hiring manager for y
 - **You send it yourself.** jobhunt only drafts and sends the text to Telegram with Copy, Sent and Skip buttons. It never uses your LinkedIn account and fetches no LinkedIn page.
 - **Commands:** `osent N`, `oskip N`, `oreplied N`. The digest has an Outreach section listing drafts to send and follow-ups due.
 - **Limits:** connection notes are at most 200 characters (the LinkedIn free-tier limit), messages at most 600.
-- **Contacts:** taken from the posting when it names someone, otherwise the talent team plus a LinkedIn people-search link you open yourself. There is no automated recruiter web search yet: it needs a search API key.
+- **Contacts:** taken from the posting when it names someone, otherwise the talent team plus a LinkedIn people-search link you open yourself. If `TAVILY_API_KEY` is set (free plan at tavily.com, no card, 1,000 credits/month), a posting that names nobody triggers one public web search for the company's recruiters with a public LinkedIn profile; the first match whose title names the company and a recruiter role is used and flagged "Found by web search" in Telegram. At most one search per company per 30 days and `outreach.search_per_month` (default 300) per month; no key, over budget or any error means the talent-team link. No LinkedIn account is used.
 - Pausing (`pause`) stops new drafts.
 
 ## Tailoring

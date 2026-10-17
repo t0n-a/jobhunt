@@ -1,5 +1,7 @@
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from urllib.parse import quote_plus
 
 from sqlmodel import Session, select
@@ -9,6 +11,7 @@ from jobhunt.jobs.models import Job
 from jobhunt.outreach.models import Contact
 from jobhunt.ranking.geo import _ALIASES
 from jobhunt.ranking.shortlist import _clean
+from jobhunt.state import get_state, set_state
 
 # Role and team words: a "name" or mailbox containing one is a role or inbox, not a person.
 ROLE_WORDS = frozenset({
@@ -127,11 +130,50 @@ def fallback_contact(company: str) -> ContactCandidate:
     )
 
 
-def contact_for(session: Session, job: Job) -> Contact:
+SEARCH_DAYS = 30
+
+
+def _searched(
+    session: Session, company: str, name: str, search: Callable[[str], list[ContactCandidate]], cap: int
+) -> ContactCandidate | None:
+    """The first web-search candidate, within the per-company and monthly budgets; None otherwise."""
+    now = datetime.now(UTC)
+    key, month = f"outreach_search:{company}", f"outreach_search_count:{now:%Y-%m}"
+    last = get_state(session, key)
+    if last and now.date() - datetime.fromisoformat(last).date() < timedelta(days=SEARCH_DAYS):
+        return None
+    count = int(get_state(session, month, "0") or 0)
+    if count >= cap:
+        return None
+    found = search(name)  # search_recruiters returns [] on any error
+    set_state(session, key, now.date().isoformat())
+    set_state(session, month, str(count + 1))
+    return found[0] if found else None
+
+
+def contact_for(
+    session: Session,
+    job: Job,
+    *,
+    search: Callable[[str], list[ContactCandidate]] | None = None,
+    monthly_cap: int = 300,
+) -> Contact:
     """The job's first contact, reusing the stored row for the same person at the same company."""
     found = find_contacts(job)
-    best = found[0] if found else fallback_contact(job.company)
     company = normalize(job.company)
+    best = found[0] if found else None
+    if best is None and search:
+        best = _searched(session, company, job.company, search, monthly_cap)
+        if best is None:  # a search within 30 days already stored its pick: keep greeting that person
+            best = next(
+                (
+                    ContactCandidate(r.name, r.role, r.profile_url, r.email, "search")
+                    for r in session.exec(select(Contact).where(Contact.source == "search"))
+                    if normalize(r.company) == company
+                ),
+                None,
+            )
+    best = best or fallback_contact(job.company)
     name = best.name.casefold() if best.name else None
     for row in session.exec(select(Contact)).all():
         if normalize(row.company) != company:

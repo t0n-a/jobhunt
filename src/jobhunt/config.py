@@ -136,6 +136,8 @@ class OutreachConfig(BaseModel):
     # None = ranking.strong_fit.
     min_fit: int | None = None
     followup_days: int = 7
+    # Web searches for a recruiter per calendar month (Tavily free plan: 1,000 credits).
+    search_per_month: int = 300
 
 
 class GrowthConfig(BaseModel):
