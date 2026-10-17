@@ -1,7 +1,7 @@
 <div id="exchange">
 {% if user_turn %}{% with turn = user_turn %}{% include "partials/counselor_turn.html" %}{% endwith %}{% endif %}
 {% if turn %}{% include "partials/counselor_turn.html" %}{% endif %}
-{% if apology %}<div class="msg counselor apology"><p>{{ apology }}</p></div>{% endif %}
+{% if apology %}<div class="msg counselor apology">{% include "partials/counselor_icon.html" %}<div class="body"><p>{{ apology }}</p></div></div>{% endif %}
 </div>
 <div id="chips" hx-swap-oob="true" class="chips">
   {% for chip in chips %}

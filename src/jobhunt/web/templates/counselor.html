@@ -1,44 +1,67 @@
 {% extends "base.html" %}
 {% block title %}Counselor — jobhunt{% endblock %}
+{% block main_class %} class="wide"{% endblock %}
 {% block content %}
-<p class="meta strip">
-  {{ accepted }} atom{{ "" if accepted == 1 else "s" }} recorded from this conversation
-  · {{ open_threads }} open thread{{ "" if open_threads == 1 else "s" }}
-  {%- if days is not none %} · last talked {% if days == 0 %}today{% else %}{{ days }} day{{ "" if days == 1 else "s" }} ago{% endif %}{% endif %}
-</p>
-
-<div class="chat">
-  <div id="transcript">
-    {% for turn in turns %}{% include "partials/counselor_turn.html" %}{% endfor %}
-    {% if apology %}<div class="msg counselor apology"><p>{{ apology }}</p></div>{% endif %}
-  </div>
-
-  <div id="chips" class="chips">
-    {% for chip in chips %}
-      <button type="button" hx-post="/counselor/say" hx-vals='{"text": {{ chip | tojson }}}'
-              hx-target="#transcript" hx-swap="beforeend" hx-indicator="#thinking">{{ chip }}</button>
-    {% endfor %}
-    {% if ended %}
-      <button type="button" class="primary" hx-post="/counselor/continue"
-              hx-target="#transcript" hx-swap="beforeend" hx-indicator="#thinking">Keep going</button>
-    {% endif %}
-  </div>
-
-  <form class="composer" hx-post="/counselor/say" hx-target="#transcript" hx-swap="beforeend"
-        hx-indicator="#thinking" hx-disabled-elt="find button, find textarea"
-        hx-on::after-request="if(event.detail.successful) this.reset()">
-    <textarea name="text" rows="3" maxlength="4000" placeholder="Your answer" required></textarea>
-    <div class="actions">
-      <button type="submit" class="primary">Send</button>
-      <button type="button" hx-post="/counselor/stop" hx-target="#transcript" hx-swap="beforeend"
+<div class="room">
+  <section class="panel convo chat">
+    <header class="who-head">
+      {% include "partials/counselor_icon.html" %}
+      <div><strong>Counselor</strong><span>Turns what you tell it into evidence for your applications.</span></div>
+      <button type="button" class="stop" hx-post="/counselor/stop" hx-target="#transcript" hx-swap="beforeend"
               hx-indicator="#thinking">Stop for today</button>
-      <span id="thinking" class="indicator">thinking…</span>
-    </div>
-  </form>
-</div>
+    </header>
 
-<details class="notes">
-  <summary>What I've noted about you</summary>
-  <div id="notes">{% include "partials/counselor_notes.html" %}</div>
-</details>
+    <div id="transcript">
+      {% for turn in turns %}{% include "partials/counselor_turn.html" %}{% endfor %}
+      {% if apology %}<div class="msg counselor apology">{% include "partials/counselor_icon.html" %}<div class="body"><p>{{ apology }}</p></div></div>{% endif %}
+    </div>
+    <div id="thinking" class="indicator thinking" aria-live="polite">{% include "partials/counselor_icon.html" %}<span class="dots"><i></i><i></i><i></i></span><span class="sr">thinking…</span></div>
+
+    <div class="dock">
+      <div id="chips" class="chips">
+        {% for chip in chips %}
+          <button type="button" hx-post="/counselor/say" hx-vals='{"text": {{ chip | tojson }}}'
+                  hx-target="#transcript" hx-swap="beforeend" hx-indicator="#thinking">{{ chip }}</button>
+        {% endfor %}
+        {% if ended %}
+          <button type="button" class="primary" hx-post="/counselor/continue"
+                  hx-target="#transcript" hx-swap="beforeend" hx-indicator="#thinking">Keep going</button>
+        {% endif %}
+      </div>
+
+      <form class="composer" hx-post="/counselor/say" hx-target="#transcript" hx-swap="beforeend"
+            hx-indicator="#thinking" hx-disabled-elt="find button, find textarea"
+            hx-on::after-request="if(event.detail.successful) this.reset()">
+        <textarea name="text" rows="1" maxlength="4000" placeholder="Tell it about something you did…" aria-label="Your answer" required></textarea>
+        <button type="submit" class="primary">Send</button>
+      </form>
+    </div>
+  </section>
+
+  <aside class="mind">
+    <section class="panel">
+      <h2>This conversation</h2>
+      <div class="stats">
+        <div><b>{{ accepted }}</b><span>added to evidence</span></div>
+        <div><b>{{ open_threads }}</b><span>open thread{{ "" if open_threads == 1 else "s" }}</span></div>
+        <div><b>{% if days is none %}—{% elif days == 0 %}today{% else %}{{ days }}d{% endif %}</b><span>{% if days is none or days == 0 %}last talked{% else %}since you talked{% endif %}</span></div>
+      </div>
+    </section>
+    <section class="panel">
+      <h2>What I've noted about you</h2>
+      <div id="notes">{% include "partials/counselor_notes.html" %}</div>
+    </section>
+    {% if atoms_by_turn %}
+    <section class="panel">
+      <h2>Added from talks</h2>
+      <ul class="atoms-from-talks">
+        {% for atom in atoms_by_turn.values() %}
+          <li><a href="/atoms#atom-{{ atom.id }}">{{ atom.title }}</a>
+            {% if atom.confirmed %}<span class="st sent">confirmed</span>{% else %}<span class="st ranked">to confirm</span>{% endif %}</li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+  </aside>
+</div>
 {% endblock %}

@@ -4,7 +4,8 @@
   <div class="msg user" id="turn-{{ turn.id }}"><p>{{ turn.text }}</p></div>
 {% elif action.get("action") == "end_sitting" %}
   <div class="msg counselor" id="turn-{{ turn.id }}">
-    <div class="callout">
+    {% include "partials/counselor_icon.html" %}
+    <div class="body wrapup">
       <strong>That's a good place to stop.</strong>
       <p>{{ action.summary }}</p>
       {% if action.next_time %}<p class="meta">Next time: {{ action.next_time }}</p>{% endif %}
@@ -12,6 +13,8 @@
   </div>
 {% else %}
   <div class="msg counselor" id="turn-{{ turn.id }}">
+    {% include "partials/counselor_icon.html" %}
+    <div class="body">
     {% if action.get("action") == "note" %}
       <p class="noted">noted: {{ action.text }}</p>
     {% endif %}
@@ -20,25 +23,28 @@
       {% set atom = visible.atom %}
       {% if turn.proposal_state == "accepted" %}
         {% set recorded = (atoms_by_turn or {}).get(turn.id) %}
-        <p class="meta">Recorded: <strong>{{ recorded.title if recorded else atom.title }}</strong> — <a href="/atoms#atom-{{ turn.atom_id }}">confirm it on Evidence</a>.</p>
+        <p class="recorded">Recorded: <strong>{{ recorded.title if recorded else atom.title }}</strong> — <a href="/atoms#atom-{{ turn.atom_id }}">confirm it on Evidence</a>.</p>
       {% elif turn.proposal_state == "rejected" %}
         <p class="meta">Not recorded.</p>
       {% else %}
-        <form class="card proposal" hx-post="/counselor/proposals/{{ turn.id }}/accept"
+        <form class="proposal" hx-post="/counselor/proposals/{{ turn.id }}/accept"
               hx-target="#turn-{{ turn.id }}" hx-swap="outerHTML">
-          <p class="meta">{{ atom.kind }}</p>
-          <input type="text" name="title" value="{{ atom.title }}">
-          <textarea name="description" rows="3">{{ atom.description }}</textarea>
-          <input type="text" name="skills" value="{{ atom.skills | join(', ') }}" placeholder="skills, comma-separated">
-          <input type="text" name="metrics" value="{{ atom.metrics or '' }}" placeholder="metrics (only what you said)">
-          <p class="meta because">because you said: “{{ visible.because }}”</p>
+          <div class="ph"><strong>Add this to your evidence?</strong><span class="kind">{{ atom.kind }}</span></div>
+          <label>Title<input type="text" name="title" value="{{ atom.title }}"></label>
+          <label>What you did<textarea name="description" rows="3">{{ atom.description }}</textarea></label>
+          <div class="two">
+            <label>Skills<input type="text" name="skills" value="{{ atom.skills | join(', ') }}" placeholder="comma-separated"></label>
+            <label>Numbers<input type="text" name="metrics" value="{{ atom.metrics or '' }}" placeholder="only what you said"></label>
+          </div>
+          <p class="because">because you said: <b>“{{ visible.because }}”</b></p>
           <div class="actions">
-            <button type="submit" class="primary">Accept</button>
+            <button type="submit" class="primary">Add to evidence</button>
             <button type="button" class="danger" hx-post="/counselor/proposals/{{ turn.id }}/reject"
                     hx-target="#turn-{{ turn.id }}" hx-swap="outerHTML" hx-indicator="#thinking">Not quite</button>
           </div>
         </form>
       {% endif %}
     {% endif %}
+    </div>
   </div>
 {% endif %}
