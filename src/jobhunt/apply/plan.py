@@ -64,11 +64,14 @@ def _profile(f: FormField, label: str, p: ProfileConfig):
         return _UNKNOWN
     n = f.name
     if n == "first_name" or _has(r"\bfirst name\b", label):
-        return p.name.rpartition(" ")[0] or p.name
+        return p.first_name or (p.name.split()[0] if len(p.name.split()) == 2 else None)
     if n == "last_name" or _has(r"\blast name\b", label):
-        return p.name.rpartition(" ")[2] if " " in p.name else None
+        return p.last_name or (p.name.split()[1] if len(p.name.split()) == 2 else None)
     if n == "name" or label in ("name", "full name") or _has(r"\bfull name\b", label):
         return p.name
+    # They ask about other people or a source, not about the candidate.
+    if _has(r"\b(refer|referr|reference|hear about|heard about)", label):
+        return _UNKNOWN
     if n == "email" or _has(r"\bemail\b", label):
         return p.email
     if n == "phone" or _has(r"\bphone\b", label):
@@ -151,7 +154,7 @@ def _answers(f: FormField, label: str, a: StandardAnswers | None, eu_job: bool |
         or _has(_SALARY, label) or _has(_RELOCATE, label) or _has(_REMOTE, label)
         or eeo or consent
     )  # fmt: skip
-    if not matched:
+    if not matched or (_has(_SALARY, label) and _has(r"\bcurrent\b", label)):
         return _UNKNOWN
     if a is None:
         return None

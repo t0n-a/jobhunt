@@ -71,7 +71,11 @@ def run_daily(
                             log.warning("form plan failed for #%s", application.id, exc_info=True)
                             session.rollback()
                 if not is_paused(session):
-                    autosubmit(session, config, now=now)
+                    try:
+                        autosubmit(session, config, now=now)
+                    except Exception:  # the queue messages below must still go out
+                        log.warning("autosubmit failed", exc_info=True)
+                        session.rollback()
                 if client:
                     for application in run.queued:
                         session.refresh(application)

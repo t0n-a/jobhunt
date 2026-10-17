@@ -177,6 +177,18 @@ def test_autosubmit_runs_and_submitted_rows_are_not_queued(engine, monkeypatch):
     assert client.sent[0][0].startswith("#2 ")
 
 
+def test_autosubmit_failure_does_not_skip_the_queue_messages(engine, monkeypatch):
+    fake_tailor(monkeypatch, engine)
+
+    def boom(*a, **k):
+        raise RuntimeError("x")
+
+    monkeypatch.setattr(daily, "autosubmit", boom)
+    client = FakeClient()
+    go(engine, client)
+    assert len(client.sent) == 3  # two queue messages + digest
+
+
 def test_autosubmit_skipped_when_paused(engine, monkeypatch):
     fake_tailor(monkeypatch, engine)
     called = []

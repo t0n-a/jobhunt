@@ -10,7 +10,7 @@ from jobhunt.apply.queue import approve, autopilot_available, skip, trust_count
 from jobhunt.apply.tracker import NEXT_STATUSES, set_status
 from jobhunt.config import Config
 from jobhunt.jobs.models import Job
-from jobhunt.state import get_state, is_paused, set_paused, set_state
+from jobhunt.state import BlockedHost, get_state, is_paused, set_paused, set_state
 from jobhunt.tailor.models import Application
 from jobhunt.telegram import TelegramClient, parse_command
 
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 HELP = (
     "Commands: yes N, no N (queue), sent N, replied N, interview N, offer N, rejected N, "
-    "done N (follow-up sent), pause, resume, status, autopilot on|off."
+    "done N (follow-up sent), pause, resume, status, autopilot on|off, unblock HOST."
 )
 SENDABLE = ("drafted", "queued", "approved")
 
@@ -36,6 +36,13 @@ def handle_command(
     if verb == "resume":
         set_paused(session, False)
         return "Resumed."
+    if verb == "unblock":
+        row = session.get(BlockedHost, arg)
+        if row is None:
+            return f"{arg} was not blocked."
+        session.delete(row)
+        session.commit()
+        return f"Unblocked {arg}."
     if verb == "autopilot":
         return set_autopilot(session, arg == "on", cfg)
     if verb == "status":
@@ -69,7 +76,7 @@ def handle_command(
         )
         if application.form_plan:
             left = len(FormPlan.from_json(application.form_plan).unknown)
-            reply += f"\nAt your computer: jobhunt apply {arg} opens the form already filled."
+            reply += f"\nAt your computer: uv run jobhunt apply --id {arg} opens the form already filled."
             if left:
                 reply += f" ({left} question(s) left for you.)"
         if application.reviewed_at is None:

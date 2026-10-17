@@ -202,7 +202,7 @@ def test_yes_mentions_assisted_apply_when_planned(session):
     session.add(app)
     session.commit()
     _, client = tick(session, msg(1, "yes 1"))
-    assert "At your computer: jobhunt apply 1 opens the form already filled." in client.sent[0]
+    assert "At your computer: uv run jobhunt apply --id 1 opens the form already filled." in client.sent[0]
     assert "(1 question(s) left for you.)" in client.sent[0]
 
 
@@ -215,3 +215,13 @@ def test_autopilot_command_and_status(session):
     assert commands.handle_command(session, "status", None, easy, NOW).endswith("Autopilot: on.")
     assert commands.handle_command(session, "autopilot", "off", easy, NOW) == "Autopilot is off."
     assert "autopilot on|off" in HELP
+
+
+def test_unblock_lifts_a_blocked_host(session):
+    from jobhunt.state import block_host, is_blocked
+
+    block_host(session, "jobs.lever.co", "x")
+    assert commands.handle_command(session, "unblock", "jobs.lever.co", CONFIG, NOW) == "Unblocked jobs.lever.co."
+    assert not is_blocked(session, "jobs.lever.co")
+    assert commands.handle_command(session, "unblock", "jobs.lever.co", CONFIG, NOW) == "jobs.lever.co was not blocked."
+    assert "unblock" in HELP

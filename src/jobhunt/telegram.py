@@ -1,4 +1,5 @@
 import logging
+import re
 
 import httpx
 
@@ -77,6 +78,8 @@ def parse_command(text: str) -> tuple[str, int | str | None] | None:
     if verb in _NO_ARG and len(parts) == 1:
         return verb, None
     if verb == "autopilot" and len(parts) == 2 and parts[1].lower() in ("on", "off"):
+        return verb, parts[1].lower()
+    if verb == "unblock" and len(parts) == 2 and re.fullmatch(r"[a-z0-9.-]+", parts[1].lower()):
         return verb, parts[1].lower()
     if verb in _NEEDS_ID and len(parts) == 2 and parts[1].isdigit():
         return verb, int(parts[1])

@@ -4,6 +4,10 @@ profile:
   email: you@example.com
   location: Porto, Portugal
   github_username: your-github-handle
+  # Optional. Set both when your name has more than two parts: otherwise application forms
+  # leave first/last name for you (multi-part surnames can't be split safely).
+  # first_name: Your
+  # last_name: Name
   # Optional. Each appears on the resume header only when set.
   # phone: "+351 000 000 000"
   # linkedin: linkedin.com/in/your-handle

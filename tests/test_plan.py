@@ -68,13 +68,34 @@ def test_contact_fields_from_profile():
         ]
     )
     assert vals(plan) == {
-        "first_name": "Ada Maria",
-        "last_name": "Lovelace",
         "name": "Ada Maria Lovelace",
         "email": "a@example.com",
         "q1": "https://linkedin.com/in/ada",
     }
-    assert [f.name for f in plan.unknown] == ["phone"]
+    assert [f.name for f in plan.unknown] == ["first_name", "last_name", "phone"]
+
+
+def test_first_and_last_name_split_only_a_two_part_name_or_use_overrides():
+    fields = [F("first_name", "First Name"), F("last_name", "Last Name")]
+    two = PROFILE.model_copy(update={"name": "Ada Lovelace"})
+    assert vals(run(fields, profile=two)) == {"first_name": "Ada", "last_name": "Lovelace"}
+    set_ = PROFILE.model_copy(update={"first_name": "Ada Maria", "last_name": "Lovelace"})
+    assert vals(run(fields, profile=set_)) == {"first_name": "Ada Maria", "last_name": "Lovelace"}
+
+
+def test_current_salary_and_referral_labels_stay_unknown():
+    plan = run(
+        [
+            F("a", "Current salary"),
+            F("b", "Current compensation (EUR)"),
+            F("c", "Referrer's email"),
+            F("d", "Reference phone number"),
+            F("e", "How did you hear about us? (e.g. LinkedIn)"),
+            F("f", "Were you referred by an employee? LinkedIn"),
+            F("g", "Expected salary"),
+        ]
+    )
+    assert vals(plan) == {"g": "50000-70000 EUR"}
 
 
 def test_resume_and_cover_letter():
