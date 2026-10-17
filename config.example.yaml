@@ -47,6 +47,10 @@ data_dir: ./data
 #   autopilot_fit: 85       # only fit this high or more may go out unseen
 #   daily_cap: 10           # most applications autopilot submits per day
 #   ats_allowlist: [greenhouse, lever, ashby]   # ATS types that may auto-submit
+# outreach:
+#   per_run: 3              # recruiter drafts per daily run (one LLM call each)
+#   min_fit: 80             # default: ranking.strong_fit
+#   followup_days: 7        # days after "sent" with no reply before a follow-up draft
 
 sources:
   enabled:

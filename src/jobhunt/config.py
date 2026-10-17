@@ -130,12 +130,21 @@ class AutopilotConfig(BaseModel):
     ats_allowlist: list[str] = ["greenhouse", "lever", "ashby"]
 
 
+class OutreachConfig(BaseModel):
+    # Drafts per daily run; each is one LLM call and one message to write.
+    per_run: int = 3
+    # None = ranking.strong_fit.
+    min_fit: int | None = None
+    followup_days: int = 7
+
+
 class Config(BaseModel):
     profile: ProfileConfig
     llm: LLMConfig = Field(default_factory=LLMConfig)
     sources: SourcesConfig = Field(default_factory=SourcesConfig)
     ranking: RankingConfig = Field(default_factory=RankingConfig)
     autopilot: AutopilotConfig = Field(default_factory=AutopilotConfig)
+    outreach: OutreachConfig = Field(default_factory=OutreachConfig)
     data_dir: Path = Path("./data")
     answers_path: Path = Path("answers.yaml")
 

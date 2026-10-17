@@ -54,7 +54,7 @@ uv run jobhunt setup
 
 `setup` asks, in order: your name, email and location; a free AI Studio key (read the training warning first); a Telegram bot token from @BotFather, then a one-time code you send to your bot so only your chat is bound; your standard answers (work authorisation, salary range, and so on); the path to your CV, which it imports and walks you through confirming fact by fact; whether to install the browser that fills application forms (about 150 MB); and whether to install the daily and 5-minute timers. Press Enter to skip any step; rerunning keeps what exists.
 
-Telegram commands: yes N, no N (queue), sent N (you applied), replied N, interview N, offer N, rejected N, done N (follow-up sent), pause, resume, status, autopilot on|off, unblock HOST (lift a blocked ATS host). "yes" means *you* apply, using the prepared PDF, then send `sent N`. Autopilot is off until you switch it on after enough clean approvals.
+Telegram commands: yes N, no N (queue), sent N (you applied), replied N, interview N, offer N, rejected N, done N (follow-up sent), osent N, oskip N, oreplied N (outreach), pause, resume, status, autopilot on|off, unblock HOST (lift a blocked ATS host). "yes" means *you* apply, using the prepared PDF, then send `sent N`. Autopilot is off until you switch it on after enough clean approvals.
 
 Timers can be installed later with `uv run jobhunt install-timers`; run `loginctl enable-linger $USER` so they fire while you are logged out.
 
@@ -146,6 +146,16 @@ The coach converts your aggregated skill gaps into concrete, day-sized tasks:
 - **`jobhunt notify`:** Pushes the current task to Telegram. Requires `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in `.env`.
 
 **No streaks by design:** The coach shows only one task at a time and maintains NO streak counters. A broken-streak screen converts a lapse into abandonment, so missing days must cost nothing.
+
+## Outreach
+
+Once a day jobhunt drafts a short message to a recruiter or hiring manager for your strongest jobs, and a follow-up seven days after you mark one sent with no reply. Each draft names the role and the company and cites confirmed evidence; it is dropped otherwise. At most one first message per contact, ever, and one open outreach per company.
+
+- **You send it yourself.** jobhunt only drafts and sends the text to Telegram with Copy, Sent and Skip buttons. It never uses your LinkedIn account and fetches no LinkedIn page.
+- **Commands:** `osent N`, `oskip N`, `oreplied N`. The digest has an Outreach section listing drafts to send and follow-ups due.
+- **Limits:** connection notes are at most 200 characters (the LinkedIn free-tier limit), messages at most 600.
+- **Contacts:** taken from the posting when it names someone, otherwise the talent team plus a LinkedIn people-search link you open yourself. There is no automated recruiter web search yet: it needs a search API key.
+- Pausing (`pause`) stops new drafts.
 
 ## Tailoring
 

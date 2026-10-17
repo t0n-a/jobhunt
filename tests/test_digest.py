@@ -127,3 +127,34 @@ def test_blocked_hosts_listed_when_autopilot_on(session):
     assert "Autopilot blocked" not in digest(session)
     set_state(session, "autopilot", "1")
     assert "Autopilot blocked: jobs.lever.co (no confirmation)" in digest(session)
+
+
+def test_digest_outreach_section(session):
+    from jobhunt.outreach.models import Outreach
+
+    add(session, 1)
+    session.add(Job(id=2, title="Dev2", company="Co2", description="d", url="u", content_hash="2"))
+    session.add(Outreach(id=1, job_id=1, kind="message", text="hi"))
+    session.add(Outreach(id=2, job_id=2, kind="message", text="hi", status="sent", sent_at=NOW - timedelta(days=8)))
+    session.add(Outreach(id=3, job_id=2, kind="message", text="hi", status="replied"))
+    session.commit()
+    out = digest(session)
+    assert (
+        "Follow-ups due: 0\n"
+        "Outreach: 1 to send, 2 sent, 1 replied\n"
+        "  #1 Co1: osent 1 / oskip 1\n"
+        "  Follow-up due: #2 Co2\n"
+        "Funnel:"
+    ) in out
+
+
+def test_digest_sent_counts_distinct_contacts(session):
+    from jobhunt.outreach.models import Contact, Outreach
+
+    add(session, 1)
+    session.add(Contact(id=1, company="Co1", source="posting"))
+    session.add(Outreach(job_id=1, contact_id=1, kind="message", text="a", status="sent"))
+    session.add(Outreach(job_id=1, contact_id=1, kind="connection_note", text="b", status="sent"))
+    session.add(Outreach(job_id=1, contact_id=1, kind="followup", text="c", status="sent"))
+    session.commit()
+    assert "Outreach: 0 to send, 1 sent, 0 replied" in digest(session)

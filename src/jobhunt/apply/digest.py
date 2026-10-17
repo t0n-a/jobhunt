@@ -8,6 +8,8 @@ from jobhunt.apply.queue import autopilot_available, trust_count
 from jobhunt.apply.tracker import funnel
 from jobhunt.config import Config
 from jobhunt.jobs.models import Job
+from jobhunt.outreach.log import followups_due as outreach_followups_due
+from jobhunt.outreach.models import Outreach
 from jobhunt.ranking.shortlist import _clean
 from jobhunt.state import blocked_hosts, is_paused
 from jobhunt.tailor.models import Application, ApplicationEvent
@@ -26,6 +28,11 @@ def _label(session: Session, application_id: int) -> str:
 def _via(session: Session, application_id: int) -> str:
     application = session.get(Application, application_id)
     return " (autopilot)" if application and application.channel == "autopilot" else ""
+
+
+def _company(session: Session, outreach: Outreach) -> str:
+    job = session.get(Job, outreach.job_id)
+    return _clean(job.company) if job else "?"
 
 
 def _section(header: str, lines: list[str]) -> list[str]:
@@ -71,6 +78,23 @@ def build_digest(
         "Follow-ups due",
         [f"{_label(session, f.application_id)}: {f.text}  (done {f.application_id})" for f in due],
     )
+    rows = session.exec(select(Outreach)).all()
+    drafted = [o for o in rows if o.status == "drafted"]
+    replied = sum(o.status == "replied" for o in rows)
+    # People written to, not rows: a message, note and follow-up to one person count once.
+    sent_total = len(
+        {
+            o.contact_id if o.contact_id is not None else f"row{o.id}"
+            for o in rows
+            if o.status in ("sent", "replied") and o.kind in ("message", "connection_note")
+        }
+    )
+    if rows:
+        out.append(f"Outreach: {len(drafted)} to send, {sent_total} sent, {replied} replied")
+        for o in drafted[:5]:
+            out.append(f"  #{o.id} {_company(session, o)}: osent {o.id} / oskip {o.id}")
+        for o in outreach_followups_due(session, now, config):
+            out.append(f"  Follow-up due: #{o.id} {_company(session, o)}")
     if ghosted:
         out.append(f"Marked ghosted: {len(ghosted)}")
 

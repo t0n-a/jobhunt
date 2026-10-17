@@ -66,7 +66,7 @@ def discover_chat_id(token: str, http: httpx.Client, code: str) -> str | None:
     return None
 
 
-_NEEDS_ID = {"yes", "no", "sent", "done", "replied", "interview", "offer", "rejected"}
+_NEEDS_ID = {"yes", "no", "sent", "done", "replied", "interview", "offer", "rejected", "osent", "oskip", "oreplied"}
 _NO_ARG = {"pause", "resume", "status", "help"}
 
 
@@ -87,7 +87,7 @@ def parse_command(text: str) -> tuple[str, int | str | None] | None:
 
 
 def queue_message(
-    application, job, score, facts, web_url: str, note: str = ""
+    application, job, score, facts, web_url: str, note: str = "", extra: str = ""
 ) -> tuple[str, list[list[dict]]]:
     pay = "pay ?"
     if facts is not None and facts.pay_yearly_eur:
@@ -101,6 +101,9 @@ def queue_message(
     )
     if note:
         text += f"\nAutopilot: {_clean(note).removeprefix('autopilot ')[:200]}"  # reasons quote page labels
+    if extra:
+        # _clean strips newlines too, so each line is cleaned on its own.
+        text += "\n\n" + "\n".join(_clean(line) for line in extra.split("\n"))[:1200]
     buttons = [
         [
             {"text": "Yes", "callback_data": f"yes:{application.id}"},
@@ -108,3 +111,37 @@ def queue_message(
         ]
     ]
     return text, buttons
+
+
+COPY_LIMIT = 256  # Telegram's copy_text button limit
+
+
+def _clean_lines(text: str) -> str:
+    """_clean per line: it strips newlines too, and drafts keep their paragraphs."""
+    return "\n".join(_clean(line) for line in text.split("\n"))
+
+
+def outreach_message(outreach, job, contact, web_url: str) -> list[tuple[str, list[list[dict]] | None]]:
+    """Header with buttons, then the draft alone so a long-press copies it cleanly."""
+    name = _clean(contact.name or "") or "the talent team"
+    to = f"{name}, {_clean(contact.role)}" if contact.role else name
+    lines = [
+        f"Outreach #{outreach.id} ({outreach.kind}): {_clean(job.title)} @ {_clean(job.company)}",
+        f"To: {to}",
+    ]
+    if contact.profile_url:
+        lines.append(_clean(contact.profile_url))
+    if getattr(contact, "email", None):
+        lines.append(f"Email: {_clean(contact.email)}")
+    lines.append("Copy the text below, send it yourself, then tap Sent.")
+    text = _clean_lines(outreach.text)  # model output can echo page text
+    buttons: list[list[dict]] = []
+    if len(text) <= COPY_LIMIT:
+        buttons.append([{"text": "Copy", "copy_text": {"text": text}}])
+    buttons.append(
+        [
+            {"text": "Sent", "callback_data": f"osent:{outreach.id}"},
+            {"text": "Skip", "callback_data": f"oskip:{outreach.id}"},
+        ]
+    )
+    return [("\n".join(lines), buttons), (text, None)]

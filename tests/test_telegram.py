@@ -10,6 +10,7 @@ from jobhunt.telegram import (
     MAX_TEXT,
     TelegramClient,
     discover_chat_id,
+    outreach_message,
     parse_command,
     queue_message,
 )
@@ -140,3 +141,64 @@ def test_queue_message_shows_autopilot_notes():
     assert "Autopilot: stopped: captcha" in t
     t, _ = queue_message(app, job, None, None, "w", "autopilot error: X - it may have gone through")
     assert "Autopilot: error: X - it may have gone through" in t
+
+
+def _outreach(text):
+    o = SimpleNamespace(id=5, kind="message", text=text)
+    job = SimpleNamespace(title="Dev", company="Acme")
+    contact = SimpleNamespace(name="Ana", role="Recruiter", profile_url="https://linkedin.com/in/ana")
+    return outreach_message(o, job, contact, "http://web")
+
+
+def test_outreach_message_has_copy_button_when_short():
+    (header, buttons), (body, none) = _outreach("Hi Ana")
+    assert header.splitlines()[0] == "Outreach #5 (message): Dev @ Acme"
+    assert "To: Ana, Recruiter" in header and "Copy the text below" in header
+    assert buttons[0] == [{"text": "Copy", "copy_text": {"text": "Hi Ana"}}]
+    assert [b["callback_data"] for b in buttons[1]] == ["osent:5", "oskip:5"]
+    assert body == "Hi Ana" and none is None
+
+
+def test_long_text_has_no_copy_button_but_its_own_message():
+    text = "x" * 257
+    (_, buttons), (body, _) = _outreach(text)
+    assert len(buttons) == 1 and "copy_text" not in str(buttons)
+    assert body == text
+
+
+def test_parse_outreach_commands():
+    assert parse_command("osent 5") == ("osent", 5)
+    assert parse_command("oskip:5") == ("oskip", 5)
+    assert parse_command("/oreplied 5") == ("oreplied", 5)
+    assert parse_command("osent") is None
+
+
+def test_queue_message_extra_is_its_own_paragraph_and_capped():
+    app = SimpleNamespace(id=1)
+    job = SimpleNamespace(title="T", company="C", location="", url="u")
+    text, _ = queue_message(app, job, None, None, "http://w", extra="line one\nline two" + "x" * 2000)
+    _, _, rest = text.partition("\n\n")
+    assert rest.startswith("line one\nline two")
+    assert len(rest) == 1200
+
+
+
+def test_outreach_text_is_cleaned_but_keeps_paragraphs():
+    from types import SimpleNamespace
+
+    from jobhunt.telegram import outreach_message
+
+    o = SimpleNamespace(id=3, kind="message", text="Hi Ana,\n\nI built \u202eX at Acme.")
+    job = SimpleNamespace(title="Dev", company="Acme")
+    contact = SimpleNamespace(name="Ana", role=None, profile_url=None)
+    (_, buttons), (body, _) = outreach_message(o, job, contact, "http://x")
+    assert body == "Hi Ana,\n\nI built X at Acme."
+    assert buttons[0][0]["copy_text"]["text"] == body
+
+
+def test_outreach_message_shows_email_contact():
+    o = SimpleNamespace(id=5, kind="message", text="Hi")
+    job = SimpleNamespace(title="Dev", company="Acme")
+    contact = SimpleNamespace(name="Ana", role=None, profile_url=None, email="ana.lopes@acme.com")
+    (header, _), _ = outreach_message(o, job, contact, "http://web")
+    assert "Email: ana.lopes@acme.com" in header.splitlines()

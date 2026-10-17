@@ -10,6 +10,8 @@ from jobhunt.apply.queue import approve, autopilot_available, skip, trust_count
 from jobhunt.apply.tracker import NEXT_STATUSES, set_status
 from jobhunt.config import Config
 from jobhunt.jobs.models import Job
+from jobhunt.outreach.log import mark
+from jobhunt.outreach.models import Outreach
 from jobhunt.state import BlockedHost, get_state, is_paused, set_paused, set_state
 from jobhunt.tailor.models import Application
 from jobhunt.telegram import TelegramClient, parse_command
@@ -18,8 +20,9 @@ logger = logging.getLogger(__name__)
 
 HELP = (
     "Commands: yes N, no N (queue), sent N, replied N, interview N, offer N, rejected N, "
-    "done N (follow-up sent), pause, resume, status, autopilot on|off, unblock HOST."
+    "done N (follow-up sent), osent N, oskip N, oreplied N (outreach), pause, resume, status, autopilot on|off, unblock HOST."
 )
+OUTREACH_MOVES = {"osent": "sent", "oskip": "skipped", "oreplied": "replied"}
 SENDABLE = ("drafted", "queued", "approved")
 
 
@@ -53,6 +56,21 @@ def handle_command(
             f"Trust: {trust_count(session)}/{target}. "
             f"Autopilot: {'on' if autopilot_on(session) else 'off'}."
         )
+
+    if verb in OUTREACH_MOVES:
+        row = session.get(Outreach, arg)
+        if row is None:
+            return f"No outreach #{arg}."
+        try:
+            mark(session, arg, OUTREACH_MOVES[verb], now)
+        except ValueError:
+            return f"Outreach #{arg} is {row.status}; nothing changed."
+        return {
+            "osent": f"Logged outreach #{arg} as sent. I'll remind you about a follow-up in "
+            f"{config.outreach.followup_days} days.",
+            "oskip": f"Skipped outreach #{arg}.",
+            "oreplied": f"Nice. Logged the reply to outreach #{arg}.",
+        }[verb]
 
     application = session.get(Application, arg)
     if application is None:

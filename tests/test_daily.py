@@ -3,6 +3,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlmodel import Session
 
+from jobhunt.answers import StandardAnswers, save_answers
 from jobhunt.apply import daily
 from jobhunt.apply.queue import TailorRun
 from jobhunt.apply.tracker import add_event, set_status
@@ -219,3 +220,101 @@ def test_error_note_is_in_queue_message(engine, monkeypatch):
     client = FakeClient()
     go(engine, client)
     assert client.sent[0][0].endswith("Autopilot: error: Error - it may have gone through; check before applying again")
+
+
+def test_daily_adds_easy_apply_brief_and_skips_form_plan(engine, monkeypatch, tmp_path):
+    fake_tailor(monkeypatch, engine)
+    with Session(engine) as s:
+        s.get(Job, 1).url = "https://www.linkedin.com/jobs/view/1"
+        s.commit()
+    save_answers(
+        tmp_path / "answers.yaml",
+        StandardAnswers(
+            work_authorization="EU citizen",
+            needs_sponsorship_outside_eu=False,
+            notice_period="1 month",
+            salary_min_eur=60000,
+            salary_max_eur=75000,
+            relocation=True,
+            remote=False,
+        ),
+    )
+    seen = []
+    monkeypatch.setattr(daily, "prepare_plan", lambda s, a, c, llm, http: seen.append(a.id))
+    config = CONFIG.model_copy(update={"answers_path": tmp_path / "answers.yaml"})
+    client = FakeClient()
+    daily.run_daily(config, engine=engine, llm=LLM, client=client, scan=scan_ok, now=NOW)
+    assert seen == [2]
+    assert "LinkedIn Easy Apply" in client.sent[0][0]
+    assert "LinkedIn Easy Apply" not in client.sent[1][0]
+
+
+def _outreach(engine, text="Hi, I built X for the Dev1 role at Co1."):
+    from jobhunt.outreach.models import Contact, Outreach
+
+    with Session(engine) as s:
+        c = Contact(company="Co1", name="Bo", source="posting")
+        s.add(c)
+        s.commit()
+        o = Outreach(job_id=1, contact_id=c.id, kind="message", text=text)
+        s.add(o)
+        s.commit()
+        return o.id
+
+
+def test_daily_drafts_and_sends_outreach(engine, monkeypatch):
+    fake_tailor(monkeypatch, engine)
+    from jobhunt.outreach.models import Outreach
+
+    def fake_draft(session, config, llm):
+        return [session.get(Outreach, _outreach(engine))]
+
+    monkeypatch.setattr(daily, "draft_for_run", fake_draft)
+    monkeypatch.setattr(daily, "draft_followups", lambda session, config, llm, now: [])
+    client = FakeClient()
+    go(engine, client)
+    texts = [t for t, _ in client.sent]
+    assert any(t.startswith("Outreach #1 (message)") for t in texts)
+    assert any(t.startswith("Hi, I built X") for t in texts)
+
+
+def test_outreach_header_resent_without_copy_when_rejected(engine, monkeypatch):
+    fake_tailor(monkeypatch, engine)
+    from jobhunt.outreach.models import Outreach
+
+    class Picky(FakeClient):
+        def send(self, text, buttons=None):
+            self.sent.append((text, buttons))
+            return not any("copy_text" in b for row in buttons or [] for b in row)
+
+    monkeypatch.setattr(daily, "draft_for_run", lambda s, c, l: [s.get(Outreach, _outreach(engine))])
+    monkeypatch.setattr(daily, "draft_followups", lambda session, config, llm, now: [])
+    client = Picky()
+    go(engine, client)
+    headers = [b for t, b in client.sent if t.startswith("Outreach #1")]
+    assert len(headers) == 2
+    assert all("copy_text" not in b for row in headers[1] for b in row)
+    assert headers[1][-1][0]["callback_data"] == "osent:1"
+
+
+def test_outreach_failure_does_not_stop_the_digest(engine, monkeypatch):
+    fake_tailor(monkeypatch, engine)
+
+    def boom(*a):
+        raise RuntimeError("llm down")
+
+    monkeypatch.setattr(daily, "draft_for_run", boom)
+    client = FakeClient()
+    out = go(engine, client)
+    assert client.sent[-1] == (out, None)
+
+
+def test_paused_daily_drafts_no_outreach(engine, monkeypatch):
+    fake_tailor(monkeypatch, engine)
+    calls = []
+    monkeypatch.setattr(daily, "draft_for_run", lambda *a: calls.append(1) or [])
+    monkeypatch.setattr(daily, "draft_followups", lambda *a: calls.append(1) or [])
+    with Session(engine) as s:
+        set_paused(s, True)
+    go(engine, FakeClient())
+    assert calls == []
