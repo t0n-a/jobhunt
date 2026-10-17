@@ -53,7 +53,8 @@ def _check(kind: str, part, job: Job, atoms: list[EvidenceAtom], limit: int) -> 
     part = part if isinstance(part, dict) else {}
     text = str(part.get("text") or "").strip()
     ids = part.get("atom_ids") or []
-    by_id = {a.id: a for a in atoms}
+    # Only confirmed facts back a claim, whatever the caller passed.
+    by_id = {a.id: a for a in atoms if a.confirmed}
     if not text:
         return "empty draft"
     if (

@@ -73,3 +73,15 @@ def test_followup_is_verified():
     bad = ok + " I have 9 years of Rust."
     assert draft_followup(o, JOB, CONTACT, ATOMS, FakeProvider([{"text": bad, "atom_ids": [1]}])) is None
     assert draft_followup(o, JOB, CONTACT, ATOMS, FakeProvider([])) is None
+
+
+
+def test_unconfirmed_atom_cannot_back_a_draft():
+    from jobhunt.outreach.draft import _check
+
+    atom = EvidenceAtom(id=9, kind=AtomKind.PROJECT, title="Flask app", description="Built a Flask app",
+                        skills=["Flask"], provenance=Provenance.CV, confirmed=False)
+    job = Job(id=1, title="Backend Engineer", company="Acme", description="d", url="u", content_hash="h")
+    out = _check("message", {"text": "Hi Acme, backend: I built a Flask app.", "atom_ids": [9]},
+                 job, [atom], 600)
+    assert isinstance(out, str)
