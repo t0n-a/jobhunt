@@ -277,7 +277,7 @@ def test_growth_commands(session, monkeypatch):
     from jobhunt.growth.models import upsert_suggestion
 
     monkeypatch.setattr(commands, "Gh", FakeGh)
-    monkeypatch.setattr(act.publish, "__kwdefaults__", {"audit": lambda *a, **k: Audit([], False)})
+    monkeypatch.setattr(act, "audit_repo", lambda *a, **k: Audit([], False))
     FakeGh.calls = []
     p = upsert_suggestion(session, "publish", "ada/x", title="t")
     r = upsert_suggestion(session, "readme", "ada/y", title="t", body="# y")

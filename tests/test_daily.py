@@ -347,3 +347,31 @@ def test_daily_sends_new_suggestions_and_skips_without_username(engine, monkeypa
     client = FakeClient()
     go(engine, client, llm=None)  # no username: nothing growth-related
     assert all("Pin ada/x" not in t for t, _ in client.sent)
+
+
+def test_readme_drafts_only_for_thin_readmes(engine, monkeypatch):
+    from types import SimpleNamespace
+
+    from jobhunt.growth.models import upsert_suggestion
+
+    with Session(engine) as s:
+        upsert_suggestion(s, "pin", "ada/thin", title="t")
+        upsert_suggestion(s, "pin", "ada/rich", title="t")
+    drafted = []
+
+    class Gh:
+        def readme(self, full):
+            return ("x" * 1000 if full == "ada/rich" else "", None)
+
+        def repos(self, *a):
+            return []
+
+    monkeypatch.setattr(daily, "Gh", Gh)
+    monkeypatch.setattr(daily, "refresh", lambda *a, **k: [])
+    monkeypatch.setattr(daily, "draft_repo_readme", lambda s, gh, t, *a: drafted.append(t))
+    monkeypatch.setattr(daily, "draft_profile_readme", lambda *a: None)
+    cfg = CONFIG.model_copy(deep=True)
+    cfg.profile.github_username = "ada"
+    fake_tailor(monkeypatch, engine)
+    daily.run_daily(cfg, engine=engine, llm=SimpleNamespace(), client=None, scan=scan_ok, now=NOW)
+    assert drafted == ["ada/thin"]

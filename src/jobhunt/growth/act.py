@@ -24,7 +24,8 @@ def _save(session: Session, s: Suggestion, status: str, error: str = "") -> None
     session.commit()
 
 
-def publish(session: Session, gh, config, suggestion_id: int, *, audit=audit_repo) -> str:
+def publish(session: Session, gh, config, suggestion_id: int, *, audit=None) -> str:
+    audit = audit or audit_repo  # looked up per call so tests can patch the module name
     s = _open(session, suggestion_id, ("publish",))
     if isinstance(s, str):
         return s or f"Nothing to publish for #{suggestion_id}."
@@ -67,7 +68,8 @@ def approve(session: Session, gh, suggestion_id: int) -> str:
         _save(session, s, "failed", str(e))
         return f"Couldn't commit the README to {s.target}: {e}"
     _save(session, s, "done")
-    return f"README committed to {s.target}."
+    replaced = " (it replaced the old one)" if sha else ""
+    return f"README committed to {s.target}{replaced}."
 
 
 def decline(session: Session, suggestion_id: int) -> str:

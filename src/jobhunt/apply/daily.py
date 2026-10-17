@@ -77,14 +77,23 @@ def _grow(session: Session, config: Config, llm, client, now: datetime) -> None:
         new = refresh(session, gh, config, now=now, workdir=config.data_dir / "growth_audit")
         if llm is not None:
             atoms = AtomStore(session).confirmed_only()
-            approved = session.exec(
-                select(Suggestion).where(Suggestion.kind == "publish", Suggestion.status == "approved")
+            # Repos he just made public, and pin candidates: draft only where the README is thin,
+            # so a README he wrote himself is never offered a replacement.
+            targets = session.exec(
+                select(Suggestion).where(
+                    ((Suggestion.kind == "publish") & (Suggestion.status == "done"))
+                    | (Suggestion.kind == "pin")
+                )
             ).all()
-            for p in approved:
-                if _find(session, "readme", p.target) is None:
-                    new.append(draft_repo_readme(session, gh, p.target, atoms, llm))
+            for p in targets:
+                if _find(session, "readme", p.target) is None and len(gh.readme(p.target)[0]) < 300:
+                    draft = draft_repo_readme(session, gh, p.target, atoms, llm)
+                    if draft is not None:
+                        new.append(draft)
             if _find(session, "profile_readme", f"{user}/{user}") is None:
-                new.append(draft_profile_readme(session, gh, user, atoms, gh.repos(user, "public"), llm))
+                profile = draft_profile_readme(session, gh, user, atoms, gh.repos(user, "public"), llm)
+                if profile is not None:
+                    new.append(profile)
     except GhError as e:  # gh missing or logged out: skip growth, keep going
         log.warning("growth skipped: %s", e)
         return

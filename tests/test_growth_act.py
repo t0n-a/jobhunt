@@ -93,7 +93,7 @@ def test_gh_failure_is_reported_not_done(session):
 def test_approve_commits_readme_with_sha(session):
     s = upsert_suggestion(session, "readme", "ada/x", title="README", body="# x\n")
     gh = FakeGh()
-    assert act.approve(session, gh, s.id) == "README committed to ada/x."
+    assert act.approve(session, gh, s.id) == "README committed to ada/x (it replaced the old one)."
     assert gh.calls == [("put", "ada/x", "README.md", "# x\n", "old")]
     assert session.get(Suggestion, s.id).status == "done"
 
