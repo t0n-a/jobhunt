@@ -2,7 +2,7 @@ import os
 import shutil
 from collections import Counter
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -39,7 +39,7 @@ from jobhunt.matching.score import EmptyProfileError, score_job
 from jobhunt.profile.importers.coursework import import_coursework
 from jobhunt.profile.importers.cv import import_cv
 from jobhunt.profile.importers.github import import_github
-from jobhunt.profile.models import EvidenceAtom
+from jobhunt.profile.models import AtomKind, EvidenceAtom, Provenance
 from jobhunt.profile.store import AtomStore
 from jobhunt.tailor.models import Application, delete_bullet, edit_bullet, iter_bullets
 from jobhunt.tailor.pipeline import mark_applied, render_application, tailor_job
@@ -48,6 +48,7 @@ from jobhunt.web.flash import FLASH_COOKIE, flash, read_flash
 from jobhunt.web.home import home_state
 
 HERE = Path(__file__).parent
+CERTIFICATE_MAX_BYTES = 10 * 1024 * 1024
 
 
 @contextmanager
@@ -229,6 +230,61 @@ def create_app(config: Config) -> FastAPI:
 
         store.add_many(atoms)
         return _imported(len(atoms))
+
+    @app.post("/import/certificate")
+    def import_certificate_route(
+        name: str = Form(...),
+        issuer: str = Form(""),
+        issued_on: str = Form(""),
+        file: UploadFile = File(...),
+        store: AtomStore = Depends(get_store),
+    ):
+        raw_filename = file.filename or ""
+        suffix = Path(raw_filename).suffix.lower()
+        if suffix not in (".pdf", ".png", ".jpg", ".jpeg"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported certificate format: {suffix or '(no extension)'}",
+            )
+        started_on = None
+        if issued_on:
+            try:
+                started_on = date.fromisoformat(issued_on)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail="issued_on must be YYYY-MM-DD") from exc
+
+        sanitized_name = Path(raw_filename).name
+        filename = sanitized_name if sanitized_name else f"certificate{suffix}"
+        certificates = config.data_dir / "certificates"
+        certificates.mkdir(parents=True, exist_ok=True)
+        target = certificates / filename
+        size = 0
+        with target.open("wb") as out:
+            while chunk := file.file.read(1024 * 1024):
+                size += len(chunk)
+                if size > CERTIFICATE_MAX_BYTES:
+                    break
+                out.write(chunk)
+        if size > CERTIFICATE_MAX_BYTES:
+            target.unlink(missing_ok=True)
+            raise HTTPException(status_code=400, detail="Certificate is larger than 10 MB")
+
+        issuer_part = f" ({issuer})" if issuer else ""
+        issued_part = f", issued {issued_on}" if issued_on else ""
+        store.add(
+            EvidenceAtom(
+                kind=AtomKind.COURSE,
+                title=name,
+                description=f"Certification: {name}{issuer_part}{issued_part}",
+                skills=[],
+                provenance=Provenance.MANUAL,
+                source_ref=target.relative_to(config.data_dir).as_posix(),
+                started_on=started_on,
+                confirmed=False,
+            )
+        )
+        response = RedirectResponse("/atoms", status_code=303)
+        return flash(response, "Certificate added. Confirm it on this page to use it as evidence.")
 
     @app.post("/atoms/{atom_id}/confirm")
     def atom_confirm(request: Request, atom_id: int, store: AtomStore = Depends(get_store)):

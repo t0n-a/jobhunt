@@ -189,6 +189,16 @@ The counselor is not an interviewer with a topic box. It decides what to ask fro
 
 Proposed atoms quote your own words and arrive unconfirmed, like everything else a model writes. Notes of kind goal and constraint are appended to the scoring prompt ("Lower fit_score for a job that violates a stated constraint"), so telling the counselor "no on-site in Lisbon" shapes every job scored afterwards — newly scanned jobs and any job you re-score — and a wrong note would too, which is why they are listed on the page with a Forget button. Jobs already scored keep their score until you press Re-score on them.
 
+### Profile growth
+
+Once a week (`growth.refresh_days`, 7 by default; never while paused or with no `profile.github_username` set), jobhunt checks your GitHub profile and your shortlisted jobs and sends suggestions to Telegram. Each suggestion has a number.
+
+- **README drafts:** a profile README is committed only after you send `approve N`. If one already exists, the reply says it will be replaced, and the commit fails rather than overwrite an edit you made in the meantime.
+- **Making a repo public:** send `publish N`. It is refused when the audit finds a secret, whatever you reply: rotate the secret and rewrite the history first. jobhunt never force-pushes your repositories; it tells you how.
+- **Pins:** pinning is manual, because GitHub has no API for it. Pin the repositories you want yourself, up to six.
+- **Certifications:** suggested only when at least two shortlisted jobs ask for one. Costs are approximate and marked as such; free and cheap options come first.
+- **Certificates as evidence:** upload a PDF, PNG or JPG at `/import` (Certificate). It arrives as an unconfirmed atom; confirm it on `/atoms` before it counts as evidence.
+
 ## Repository Layout
 
 - `src/jobhunt/config.py`: Configuration models and YAML loading.

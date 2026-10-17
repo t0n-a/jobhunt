@@ -15,6 +15,17 @@
 </section>
 
 <section class="card">
+  <h3>Certificate</h3>
+  <form method="post" action="/import/certificate" enctype="multipart/form-data">
+    <input type="text" name="name" placeholder="Certificate name" required>
+    <input type="text" name="issuer" placeholder="Issuer">
+    <input type="date" name="issued_on" aria-label="Issued on">
+    <input type="file" name="file" accept=".pdf,.png,.jpg,.jpeg" required>
+    <button type="submit" class="primary" data-busy="Adding…">Add certificate</button>
+  </form>
+</section>
+
+<section class="card">
   <h3>GitHub</h3>
   <form method="post" action="/import/github">
     <input type="text" name="username" placeholder="github-handle" required>
