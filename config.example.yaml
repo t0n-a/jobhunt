@@ -18,6 +18,14 @@ llm:
 
 data_dir: ./data
 
+# Ranking. Defaults shown; uncomment to change.
+# ranking:
+#   languages: [english, portuguese]   # postings requiring any other language are dropped
+#   shortlist_fit: 40                  # fit scores below this are not shortlisted
+#   strong_fit: 80                     # fit scores from this up are strong matches
+#   min_pay_outside_eu: 60000          # yearly EUR a non-EU job must pay to stay in the running
+#   liveness_check_limit: 50           # postings checked for closed listings per run
+
 # Job sources. Company boards are where most real postings originate — the large
 # aggregators mostly re-host them — so filling in the three ATS lists below
 # matters more than anything else here. A company's board slug is usually the

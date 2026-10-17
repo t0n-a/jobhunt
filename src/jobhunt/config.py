@@ -73,10 +73,23 @@ class SourcesConfig(BaseModel):
     )
 
 
+class RankingConfig(BaseModel):
+    # Languages the candidate works in; a posting requiring any other language is dropped.
+    languages: list[str] = Field(default_factory=lambda: ["english", "portuguese"])
+    # fit_score bands: below shortlist_fit is dropped, from strong_fit up is a strong match.
+    shortlist_fit: int = 40
+    strong_fit: int = 80
+    # Outside the EU a job is "ok" only if it mentions sponsorship or pays at least this.
+    min_pay_outside_eu: int = 60_000
+    # Most postings to liveness-check per run, so a large backlog cannot stall a scan.
+    liveness_check_limit: int = 50
+
+
 class Config(BaseModel):
     profile: ProfileConfig
     llm: LLMConfig = Field(default_factory=LLMConfig)
     sources: SourcesConfig = Field(default_factory=SourcesConfig)
+    ranking: RankingConfig = Field(default_factory=RankingConfig)
     data_dir: Path = Path("./data")
 
 

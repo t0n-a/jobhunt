@@ -65,3 +65,21 @@ def test_env_file_is_loaded(tmp_path: Path, monkeypatch):
 
     assert os.environ.get("TEST_NEW_VAR") == "hello"
     assert os.environ.get("TEST_EXISTING_VAR") == "pre_existing"
+
+
+def test_ranking_defaults(tmp_path: Path):
+    (tmp_path / "config.yaml").write_text(
+        """
+profile:
+  name: Ada
+  email: ada@example.com
+  location: Porto
+""",
+        encoding="utf-8",
+    )
+
+    cfg = load_config(tmp_path / "config.yaml")
+
+    assert cfg.ranking.shortlist_fit == 40
+    assert cfg.ranking.strong_fit == 80
+    assert cfg.ranking.languages == ["english", "portuguese"]
