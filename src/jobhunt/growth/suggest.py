@@ -30,15 +30,24 @@ def _find(session, kind, target) -> Suggestion | None:
 
 
 
+# Each audit mirror-clones a repo (up to 120 s); the rest are audited on the following weeks.
+MAX_AUDITS_PER_REFRESH = 10
+
+
 def suggest_publish(session, gh, config, *, audit=audit_repo, workdir: Path) -> list[Suggestion]:
     out = []
-    for repo in _repos(gh, config.profile.github_username, "private"):
+    repos = sorted(_repos(gh, config.profile.github_username, "private"), key=lambda r: r.get("pushedAt") or "", reverse=True)
+    audited = 0
+    for repo in repos:
         full = repo["nameWithOwner"]
         # Open suggestions are re-audited every refresh: a secret pushed since the last audit
         # must block, and a fixed one must unblock. Only decided rows are left alone.
         seen = _find(session, "publish", full)
         if seen is not None and seen.status in ("declined", "done"):
             continue
+        if audited >= MAX_AUDITS_PER_REFRESH:
+            break
+        audited += 1
         desc = repo.get("description") or ""
         readme_text, _ = gh.readme(full)
         result = audit(
@@ -78,13 +87,16 @@ def suggest_pins(session, gh, config, *, now: datetime | None = None) -> list[Su
             why.append("has a README")
         scored.append((points, repo, why))
     scored.sort(key=lambda t: -t[0])
-    return [
-        upsert_suggestion(
+    out = []
+    for _, repo, why in scored[: config.growth.max_pins]:
+        seen = _find(session, "pin", repo["nameWithOwner"])
+        row = upsert_suggestion(
             session, "pin", repo["nameWithOwner"], title=f"Pin {repo['name']}",
             body="Worth pinning on your profile: " + ", ".join(why or ["a finished project"]) + ".",
         )
-        for _, repo, why in scored[: config.growth.max_pins]
-    ]
+        if seen is None:  # a pin he has seen (or declined) is never announced again
+            out.append(row)
+    return out
 
 
 def suggest_certs(session, config) -> list[Suggestion]:
@@ -98,12 +110,13 @@ def suggest_certs(session, config) -> list[Suggestion]:
     out = []
     for n, cost, key in keep[:3]:
         cert = CERT_TABLE[key]
-        out.append(
-            upsert_suggestion(
-                session, "cert", key, title=f"Consider {cert.name}",
-                body=f"{n} of your matched jobs ask for it. About €{cost} (approximate; check before paying). Free prep: {cert.free_prep}",
-            )
+        seen = _find(session, "cert", key)
+        row = upsert_suggestion(
+            session, "cert", key, title=f"Consider {cert.name}",
+            body=f"{n} of your matched jobs ask for it. About €{cost} (approximate; check before paying). Free prep: {cert.free_prep}",
         )
+        if seen is None:
+            out.append(row)
     return out
 
 

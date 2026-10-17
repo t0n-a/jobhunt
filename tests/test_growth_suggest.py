@@ -140,3 +140,25 @@ def test_open_publish_suggestion_is_reaudited(session, tmp_path):
     assert suggest.suggest_publish(session, gh, cfg(), audit=leaked, workdir=tmp_path) == []
     session.refresh(s)
     assert s.blocking and s.flags == ["secret in history: aws_access_key in x.py"]
+
+
+def test_pins_and_certs_are_returned_once_even_when_declined(session):
+    from jobhunt.growth.act import decline
+
+    gh = FakeGh(public=[repo("star", stargazerCount=5)])
+    [pin] = suggest.suggest_pins(session, gh, cfg(), now=NOW)
+    assert suggest.suggest_pins(session, gh, cfg(), now=NOW) == []
+    add_job(session, "AZ-900", 1)
+    add_job(session, "AZ-900", 2)
+    [cert] = suggest.suggest_certs(session, cfg())
+    decline(session, pin.id)
+    decline(session, cert.id)
+    assert suggest.suggest_pins(session, gh, cfg(), now=NOW) == []
+    assert suggest.suggest_certs(session, cfg()) == []
+
+
+def test_publish_audits_at_most_ten_repos_newest_pushed_first(session, tmp_path):
+    repos = [repo(f"r{i:02}", pushedAt=f"2026-10-{i + 1:02}T00:00:00Z") for i in range(12)]
+    out = suggest.suggest_publish(session, FakeGh(private=repos), cfg(), audit=audit, workdir=tmp_path)
+    assert len(out) == suggest.MAX_AUDITS_PER_REFRESH == 10
+    assert "ada/r00" not in {s.target for s in out} and "ada/r11" in {s.target for s in out}

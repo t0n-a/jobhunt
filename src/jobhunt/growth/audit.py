@@ -43,10 +43,14 @@ def _is_env(path: str) -> bool:
 
 
 def scan_history(repo_dir: Path, run=subprocess.run) -> list[str]:
-    proc = run(
-        ["git", "-C", str(repo_dir), "log", "-p", "--all", "--no-color"],
-        capture_output=True, text=True, errors="replace",
-    )
+    try:
+        proc = run(
+            # -a: binary files as text; -m: diffs of merge commits too.
+            ["git", "-C", str(repo_dir), "log", "-p", "--all", "--no-color", "-a", "-m"],
+            capture_output=True, text=True, errors="replace", timeout=300,
+        )
+    except subprocess.TimeoutExpired:
+        return ["could not audit: git log timed out"]
     # An audit that could not read the whole history must block, never pass as clean.
     if proc.returncode != 0:
         return ["could not audit: git log failed"]

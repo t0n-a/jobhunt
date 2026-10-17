@@ -106,3 +106,25 @@ def test_failed_or_oversized_log_blocks(tmp_path, monkeypatch):
     monkeypatch.setattr(audit, "_MAX_LOG", 10)
     big = lambda *a, **k: SimpleNamespace(returncode=0, stdout="+" * 11, stderr="")
     assert audit.scan_history(tmp_path, run=big) == ["could not audit: history larger than 50 MB"]
+
+
+def test_history_scan_reads_binary_and_merge_diffs_and_times_out(tmp_path):
+    import subprocess
+    from types import SimpleNamespace
+
+    from jobhunt.growth import audit
+
+    seen = {}
+
+    def ok(cmd, **k):
+        seen.update(cmd=cmd, **k)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    audit.scan_history(tmp_path, run=ok)
+    assert {"-a", "-m"} <= set(seen["cmd"])
+    assert seen["timeout"] == 300
+
+    def slow(cmd, **k):
+        raise subprocess.TimeoutExpired(cmd, 300)
+
+    assert audit.scan_history(tmp_path, run=slow) == ["could not audit: git log timed out"]
