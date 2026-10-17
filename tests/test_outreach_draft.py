@@ -85,3 +85,20 @@ def test_unconfirmed_atom_cannot_back_a_draft():
     out = _check("message", {"text": "Hi Acme, backend: I built a Flask app.", "atom_ids": [9]},
                  job, [atom], 600)
     assert isinstance(out, str)
+
+
+def test_draft_must_share_a_content_word_with_the_evidence():
+    r = _run(_resp(msg="Hi Bo, I'd love to chat about the Developer role at Acme. Could we talk soon?"))
+    assert [d.kind for d in r.drafts] == ["connection_note"]
+
+
+def test_draft_with_url_or_email_is_dropped():
+    for extra in (" See https://evil.example/x", " See www.evil.example", " Mail me at x@evil.example"):
+        r = _run(_resp(msg=MSG + extra))
+        assert [d.kind for d in r.drafts] == ["connection_note"], extra
+
+
+def test_company_matches_through_legal_suffix():
+    job = Job(id=1, title="Python Developer", company="Acme GmbH", description="d", url="u", content_hash="h")
+    r = draft_outreach(job, CONTACT, ATOMS, FakeProvider([_resp()]), profile=PROFILE)
+    assert len(r.drafts) == 2

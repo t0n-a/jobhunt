@@ -131,6 +131,8 @@ def outreach_message(outreach, job, contact, web_url: str) -> list[tuple[str, li
     ]
     if contact.profile_url:
         lines.append(_clean(contact.profile_url))
+    if getattr(contact, "email", None):
+        lines.append(f"Email: {_clean(contact.email)}")
     lines.append("Copy the text below, send it yourself, then tap Sent.")
     text = _clean_lines(outreach.text)  # model output can echo page text
     buttons: list[list[dict]] = []

@@ -194,3 +194,11 @@ def test_outreach_text_is_cleaned_but_keeps_paragraphs():
     (_, buttons), (body, _) = outreach_message(o, job, contact, "http://x")
     assert body == "Hi Ana,\n\nI built X at Acme."
     assert buttons[0][0]["copy_text"]["text"] == body
+
+
+def test_outreach_message_shows_email_contact():
+    o = SimpleNamespace(id=5, kind="message", text="Hi")
+    job = SimpleNamespace(title="Dev", company="Acme")
+    contact = SimpleNamespace(name="Ana", role=None, profile_url=None, email="ana.lopes@acme.com")
+    (header, _), _ = outreach_message(o, job, contact, "http://web")
+    assert "Email: ana.lopes@acme.com" in header.splitlines()

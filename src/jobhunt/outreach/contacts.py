@@ -19,7 +19,18 @@ _RECRUITER = re.compile(
     r"(recruiter|talent (acquisition|partner)|hiring manager|technical recruiter)", re.IGNORECASE
 )
 # Two capitalised words. Lowercase after the capital keeps "Reach out" from matching.
-_NAME = re.compile(r"\b([A-ZÀ-Ý][a-zà-ÿ]+)[ \t]+([A-ZÀ-Ý][a-zà-ÿ]+)\b")
+_WORD = r"[A-ZÀ-Ý][a-zà-ÿ]+"
+_NAME = rf"(?P<name>{_WORD}[ \t]+{_WORD})"
+_KW = f"(?i:{_RECRUITER.pattern})"  # case-insensitive keyword only; names stay capitalised
+# A name counts only when it touches the role: "recruiter: Name", "recruiter is Name", "Name, recruiter".
+_AFTER_ROLE = re.compile(rf"{_KW}\s*(?::|\bis\b)\s*{_NAME}\b")
+_BEFORE_ROLE = re.compile(rf"\b{_NAME}\s*,\s*{_KW}")
+_BEFORE_URL = re.compile(rf"\b({_WORD})[ \t]+({_WORD})[\s(\[<:-]*$")
+# Leading words that look like a first name but are verbs, prepositions or headings.
+_NOT_NAMES = {
+    "contact", "reach", "email", "message", "ask", "with", "to", "out", "questions",
+    "our", "the", "about", "join", "apply", "meet", "see", "team",
+}  # fmt: skip
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 # "first.last" local parts are the only emails whose name we can read off the address.
 _LOCAL_NAME = re.compile(r"^([a-z]+)[._]([a-z]+)$", re.IGNORECASE)
@@ -39,20 +50,10 @@ def _name(text: str) -> str:
     return text[:_MAX_NAME]
 
 
-def _line_names(line: str) -> list[re.Match]:
-    """Name matches on a line, leaving out any that overlap a recruiter phrase ("Technical Recruiter")."""
-    spans = [m.span() for m in _RECRUITER.finditer(line)]
-    return [
-        m
-        for m in _NAME.finditer(line)
-        if not any(m.start() < end and start < m.end() for start, end in spans)
-    ]
-
-
 def find_contacts(job: Job) -> list[ContactCandidate]:
     """People named in the posting text, in order and de-duplicated. Never invented."""
-    text = _clean(job.description)
-    lines = text.splitlines()
+    # _clean deletes newlines, so it runs per line; a name never spans two lines.
+    lines = [_clean(line) for line in job.description.splitlines()]
     found: list[ContactCandidate] = []
     seen: set[str] = set()
 
@@ -63,11 +64,13 @@ def find_contacts(job: Job) -> list[ContactCandidate]:
         seen.update(keys)
         found.append(candidate)
 
-    # LinkedIn profiles, named by the nearest name before the link on the same line.
+    # LinkedIn profiles, named by the two capitalised words right before the link.
     for line in lines:
         for url in _LINKEDIN.finditer(line):
-            before = [m for m in _line_names(line) if m.end() <= url.start()]
-            name = _name(before[-1].group(0)) if before else None
+            before = _BEFORE_URL.search(line[: url.start()])
+            name = None
+            if before and before.group(1).casefold() not in _NOT_NAMES:
+                name = _name(f"{before.group(1)} {before.group(2)}")
             slug = url.group(0).rstrip("/").rsplit("/", 1)[-1]
             add(
                 ContactCandidate(
@@ -75,15 +78,15 @@ def find_contacts(job: Job) -> list[ContactCandidate]:
                 )
             )
 
-    # Recruiter lines: the name on the line, the role from its longest recruiter phrase.
+    # Recruiter lines: a name bound to the role keyword; the role from its longest recruiter phrase.
     for line in lines:
-        keywords = list(_RECRUITER.finditer(line))
-        names = _line_names(line)
-        if keywords and names:
+        bound = _AFTER_ROLE.search(line) or _BEFORE_ROLE.search(line)
+        if bound:
+            keywords = list(_RECRUITER.finditer(line))
             role = max(keywords, key=lambda m: len(m.group(0))).group(0).title()
-            add(ContactCandidate(_name(names[0].group(0)), role, None, None, "posting"))
+            add(ContactCandidate(_name(re.sub(r"\s+", " ", bound.group("name"))), role, None, None, "posting"))
 
-    for match in _EMAIL.finditer(text):
+    for match in _EMAIL.finditer("\n".join(lines)):
         address = match.group(0)
         if ROLE_MAILBOX.match(address):
             continue

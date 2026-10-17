@@ -71,3 +71,31 @@ def test_contact_for_upserts_the_same_person(tmp_path):
         b = contact_for(s, second)
         assert a.id == b.id
         assert len(s.exec(select(Contact)).all()) == 1
+
+
+def test_multiparagraph_posting_names_only_the_real_recruiter():
+    job = _job(
+        "About Acme Corp\nWe build things.\n\nJoin Berlin Office team.\n\n"
+        "Your recruiter: João Costa, Technical Recruiter"
+    )
+    found = find_contacts(job)
+    assert [c.name for c in found] == ["João Costa"]
+    assert found[0].role == "Technical Recruiter"
+
+
+def test_name_before_linkedin_url_skips_leading_verb():
+    job = _job("Contact Maria Silva (https://www.linkedin.com/in/maria)")
+    assert find_contacts(job)[0].name == "Maria Silva"
+    job = _job("Contact Maria (https://www.linkedin.com/in/maria)")
+    found = find_contacts(job)
+    assert found[0].name is None and found[0].profile_url.endswith("/in/maria")
+
+
+def test_unbound_name_is_no_contact():
+    assert find_contacts(_job("Reach out to Maria Silva for questions.")) == []
+    assert find_contacts(_job("Our Hiring Manager Will review. Apply at Acme Careers Page")) == []
+
+
+def test_name_before_comma_role():
+    found = find_contacts(_job("Contact Maria Silva, Recruiter"))
+    assert found[0].name == "Maria Silva" and found[0].role == "Recruiter"

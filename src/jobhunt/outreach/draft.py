@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 
 from jobhunt.config import ProfileConfig
+from jobhunt.jobs.dedupe import normalize
 from jobhunt.jobs.models import Job
 from jobhunt.llm import LLMError, LLMProvider
 from jobhunt.outreach.models import Contact, Outreach
@@ -16,6 +18,11 @@ MESSAGE_MAX = 600
 NOTE_MAX = 200  # LinkedIn's free-tier connection note limit
 FOLLOWUP_MAX = 400  # a nudge, shorter than the first message
 _DESC_MAX = 1500  # enough posting context for the prompt without flooding it
+_WORDS = re.compile(r"[^\W\d_]{5,}")
+_LINKISH = re.compile(r"https?://|www\.|\S+@\S+", re.IGNORECASE)
+# Words that say nothing about the evidence, so sharing one proves nothing.
+_FILLER = {"about", "built", "could", "would", "short", "which", "their", "there", "these", "using",
+           "other", "chat", "role", "team", "looking", "interested", "applying", "worked", "years"}  # fmt: skip
 _PART = {"text": "string", "atom_ids": ["integer"]}
 _SCHEMA = {"message": _PART, "connection_note": _PART}
 
@@ -66,9 +73,20 @@ def _check(kind: str, part, job: Job, atoms: list[EvidenceAtom], limit: int) -> 
     res = verify_prose(text, [by_id[i] for i in ids])
     if not res.passed:
         return res.reason or "not supported by the cited evidence"
+    if _LINKISH.search(text):
+        return "contains a link or email address"
+    cited = [by_id[i] for i in ids]
+    evidence = {
+        w
+        for a in cited
+        for w in _WORDS.findall(f"{a.title} {a.description} {' '.join(a.skills or [])}".casefold())
+    } - _FILLER
+    if not evidence & (set(_WORDS.findall(text.casefold())) - _FILLER):
+        return "generic: mentions no specific evidence"
     low = text.casefold()
+    company = normalize(job.company) or job.company.casefold()
     # Title word: any word of length >= 4 from the job title, casefolded.
-    if job.company.casefold() not in low or not any(
+    if f" {company} " not in f" {normalize(text) or low} " or not any(
         len(w) >= 4 and w in low for w in job.title.casefold().split()
     ):
         return "generic: does not name the company and the role"

@@ -146,3 +146,15 @@ def test_digest_outreach_section(session):
         "  Follow-up due: #2 Co2\n"
         "Funnel:"
     ) in out
+
+
+def test_digest_sent_counts_distinct_contacts(session):
+    from jobhunt.outreach.models import Contact, Outreach
+
+    add(session, 1)
+    session.add(Contact(id=1, company="Co1", source="posting"))
+    session.add(Outreach(job_id=1, contact_id=1, kind="message", text="a", status="sent"))
+    session.add(Outreach(job_id=1, contact_id=1, kind="connection_note", text="b", status="sent"))
+    session.add(Outreach(job_id=1, contact_id=1, kind="followup", text="c", status="sent"))
+    session.commit()
+    assert "Outreach: 0 to send, 1 sent, 0 replied" in digest(session)

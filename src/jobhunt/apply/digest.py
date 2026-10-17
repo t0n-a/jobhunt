@@ -81,7 +81,14 @@ def build_digest(
     rows = session.exec(select(Outreach)).all()
     drafted = [o for o in rows if o.status == "drafted"]
     replied = sum(o.status == "replied" for o in rows)
-    sent_total = sum(o.status in ("sent", "replied") for o in rows)
+    # People written to, not rows: a message, note and follow-up to one person count once.
+    sent_total = len(
+        {
+            o.contact_id if o.contact_id is not None else f"row{o.id}"
+            for o in rows
+            if o.status in ("sent", "replied") and o.kind in ("message", "connection_note")
+        }
+    )
     if rows:
         out.append(f"Outreach: {len(drafted)} to send, {sent_total} sent, {replied} replied")
         for o in drafted[:5]:

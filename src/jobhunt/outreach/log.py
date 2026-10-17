@@ -22,6 +22,8 @@ log = logging.getLogger(__name__)
 # An application in any of these is live; a rejected or withdrawn one is not worth a recruiter's time.
 LIVE_STATUSES = ("queued", "approved", "sent")
 OPEN = ("drafted", "sent")
+# An unanswered draft must not block its company forever.
+STALE_DRAFT_DAYS = 14
 FIRST_KINDS = ("message", "connection_note")
 # status -> statuses it may move to
 TRANSITIONS = {"drafted": ("sent", "skipped"), "sent": ("replied",)}
@@ -40,10 +42,13 @@ def _utc(dt: datetime) -> datetime:
 
 
 def _open_companies(session: Session) -> set[str]:
+    cutoff = datetime.now(UTC) - timedelta(days=STALE_DRAFT_DAYS)
     rows = session.exec(
-        select(Job.company).join(Outreach, Outreach.job_id == Job.id).where(Outreach.status.in_(OPEN))
+        select(Job.company, Outreach.status, Outreach.created_at)
+        .join(Outreach, Outreach.job_id == Job.id)
+        .where(Outreach.status.in_(OPEN))
     ).all()
-    return {normalize(c) for c in rows}
+    return {normalize(c) for c, status, made in rows if status == "sent" or _utc(made) > cutoff}
 
 
 def _contacted(session: Session, contact: Contact) -> bool:
@@ -100,7 +105,8 @@ def draft_for_run(session: Session, config: Config, llm: LLMProvider) -> list[Ou
         if contact is None:
             continue
         result = draft_outreach(job, contact, atoms, llm, profile=config.profile)
-        if not result.drafts:
+        # A lone note would mark the contact contacted and never get its message.
+        if not any(d.kind == "message" for d in result.drafts):
             log.warning("outreach: no usable draft for job %s (%s); retry next run", job.id, result.dropped)
             continue
         for d in result.drafts:

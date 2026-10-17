@@ -177,3 +177,28 @@ def test_skipped_company_can_get_a_new_contact_later(session, tmp_path):
     third = add(session, "Three", 70000, company="Acme", recruiter="Ann Lee")
     assert third.id not in [j.id for j in candidates(session, cfg(tmp_path))]
     assert session.exec(select(Outreach)).all()
+
+
+def test_lone_connection_note_is_not_stored(session, tmp_path, monkeypatch):
+    seed_atom(session)
+    add(session, "One", 90000)
+    monkeypatch.setattr(
+        outlog, "draft_outreach",
+        lambda job, c, atoms, llm, *, profile: DraftResult(drafts=[Draft("connection_note", "Hi", [atoms[0].id])]),
+    )
+    assert draft_for_run(session, cfg(tmp_path), None) == []
+    assert session.exec(select(Outreach)).all() == []
+    assert len(candidates(session, cfg(tmp_path))) == 1
+
+
+def test_stale_drafted_does_not_block_company(session, tmp_path):
+    seed_atom(session)
+    job = add(session, "One", 90000)
+    old = Outreach(job_id=job.id, kind="message", text="x", created_at=datetime.now(UTC) - timedelta(days=15))
+    session.add(old)
+    session.commit()
+    assert len(candidates(session, cfg(tmp_path))) == 1
+    old.created_at = datetime.now(UTC) - timedelta(days=2)
+    session.add(old)
+    session.commit()
+    assert candidates(session, cfg(tmp_path)) == []
