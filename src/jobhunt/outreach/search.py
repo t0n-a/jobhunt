@@ -30,7 +30,9 @@ def _candidate(item: dict, company: str) -> ContactCandidate | None:
     if not _NAME.match(name) or _not_person(name):
         return None
     text = f"{title} {_clean(str(item.get('content') or ''))}"
-    if normalize(company) not in normalize(text) or not _RECRUITER.search(text):
+    # Whole words: "Acme" must not match a recruiter at "Acmeville Corp".
+    company_words = re.escape(normalize(company))
+    if not re.search(rf"\b{company_words}\b", normalize(text)) or not _RECRUITER.search(text):
         return None
     role = next((p.strip()[:_MAX_ROLE] for p in parts[1:] if _RECRUITER.search(p)), None)
     return ContactCandidate(name, role, f"https://www.linkedin.com/in/{url.group(1)}", None, "search")

@@ -122,3 +122,13 @@ def test_no_key_means_no_search(monkeypatch):
     assert outreach_log._search() is None
     monkeypatch.setenv("TAVILY_API_KEY", KEY)
     assert outreach_log._search() is not None
+
+
+
+@respx.mock
+def test_a_company_name_inside_another_word_is_not_a_match():
+    respx.post(TAVILY_URL).respond(200, json={"results": [{
+        "title": "Ana Lopes - Recruiter - Acmeville Corp | LinkedIn",
+        "url": "https://www.linkedin.com/in/ana", "content": "Recruiter at Acmeville Corp"}]})
+    with httpx.Client() as http:
+        assert search_recruiters("Acme", api_key="tvly-x", http=http) == []
