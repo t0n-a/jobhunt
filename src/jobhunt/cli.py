@@ -15,9 +15,8 @@ def load_env(dotenv_path: Path | str | None = None) -> bool:
     return load_dotenv(dotenv_path=target, override=False)
 
 
-def run_scan_command(config) -> str:
-    """Run one scan and return the one-line summary. Returns rather than prints
-    so the outcome is assertable in a test."""
+def scan_result(config):
+    """Run one scan; None when no sources are enabled."""
     import os
 
     from jobhunt.db import create_engine_for, init_db
@@ -28,17 +27,22 @@ def run_scan_command(config) -> str:
     init_db(engine)
     sources = build_sources(config.sources, os.environ.get("ITJOBS_API_KEY"))
     if not sources:
-        return (
-            "No sources enabled. Add company board slugs under `sources:` in "
-            "config.yaml, or enable an aggregator."
-        )
+        return None
     with httpx.Client(timeout=10) as client:
-        result = run_scan(
+        return run_scan(
             engine,
             sources,
             build_provider(config.llm),
             ranking=config.ranking,
             liveness_client=client,
+        )
+
+
+def summarize_scan(result) -> str:
+    if result is None:
+        return (
+            "No sources enabled. Add company board slugs under `sources:` in "
+            "config.yaml, or enable an aggregator."
         )
     parts = [
         f"fetched={result.fetched}",
@@ -62,10 +66,16 @@ def run_scan_command(config) -> str:
     return line
 
 
+def run_scan_command(config) -> str:
+    """Run one scan and return the one-line summary. Returns rather than prints
+    so the outcome is assertable in a test."""
+    return summarize_scan(scan_result(config))
+
+
 def main() -> None:
     load_env()
     parser = argparse.ArgumentParser(prog="jobhunt")
-    parser.add_argument("command", choices=["serve", "scan", "today", "notify", "shortlist", "tick"])
+    parser.add_argument("command", choices=["serve", "scan", "today", "notify", "shortlist", "tick", "daily"])
     parser.add_argument("--config", type=Path, default=Path("config.yaml"))
     parser.add_argument("--limit", type=int, default=30)
     parser.add_argument("--port", type=int, default=8000)
@@ -149,6 +159,33 @@ def main() -> None:
                 db, TelegramClient(token, chat_id, http), config, datetime.now(UTC)
             )
         print(f"handled={handled}")
+        return
+
+    if args.command == "daily":
+        import os
+        from datetime import UTC, datetime
+
+        from jobhunt.apply.daily import run_daily
+        from jobhunt.db import create_engine_for, init_db
+        from jobhunt.llm import build_provider
+        from jobhunt.telegram import TelegramClient
+
+        engine = create_engine_for(config.data_dir / "jobhunt.db")
+        init_db(engine)
+        token = os.environ.get("TELEGRAM_BOT_TOKEN")
+        chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+        with httpx.Client(timeout=15) as http:
+            client = TelegramClient(token, chat_id, http) if token and chat_id else None
+            print(
+                run_daily(
+                    config,
+                    engine=engine,
+                    llm=build_provider(config.llm),
+                    client=client,
+                    scan=lambda: scan_result(config),
+                    now=datetime.now(UTC),
+                )
+            )
         return
 
     uvicorn.run(create_app(config), host="127.0.0.1", port=args.port)
