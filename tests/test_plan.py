@@ -122,9 +122,11 @@ def test_llm_answers_are_verified():
     )
     plan = run(fields, atoms=[ATOM], llm=llm)
     assert [(p.name, p.source) for p in plan.filled] == [("ok", "evidence")]
-    assert {d["name"] for d in plan.dropped} == {"ghost", "sel", "years"}
+    # A select is never answered from evidence: it is not even asked.
+    assert {d["name"] for d in plan.dropped} == {"ghost", "years"}
     assert all(d["reason"] for d in plan.dropped)
     assert {f.name for f in plan.unknown} == {"ghost", "sel", "years"}
+    assert "Worked with Flask?" not in llm.prompts[0]
 
 
 def test_llm_error_leaves_fields_unknown():
@@ -157,3 +159,26 @@ def test_save_plan_persists(tmp_path):
         save_plan(s, app, plan)
         s.expire_all()
         assert FormPlan.from_json(s.get(Application, app.id).form_plan) == plan
+
+
+
+def test_eeo_never_goes_into_free_text():
+    plan = run([F("q", "Describe a time you embraced a challenge", "textarea"),
+                F("g", "Gender", "text")])
+    assert not plan.filled
+    assert {f.name for f in plan.unknown} == {"q", "g"}
+
+
+def test_only_processing_consent_is_ticked():
+    plan = run([
+        F("c1", "I consent to the processing of my personal data for this application", "checkbox"),
+        F("c2", "Send me marketing emails and future opportunities", "checkbox", required=False),
+        F("c3", "I have read the privacy notice", "checkbox"),
+    ])
+    filled = {p.name: p.value for p in plan.filled}
+    assert filled.get("c1") is True and filled.get("c3") is True and "c2" not in filled
+
+
+def test_privacy_notice_is_not_a_notice_period():
+    plan = run([F("n", "Privacy notice acknowledgement", "text", required=False)])
+    assert not plan.filled
