@@ -36,7 +36,8 @@ _PERIOD_WORDS = {
 
 _CUR = r"(?:[€£$]|\b(?:EUR|USD|GBP|CHF|SEK|NOK|DKK|PLN|CZK|CAD|AUD|SGD)\b)"
 # grouping (45.000 / 45,000) is tried before decimal (45,5 / 45.5); optional k suffix
-_NUM = r"(?:\d{1,3}(?:[.,]\d{3})+|\d+(?:[.,]\d+)?)(?:\s?[kK]\b)?"
+# grouping capped at 3 separators: an unbounded run makes int() in _num raise past 4300 digits
+_NUM = r"(?:\d{1,3}(?:[.,]\d{3}){1,3}|\d+(?:[.,]\d+)?)(?:\s?[kK]\b)?"
 _SEP = r"\s*(?:-|–|—|\bto\b|\ba\b)\s*"
 _SALARY = re.compile(
     rf"(?P<c1>{_CUR})\s?(?P<n1>{_NUM})(?:{_SEP}(?:{_CUR}\s?)?(?P<n2>{_NUM}))?"

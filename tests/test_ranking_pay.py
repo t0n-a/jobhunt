@@ -18,6 +18,10 @@ def test_monthly_gbp_to_annual_eur():
     assert s == Salary(3500, 3500, "GBP", "month")
     assert annual_eur(s) == 49140
 
+def test_huge_grouped_number_does_not_raise():
+    s = parse_salary("EUR 1" + ",000" * 1500 + " yearly")
+    assert s is None or isinstance(s, Salary)
+
 def test_hourly():
     assert annual_eur(parse_salary("EUR 40/hour")) == 83200
 
