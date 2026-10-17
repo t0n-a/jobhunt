@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inbox demos</title>
+<style>
+:root { --paper: oklch(96% 0.005 265); --ink: oklch(20% 0.01 265); --soft: oklch(45% 0.01 265); --line: oklch(85% 0.01 265); }
+@media (prefers-color-scheme: dark) { :root { --paper: oklch(16% 0.01 265); --ink: oklch(94% 0.01 265); --soft: oklch(70% 0.01 265); --line: oklch(32% 0.01 265); } }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.5 system-ui, sans-serif; padding: 20px 16px 60px; }
+h1 { margin: 0 0 4px; font-size: 22px; } p { margin: 0 0 18px; color: var(--soft); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr)); gap: 20px; }
+a.demo { color: inherit; text-decoration: none; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; display: block; }
+a.demo:focus-visible { outline: 3px solid oklch(60% 0.2 265); }
+.frame { height: 300px; overflow: hidden; position: relative; pointer-events: none; }
+.frame iframe { width: 1280px; height: 860px; border: 0; transform: scale(.35); transform-origin: 0 0; position: absolute; }
+.cap { padding: 10px 14px; border-top: 1px solid var(--line); } .cap b { display: block; }
+</style>
+</head>
+<body>
+<h1>Jobs inbox: five directions</h1>
+<p>Same sample data in each. Click one to open it full size, and try the keyboard where it says so.</p>
+<div class="grid">
+  <a class="demo" href="a-console.html"><div class="frame"><iframe src="a-console.html" tabindex="-1" title="Console preview"></iframe></div><div class="cap"><b>A · Console</b>Dense table + inspector, j/k and Enter, blinking “needs you”. Dark phosphor, light green-bar paper.</div></a>
+  <a class="demo" href="b-broadsheet.html"><div class="frame"><iframe src="b-broadsheet.html" tabindex="-1" title="Broadsheet preview"></iframe></div><div class="cap"><b>B · Broadsheet</b>Best match is the lead story, the rest are briefs and classifieds. Flags are an editor’s red pen.</div></a>
+  <a class="demo" href="c-board.html"><div class="frame"><iframe src="c-board.html" tabindex="-1" title="Board preview"></iframe></div><div class="cap"><b>C · Pipeline board</b>Brutalist kanban: stage is the layout, hazard strip for what needs you, drag cards between stages.</div></a>
+  <a class="demo" href="d-deck.html"><div class="frame"><iframe src="d-deck.html" tabindex="-1" title="Deck preview"></iframe></div><div class="cap"><b>D · Deck</b>One job at a time. ← pass, → do the next action, ↓ later. Soft and playful.</div></a>
+  <a class="demo" href="e-map.html"><div class="frame"><iframe src="e-map.html" tabindex="-1" title="Fit map preview"></iframe></div><div class="cap"><b>E · Fit map</b>A chart of fit against freshness, linked to the ranked list. Atmospheric night palette.</div></a>
+</div>
+</body>
+</html>
