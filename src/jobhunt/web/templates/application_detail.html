@@ -56,5 +56,13 @@
   <form method="post" action="/applications/{{ application.id }}/applied">
     <button type="submit">Mark as applied</button>
   </form>
+  {% if application.status == 'queued' %}
+    <form method="post" action="/applications/{{ application.id }}/approve">
+      <button type="submit" class="primary">Approve</button>
+    </form>
+    <form method="post" action="/applications/{{ application.id }}/skip">
+      <button type="submit">Skip</button>
+    </form>
+  {% endif %}
 </div>
 {% endblock %}

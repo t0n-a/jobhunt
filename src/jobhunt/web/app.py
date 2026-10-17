@@ -14,6 +14,7 @@ from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from jobhunt.apply import queue
 from jobhunt.coach.engine import Coach
 from jobhunt.coach.models import Energy
 from jobhunt.config import Config
@@ -505,6 +506,28 @@ def create_app(config: Config) -> FastAPI:
         with Session(app.state.engine) as db:
             mark_applied(db, _application(db, application_id))
         return flash(RedirectResponse("/applications", status_code=303), "Marked as applied.")
+
+    @app.post("/applications/{application_id}/approve")
+    def application_approve(application_id: int):
+        with Session(app.state.engine) as db:
+            try:
+                queue.approve(db, _application(db, application_id), config.autopilot)
+            except ValueError as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return flash(
+            RedirectResponse(f"/applications/{application_id}", status_code=303), "Approved."
+        )
+
+    @app.post("/applications/{application_id}/skip")
+    def application_skip(application_id: int):
+        with Session(app.state.engine) as db:
+            try:
+                queue.skip(db, _application(db, application_id))
+            except ValueError as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return flash(
+            RedirectResponse(f"/applications/{application_id}", status_code=303), "Skipped."
+        )
 
     def _previous_texts(store: LinkedinStore, version) -> dict[tuple[str, int], str]:
         """This version's predecessor's text, keyed the same way a field is: by

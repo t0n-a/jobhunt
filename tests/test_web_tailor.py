@@ -205,3 +205,34 @@ def test_the_unverified_header_fields_are_shown_for_review(make_client):
 
     assert "Backend Engineer" in text
     assert "not checked against your evidence" in text.casefold()
+
+
+def _queue(client):
+    from jobhunt.apply.tracker import set_status
+    from jobhunt.tailor.models import Application
+
+    with Session(client.engine) as db:
+        set_status(db, db.get(Application, 1), "queued")
+
+
+def test_queued_application_can_be_approved(make_client):
+    client = make_client(responses())
+    job_id = seed(client)
+    client.post(f"/jobs/{job_id}/tailor", follow_redirects=True)
+    _queue(client)
+
+    response = client.post("/applications/1/approve", follow_redirects=True)
+
+    assert "Approved." in response.text
+    from jobhunt.tailor.models import Application
+
+    with Session(client.engine) as db:
+        assert db.get(Application, 1).status == "approved"
+
+
+def test_approving_a_non_queued_application_is_409(make_client):
+    client = make_client(responses())
+    job_id = seed(client)
+    client.post(f"/jobs/{job_id}/tailor", follow_redirects=True)
+
+    assert client.post("/applications/1/approve").status_code == 409
