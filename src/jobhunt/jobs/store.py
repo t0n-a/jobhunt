@@ -25,6 +25,7 @@ class JobStore:
                 description=posting.description,
                 url=posting.url,
                 content_hash=posting.content_hash,
+                salary_text=posting.salary_text,
             )
         else:
             match.last_seen = datetime.now(UTC)
@@ -35,6 +36,9 @@ class JobStore:
                 match.content_hash = posting_hash(match.title, match.company, match.description)
             # A posting seen as remote anywhere is remote.
             match.remote = match.remote or posting.remote
+            # The first salary seen wins; a later duplicate never overwrites it.
+            if match.salary_text is None:
+                match.salary_text = posting.salary_text
 
         self.session.add(match)
         try:

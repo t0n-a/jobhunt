@@ -147,3 +147,12 @@ def test_list_jobs_respects_the_limit(store: JobStore):
     store.upsert_posting(make_posting(title="B", company="Two"))
 
     assert len(store.list_jobs(limit=1)) == 1
+
+
+def test_upsert_keeps_first_salary_text(store: JobStore):
+    store.upsert_posting(make_posting(salary_text=None))
+    job = store.upsert_posting(make_posting(external_id="2", salary_text="EUR 40000-50000 yearly"))
+    assert job.salary_text == "EUR 40000-50000 yearly"
+
+    job = store.upsert_posting(make_posting(external_id="3", salary_text="EUR 60000 yearly"))
+    assert job.salary_text == "EUR 40000-50000 yearly"
