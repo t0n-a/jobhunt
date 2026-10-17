@@ -61,7 +61,8 @@ def test_full_digest_layout(session):
         + _followup_text(session)
         + "  (done 3)\n"
         "Funnel: sent 2, replied 0, interview 0, offer 0\n"
-        "Trust: 0/10 clean approvals"
+        "Trust: 0/10 clean approvals\n"
+        "Autopilot: off, 0/10 today"
     )
 
 
@@ -106,3 +107,14 @@ def test_approved_not_yet_sent_are_listed(session):
     assert "Approved, apply when ready: 1" in text
     assert "#1 Dev1 @ Co1: sent 1 once it's out" in text
     assert text.index("Waiting on you") < text.index("Approved, apply when ready")
+
+
+def test_autopilot_line_and_suffix(session):
+    from jobhunt.state import set_state
+
+    add(session, 1, "sent", NOW - timedelta(hours=2)).channel = "autopilot"
+    session.commit()
+    set_state(session, "autopilot", "1")
+    out = digest(session)
+    assert "  #1 Dev1 @ Co1 (autopilot)" in out
+    assert out.endswith("Autopilot: on, 1/10 today")

@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from sqlmodel import Field, Session, SQLModel
 
 
@@ -8,6 +10,25 @@ class AppState(SQLModel, table=True):
 
     key: str = Field(primary_key=True)
     value: str
+
+
+class BlockedHost(SQLModel, table=True):
+    """A host autopilot must never submit to again (a failed submit may have gone through)."""
+
+    __tablename__ = "blocked_host"
+
+    host: str = Field(primary_key=True)
+    reason: str
+    at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+def block_host(session: Session, host: str, reason: str) -> None:
+    session.merge(BlockedHost(host=host, reason=reason))
+    _commit(session)
+
+
+def is_blocked(session: Session, host: str) -> bool:
+    return session.get(BlockedHost, host) is not None
 
 
 def get_state(session: Session, key: str, default: str | None = None) -> str | None:

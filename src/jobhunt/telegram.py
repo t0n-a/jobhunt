@@ -69,19 +69,23 @@ _NEEDS_ID = {"yes", "no", "sent", "done", "replied", "interview", "offer", "reje
 _NO_ARG = {"pause", "resume", "status", "help"}
 
 
-def parse_command(text: str) -> tuple[str, int | None] | None:
+def parse_command(text: str) -> tuple[str, int | str | None] | None:
     parts = text.strip().lstrip("/").replace(":", " ").split()
     if not parts:
         return None
     verb = parts[0].split("@")[0].lower()
     if verb in _NO_ARG and len(parts) == 1:
         return verb, None
+    if verb == "autopilot" and len(parts) == 2 and parts[1].lower() in ("on", "off"):
+        return verb, parts[1].lower()
     if verb in _NEEDS_ID and len(parts) == 2 and parts[1].isdigit():
         return verb, int(parts[1])
     return None
 
 
-def queue_message(application, job, score, facts, web_url: str) -> tuple[str, list[list[dict]]]:
+def queue_message(
+    application, job, score, facts, web_url: str, note: str = ""
+) -> tuple[str, list[list[dict]]]:
     pay = "pay ?"
     if facts is not None and facts.pay_yearly_eur:
         pay = f"€{facts.pay_yearly_eur:,}" + (" (est.)" if facts.pay_estimated else "")
@@ -92,6 +96,8 @@ def queue_message(application, job, score, facts, web_url: str) -> tuple[str, li
         f"{job.url}\n"
         f"Review: {web_url}/applications/{application.id}"
     )
+    if note:
+        text += f"\nAutopilot stopped: {note}"
     buttons = [
         [
             {"text": "Yes", "callback_data": f"yes:{application.id}"},

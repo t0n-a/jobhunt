@@ -5,6 +5,7 @@ from datetime import datetime
 import httpx
 from sqlmodel import Session, select
 
+from jobhunt.apply.autopilot import autosubmit
 from jobhunt.apply.digest import build_digest
 from jobhunt.apply.followup import mark_cold
 from jobhunt.apply.prepare import prepare_plan
@@ -14,17 +15,25 @@ from jobhunt.config import Config
 from jobhunt.jobs.models import Job, JobFacts, Score
 from jobhunt.scan import ScanResult
 from jobhunt.state import is_paused
+from jobhunt.tailor.models import ApplicationEvent
 from jobhunt.telegram import TelegramClient, queue_message
 
 log = logging.getLogger(__name__)
 
 
 def _send_queued(session: Session, client: TelegramClient, application, web_url: str) -> None:
+    last = session.exec(
+        select(ApplicationEvent)
+        .where(ApplicationEvent.application_id == application.id)
+        .order_by(ApplicationEvent.id.desc())
+    ).first()
+    prefix = "autopilot stopped: "
+    note = last.note[len(prefix) :] if last and last.note.startswith(prefix) else ""
     job = session.get(Job, application.job_id)
     score = session.exec(
         select(Score).where(Score.job_id == job.id, Score.content_hash == job.content_hash)
     ).first()
-    text, buttons = queue_message(application, job, score, session.get(JobFacts, job.id), web_url)
+    text, buttons = queue_message(application, job, score, session.get(JobFacts, job.id), web_url, note)
     client.send(text, buttons)
 
 
@@ -61,8 +70,13 @@ def run_daily(
                         except Exception:  # one unreadable form must not stop the run
                             log.warning("form plan failed for #%s", application.id, exc_info=True)
                             session.rollback()
+                if not is_paused(session):
+                    autosubmit(session, config, now=now)
                 if client:
                     for application in run.queued:
+                        session.refresh(application)
+                        if application.status != "queued":
+                            continue
                         _send_queued(session, client, application, config.autopilot.web_url)
             except Exception as exc:
                 log.warning("daily tailoring failed", exc_info=True)

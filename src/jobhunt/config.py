@@ -120,6 +120,12 @@ class AutopilotConfig(BaseModel):
     heavy_edit_limit: int = 2
     # Where review links in Telegram messages point.
     web_url: str = "http://127.0.0.1:8000"
+    # Stricter than the shortlist: only strong matches go out unseen.
+    autopilot_fit: int = 85
+    # Spec: starts around 10 a day; raise it here.
+    daily_cap: int = 10
+    # ATS types that may auto-submit at all.
+    ats_allowlist: list[str] = ["greenhouse", "lever", "ashby"]
 
 
 class Config(BaseModel):

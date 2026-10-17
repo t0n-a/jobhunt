@@ -162,3 +162,37 @@ def test_daily_survives_a_failing_plan(engine, monkeypatch):
     client = FakeClient()
     out = go(engine, client)
     assert seen == [1, 2] and client.sent[-1] == (out, None)
+
+
+def test_autosubmit_runs_and_submitted_rows_are_not_queued(engine, monkeypatch):
+    fake_tailor(monkeypatch, engine)
+
+    def fake(session, config, *, now):
+        set_status(session, session.get(Application, 1), "sent")
+
+    monkeypatch.setattr(daily, "autosubmit", fake)
+    client = FakeClient()
+    go(engine, client)
+    assert len(client.sent) == 2  # one queue message + digest
+    assert client.sent[0][0].startswith("#2 ")
+
+
+def test_autosubmit_skipped_when_paused(engine, monkeypatch):
+    fake_tailor(monkeypatch, engine)
+    called = []
+    monkeypatch.setattr(daily, "autosubmit", lambda *a, **k: called.append(1))
+    with Session(engine) as s:
+        set_paused(s, True)
+    go(engine, FakeClient())
+    assert called == []
+
+
+def test_stopped_note_is_in_queue_message(engine, monkeypatch):
+    fake_tailor(monkeypatch, engine)
+    monkeypatch.setattr(daily, "autosubmit", lambda *a, **k: None)
+    with Session(engine) as s:
+        add_event(s, s.get(Application, 1), "queued", note="autopilot stopped: captcha")
+    client = FakeClient()
+    go(engine, client)
+    assert client.sent[0][0].endswith("Autopilot stopped: captcha")
+    assert "Autopilot stopped" not in client.sent[1][0]

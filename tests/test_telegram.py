@@ -28,6 +28,10 @@ TOKEN = "123:SECRET"
         ("interview 3", ("interview", 3)),
         ("offer 3", ("offer", 3)),
         ("rejected 3", ("rejected", 3)),
+        ("autopilot on", ("autopilot", "on")),
+        ("/Autopilot OFF", ("autopilot", "off")),
+        ("autopilot", None),
+        ("autopilot maybe", None),
         ("yes", None),
         ("hello", None),
         ("sent twelve", None),
@@ -106,3 +110,10 @@ def test_queue_message_strips_control_and_bidi_characters():
     assert "\u202e" not in text and "\u2066" not in text and "\x07" not in text
     assert "\u200e" not in text
     assert "Devevil @ Acmex" in text
+
+
+def test_queue_message_autopilot_note():
+    app = SimpleNamespace(id=1)
+    job = SimpleNamespace(title="T", company="C", location="", url="u")
+    text, _ = queue_message(app, job, None, None, "http://w", "captcha")
+    assert text.endswith("\nAutopilot stopped: captcha")

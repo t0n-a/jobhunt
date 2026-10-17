@@ -3,6 +3,7 @@ from datetime import datetime
 
 from sqlmodel import Session, select
 
+from jobhunt.apply.autopilot import autopilot_on, set_autopilot
 from jobhunt.apply.followup import followups_due, mark_followup_done
 from jobhunt.apply.plan import FormPlan
 from jobhunt.apply.queue import approve, autopilot_available, skip, trust_count
@@ -17,13 +18,13 @@ logger = logging.getLogger(__name__)
 
 HELP = (
     "Commands: yes N, no N (queue), sent N, replied N, interview N, offer N, rejected N, "
-    "done N (follow-up sent), pause, resume, status."
+    "done N (follow-up sent), pause, resume, status, autopilot on|off."
 )
 SENDABLE = ("drafted", "queued", "approved")
 
 
 def handle_command(
-    session: Session, verb: str, arg: int | None, config: Config, now: datetime
+    session: Session, verb: str, arg: int | str | None, config: Config, now: datetime
 ) -> str:
     cfg = config.autopilot
     target = cfg.trust_target
@@ -35,12 +36,15 @@ def handle_command(
     if verb == "resume":
         set_paused(session, False)
         return "Resumed."
+    if verb == "autopilot":
+        return set_autopilot(session, arg == "on", cfg)
     if verb == "status":
         queued = len(session.exec(select(Application).where(Application.status == "queued")).all())
         return (
             f"{'Paused' if is_paused(session) else 'Running'}. Queued: {queued}. "
             f"Follow-ups due: {len(followups_due(session, now))}. "
-            f"Trust: {trust_count(session)}/{target}."
+            f"Trust: {trust_count(session)}/{target}. "
+            f"Autopilot: {'on' if autopilot_on(session) else 'off'}."
         )
 
     application = session.get(Application, arg)

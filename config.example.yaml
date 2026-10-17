@@ -40,6 +40,9 @@ data_dir: ./data
 #   trust_target: 10        # clean approvals before autopilot can be switched on
 #   heavy_edit_limit: 2     # more edited/deleted bullets than this earns no trust
 #   web_url: http://127.0.0.1:8000   # where Telegram review links point
+#   autopilot_fit: 85       # only fit this high or more may go out unseen
+#   daily_cap: 10           # most applications autopilot submits per day
+#   ats_allowlist: [greenhouse, lever, ashby]   # ATS types that may auto-submit
 
 sources:
   enabled:
