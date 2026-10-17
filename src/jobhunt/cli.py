@@ -1,6 +1,7 @@
 import argparse
 from pathlib import Path
 
+import httpx
 import uvicorn
 from dotenv import load_dotenv
 
@@ -31,7 +32,14 @@ def run_scan_command(config) -> str:
             "No sources enabled. Add company board slugs under `sources:` in "
             "config.yaml, or enable an aggregator."
         )
-    result = run_scan(engine, sources, build_provider(config.llm))
+    with httpx.Client(timeout=10) as client:
+        result = run_scan(
+            engine,
+            sources,
+            build_provider(config.llm),
+            ranking=config.ranking,
+            liveness_client=client,
+        )
     parts = [
         f"fetched={result.fetched}",
         f"jobs={result.jobs}",
@@ -39,6 +47,10 @@ def run_scan_command(config) -> str:
     ]
     if result.unscored_remaining:
         parts.append(f"unscored={result.unscored_remaining}")
+    if result.filtered:
+        parts.append(f"filtered={result.filtered}")
+    if result.expired:
+        parts.append(f"expired={result.expired}")
     if result.failed_sources:
         parts.append(f"failed={','.join(result.failed_sources)}")
     if result.timed_out_sources:
@@ -53,8 +65,9 @@ def run_scan_command(config) -> str:
 def main() -> None:
     load_env()
     parser = argparse.ArgumentParser(prog="jobhunt")
-    parser.add_argument("command", choices=["serve", "scan", "today", "notify"])
+    parser.add_argument("command", choices=["serve", "scan", "today", "notify", "shortlist"])
     parser.add_argument("--config", type=Path, default=Path("config.yaml"))
+    parser.add_argument("--limit", type=int, default=30)
     parser.add_argument("--port", type=int, default=8000)
     args = parser.parse_args()
 
@@ -62,6 +75,22 @@ def main() -> None:
 
     if args.command == "scan":
         print(run_scan_command(config))
+        return
+
+    if args.command == "shortlist":
+        from sqlmodel import Session
+
+        from jobhunt.db import create_engine_for, init_db
+        from jobhunt.ranking.shortlist import render_line, shortlist
+
+        engine = create_engine_for(config.data_dir / "jobhunt.db")
+        init_db(engine)
+        with Session(engine) as db:
+            ranked = shortlist(db, config.ranking, limit=args.limit)
+            print(
+                "\n".join(render_line(r) for r in ranked)
+                or "Nothing on the shortlist yet. Run `jobhunt scan` first."
+            )
         return
 
     if args.command in ("today", "notify"):

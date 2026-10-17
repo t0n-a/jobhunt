@@ -94,6 +94,12 @@ opening, and scores each one against your **confirmed** atoms. Results appear at
 `/jobs`, ranked by fit, with a track breakdown ("backend · 12, ai · 6") so the
 data can tell you what kind of role you actually match.
 
+Before any LLM call, cheap rules drop senior roles and postings needing a
+language you don't list, and flag visa difficulty and pay (posted, or a labelled
+estimate). `uv run jobhunt shortlist` prints the survivors ranked by pay first
+(visa-hard last, unknown pay after known), then fit; closed postings are checked
+for and removed.
+
 Scoring refuses to run against an empty profile: with nothing to match, the
 model rates whichever job demands least, which is a confidently wrong ranking.
 Build the profile first.

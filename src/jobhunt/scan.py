@@ -1,16 +1,21 @@
 import logging
 import time
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 
+import httpx
 from sqlmodel import Session, select
 
-from jobhunt.config import SourcesConfig
+from jobhunt.config import RankingConfig, SourcesConfig
 from jobhunt.counselor.scoring import scoring_block
-from jobhunt.jobs.models import Job, Score
+from jobhunt.jobs.liveness import check_liveness
+from jobhunt.jobs.models import Job, JobFacts, Score
 from jobhunt.jobs.store import JobStore
 from jobhunt.llm import LLMError, LLMProvider
 from jobhunt.matching.score import score_job
 from jobhunt.profile.store import AtomStore
+from jobhunt.ranking.rules import triage
+from jobhunt.ranking.shortlist import shortlist
 from jobhunt.sources.ats import AshbySource, GreenhouseSource, LeverSource
 from jobhunt.sources.hackernews import HackerNewsSource
 from jobhunt.sources.jobspy_source import JobSpySource
@@ -49,6 +54,8 @@ class ScanResult:
     timed_out_sources: list[str] = field(default_factory=list)
     scoring_skipped: str | None = None
     unscored_remaining: int = 0
+    filtered: int = 0
+    expired: int = 0
 
 
 def build_sources(cfg: SourcesConfig, itjobs_key: str | None) -> list:
@@ -125,6 +132,8 @@ def run_scan(
     llm: LLMProvider,
     deadline_seconds: int = SOURCE_DEADLINE_SECONDS,
     scoring_deadline_seconds: int = SCORING_DEADLINE_SECONDS,
+    ranking: RankingConfig | None = None,
+    liveness_client: httpx.Client | None = None,
 ) -> ScanResult:
     """Fetch every source, dedupe into jobs, and score anything unscored.
 
@@ -133,6 +142,7 @@ def run_scan(
     a source that overruns its deadline keeps what it collected;
     a failing score leaves the job stored but unscored, never dropped.
     """
+    ranking = ranking or RankingConfig()
     result = ScanResult()
     postings = []
 
@@ -172,7 +182,18 @@ def run_scan(
 
         result.jobs = len(seen_job_ids)
 
-        queue = list(seen_job_ids) + _sweep_unscored(session, skip=seen_job_ids)
+        _triage_all(session, ranking)
+        filtered_ids = {
+            f.job_id
+            for f in session.exec(select(JobFacts).where(JobFacts.filtered_reason.is_not(None)))
+        }
+        result.filtered = len(filtered_ids & seen_job_ids)
+
+        queue = [
+            j
+            for j in list(seen_job_ids) + _sweep_unscored(session, skip=seen_job_ids)
+            if j not in filtered_ids
+        ]
         started = time.monotonic()
         for index, job_id in enumerate(queue if atoms else []):
             if time.monotonic() - started >= scoring_deadline_seconds:
@@ -204,9 +225,43 @@ def run_scan(
                 session.rollback()
                 raise
 
-        result.unscored_remaining = len(_unscored_job_ids(session))
+        result.unscored_remaining = len(
+            [j for j in _unscored_job_ids(session) if j not in filtered_ids]
+        )
+        if liveness_client is not None:
+            result.expired = _check_liveness(session, ranking, liveness_client)
 
     return result
+
+
+def _triage_all(session: Session, cfg: RankingConfig) -> None:
+    """Compute rule facts for jobs lacking them or whose text changed since."""
+    facts = {f.job_id: f for f in session.exec(select(JobFacts)).all()}
+    for job in session.exec(select(Job)).all():
+        old = facts.get(job.id)
+        if old is not None and old.content_hash == job.content_hash:
+            continue
+        new = triage(job, cfg)
+        if old is not None:
+            new.liveness, new.liveness_checked_at = old.liveness, old.liveness_checked_at
+            session.delete(old)
+            session.flush()
+        session.add(new)
+    session.commit()
+
+
+def _check_liveness(session: Session, cfg: RankingConfig, client: httpx.Client) -> int:
+    """Probe the top shortlist entries not checked in 24h; return how many are expired."""
+    cutoff = datetime.now(UTC) - timedelta(hours=24)
+    for r in shortlist(session, cfg)[: cfg.liveness_check_limit]:
+        checked = r.facts.liveness_checked_at
+        if checked is not None and checked.replace(tzinfo=UTC) > cutoff:
+            continue
+        r.facts.liveness = check_liveness(r.job.url, client)
+        r.facts.liveness_checked_at = datetime.now(UTC)
+        session.add(r.facts)
+    session.commit()
+    return len(session.exec(select(JobFacts).where(JobFacts.liveness == "expired")).all())
 
 
 def _unscored_job_ids(session: Session) -> list[int]:

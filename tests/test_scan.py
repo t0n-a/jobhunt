@@ -310,7 +310,9 @@ def test_deadline_stops_between_items_but_cannot_preempt_a_blocking_fetch(tmp_pa
 def test_scoring_stops_at_its_deadline_and_reports_what_is_left(tmp_path):
     """A 200-job scan is 40 minutes; the user must be able to bound it."""
     engine = fresh(tmp_path)
-    postings = [posting(title=f"Role {i}", company=f"Co{i}") for i in range(5)]
+    postings = [
+        posting(title=f"Role {c}", company=f"Co{c}") for c in "abcde"
+    ]  # digits would trip the level rules
 
     result = run_scan(
         engine,
@@ -337,3 +339,70 @@ def test_a_previously_unscored_job_is_retried_on_the_next_scan(tmp_path):
 def test_build_sources_includes_jobspy_sites():
     sources = build_sources(SourcesConfig(enabled=["linkedin", "indeed"]), None)
     assert [s.name for s in sources] == ["linkedin", "indeed"]
+
+
+def _live_client(status=200):
+    import httpx
+
+    return httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(status, text="ok")))
+
+
+def test_senior_job_is_filtered_before_scoring(tmp_path):
+    engine = fresh(tmp_path)
+    llm = FakeProvider([score_payload()])
+    client = _live_client()
+
+    result = run_scan(
+        engine,
+        [StubSource("stub", [posting("Senior Backend Engineer"), posting("Backend Engineer")])],
+        llm,
+        liveness_client=client,
+    )
+
+    assert result.filtered == 1
+    assert result.scored == 1
+    with Session(engine) as session:
+        scores = session.exec(select(Score)).all()
+        assert len(scores) == 1
+        assert session.get(Job, scores[0].job_id).title == "Backend Engineer"
+
+
+def test_triage_reruns_when_content_changes(tmp_path):
+    from jobhunt.jobs.models import JobFacts
+
+    engine = fresh(tmp_path)
+    client = _live_client()
+    run_scan(
+        engine,
+        [StubSource("stub", [posting(description="Python.")])],
+        FakeProvider([score_payload()]),
+        liveness_client=client,
+    )
+    run_scan(
+        engine,
+        [StubSource("stub", [posting(description="Python and Redis. Fluent German required.")])],
+        FakeProvider([score_payload()]),
+        liveness_client=client,
+    )
+
+    with Session(engine) as session:
+        assert session.exec(select(JobFacts)).one().filtered_reason == "language:german"
+
+
+def test_expired_job_leaves_the_shortlist(tmp_path):
+    from jobhunt.config import RankingConfig
+    from jobhunt.ranking.shortlist import shortlist
+
+    engine = fresh(tmp_path)
+    client = _live_client(404)
+
+    result = run_scan(
+        engine,
+        [StubSource("stub", [posting()])],
+        FakeProvider([score_payload(fit_score=85)]),
+        liveness_client=client,
+    )
+
+    assert result.expired == 1
+    with Session(engine) as session:
+        assert shortlist(session, RankingConfig()) == []
