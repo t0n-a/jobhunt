@@ -40,5 +40,6 @@ def build_provider(cfg: LLMConfig) -> LLMProvider:
             api_key=api_key,
             model=cfg.model,
             timeout_seconds=cfg.timeout_seconds,
+            min_interval_seconds=cfg.min_interval_seconds,
         )
     return CachingProvider(inner, cfg.cache_dir)

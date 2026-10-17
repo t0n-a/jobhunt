@@ -61,6 +61,7 @@ The default provider is `agy`, running Google Gemini models via the Antigravity 
 
 - **WSL Path Translation:** When jobhunt runs inside WSL and uses the Windows binary (`agy.exe`), the provider automatically translates temporary JSON-schema paths using `wslpath -w` so the Windows binary can read them.
 - **OpenAI Compatible API:** Set `llm.provider: openai_compat` with `OPENAI_BASE_URL` and `OPENAI_API_KEY` in `.env` to use any OpenAI-compatible endpoint (OpenRouter, Gemini, a local server) instead of the Antigravity CLI.
+- **Free Google AI Studio key:** Get a key at aistudio.google.com/apikey. In `.env`, set `OPENAI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/` and `OPENAI_API_KEY=<key>`. In `config.yaml`, set `llm.provider: openai_compat`, `llm.model: gemini-flash-latest`, and `llm.min_interval_seconds: 6` (the free tier allows about 10 requests a minute). jobhunt spaces requests that far apart and retries once after a 429, waiting the `Retry-After` seconds (default 30, capped at 60). Free-tier prompts may be used by Google for training. On the free tier, Google may use your prompts and responses to improve its products. Your CV and profile are in those prompts. If that is not acceptable, use a paid key (same settings, billing enabled) or the agy provider.
 - **Disk Cache:** All LLM responses are cached on disk under `llm.cache_dir` (default: `./data/llm_cache`), keyed by model, prompt, and schema. Re-runs are free.
 
 ## Environment Variables
@@ -92,6 +93,12 @@ Fetches from every enabled source, deduplicates postings that describe the same
 opening, and scores each one against your **confirmed** atoms. Results appear at
 `/jobs`, ranked by fit, with a track breakdown ("backend · 12, ai · 6") so the
 data can tell you what kind of role you actually match.
+
+Before any LLM call, cheap rules drop senior roles and postings needing a
+language you don't list, and flag visa difficulty and pay (posted, or a labelled
+estimate). `uv run jobhunt shortlist` prints the survivors ranked by pay first
+(visa-hard last, unknown pay after known), then fit; closed postings are checked
+for and removed.
 
 Scoring refuses to run against an empty profile: with nothing to match, the
 model rates whichever job demands least, which is a confidently wrong ranking.

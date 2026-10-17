@@ -42,6 +42,7 @@ class RawPosting(SQLModel, table=True):
     location: str | None = None
     remote: bool = False
     description: str
+    salary_text: str | None = None
     posted_at: datetime | None = None
     fetched_at: datetime = Field(default_factory=_now)
     content_hash: str
@@ -59,6 +60,7 @@ class Job(SQLModel, table=True):
     location: str | None = None
     remote: bool = False
     description: str
+    salary_text: str | None = None
     url: str
     first_seen: datetime = Field(default_factory=_now)
     last_seen: datetime = Field(default_factory=_now)
@@ -84,3 +86,23 @@ class Score(SQLModel, table=True):
     model: str = ""
     content_hash: str
     scored_at: datetime = Field(default_factory=_now)
+
+
+class JobFacts(SQLModel, table=True):
+    """Rule-based facts about a job, computed once per content hash for filters and ranking."""
+
+    __tablename__ = "job_facts"
+
+    job_id: int = Field(primary_key=True, foreign_key="job.id")
+    content_hash: str
+    level: str
+    languages_required: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    country: str | None = None
+    visa: str
+    pay_yearly_eur: int | None = None
+    pay_estimated: bool = False
+    pay_source: str | None = None
+    filtered_reason: str | None = None
+    liveness: str | None = None
+    liveness_checked_at: datetime | None = None
+    triaged_at: datetime = Field(default_factory=_now)

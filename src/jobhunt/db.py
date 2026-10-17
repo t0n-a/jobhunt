@@ -1,6 +1,7 @@
 from contextlib import contextmanager
 from pathlib import Path
 
+from sqlalchemy import inspect
 from sqlmodel import Session, SQLModel, create_engine
 
 
@@ -21,6 +22,36 @@ def init_db(engine) -> None:
     import jobhunt.tailor.models  # noqa: F401  (registers tables)
 
     SQLModel.metadata.create_all(engine)
+    ensure_columns(engine)
+
+
+def ensure_columns(engine) -> list[str]:
+    """Add model columns missing from existing tables; returns the "table.column" names added.
+
+    shortcut: additive-only (no type change, no drop), upgrade to Alembic when a column must change.
+    """
+    added: list[str] = []
+    with engine.begin() as conn:
+        inspector = inspect(conn)
+        for table in SQLModel.metadata.sorted_tables:
+            if not inspector.has_table(table.name):
+                continue
+            present = {c["name"] for c in inspector.get_columns(table.name)}
+            for column in table.columns:
+                if column.name in present:
+                    continue
+                ddl = f"{column.name} {column.type.compile(dialect=engine.dialect)}"
+                if not column.nullable:
+                    if column.default is None or not column.default.is_scalar:
+                        raise RuntimeError(
+                            f"cannot add {table.name}.{column.name}: "
+                            "NOT NULL needs a scalar default"
+                        )
+                    literal = column.type.literal_processor(engine.dialect)(column.default.arg)
+                    ddl += f" NOT NULL DEFAULT {literal}"
+                conn.exec_driver_sql(f"ALTER TABLE {table.name} ADD COLUMN {ddl}")
+                added.append(f"{table.name}.{column.name}")
+    return added
 
 
 @contextmanager

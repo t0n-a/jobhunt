@@ -24,12 +24,34 @@ class LLMConfig(BaseModel):
     model: str = "gemini-3.8-flash-medium"
     binary: str = "agy.exe"
     timeout_seconds: int = 300
+    # Minimum gap between request starts; free API tiers cap requests per minute.
+    min_interval_seconds: float = 0.0
     cache_dir: Path = Path("./data/llm_cache")
+
+
+class JobSpyConfig(BaseModel):
+    # Broad on purpose: triage drops senior titles before scoring.
+    search_terms: list[str] = Field(
+        default_factory=lambda: [
+            "software engineer",
+            "software developer",
+            "backend developer",
+            "frontend developer",
+            "full stack developer",
+            "python developer",
+        ]
+    )
+    locations: list[str] = Field(default_factory=lambda: ["Portugal", "European Union", "Remote"])
+    results_wanted: int = 50
+    hours_old: int = 72
+    country_indeed: str = "portugal"
 
 
 class SourcesConfig(BaseModel):
     enabled: list[str] = Field(
         default_factory=lambda: [
+            "linkedin",
+            "indeed",
             "greenhouse",
             "lever",
             "ashby",
@@ -40,6 +62,7 @@ class SourcesConfig(BaseModel):
             "hackernews",
         ]
     )
+    jobspy: JobSpyConfig = Field(default_factory=JobSpyConfig)
     greenhouse: list[str] = Field(default_factory=list)
     lever: list[str] = Field(default_factory=list)
     ashby: list[str] = Field(default_factory=list)
@@ -73,10 +96,23 @@ class SourcesConfig(BaseModel):
     )
 
 
+class RankingConfig(BaseModel):
+    # Languages the candidate works in; a posting requiring any other language is dropped.
+    languages: list[str] = Field(default_factory=lambda: ["english", "portuguese"])
+    # fit_score bands: below shortlist_fit is dropped, from strong_fit up is a strong match.
+    shortlist_fit: int = 40
+    strong_fit: int = 80
+    # Outside the EU a job is "ok" only if it mentions sponsorship or pays at least this.
+    min_pay_outside_eu: int = 60_000
+    # Most postings to liveness-check per run, so a large backlog cannot stall a scan.
+    liveness_check_limit: int = 50
+
+
 class Config(BaseModel):
     profile: ProfileConfig
     llm: LLMConfig = Field(default_factory=LLMConfig)
     sources: SourcesConfig = Field(default_factory=SourcesConfig)
+    ranking: RankingConfig = Field(default_factory=RankingConfig)
     data_dir: Path = Path("./data")
 
 

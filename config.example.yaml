@@ -15,8 +15,20 @@ llm:
   binary: agy.exe          # resolved on PATH; agy.exe works from inside WSL
   timeout_seconds: 300
   cache_dir: ./data/llm_cache
+  # Free Google AI Studio variant (keys in .env; see README "LLM Provider"):
+  # provider: openai_compat
+  # model: gemini-flash-latest
+  # min_interval_seconds: 6  # free tier allows about 10 requests a minute
 
 data_dir: ./data
+
+# Ranking. Defaults shown; uncomment to change.
+# ranking:
+#   languages: [english, portuguese]   # postings requiring any other language are dropped
+#   shortlist_fit: 40                  # fit scores below this are not shortlisted
+#   strong_fit: 80                     # fit scores from this up are strong matches
+#   min_pay_outside_eu: 60000          # yearly EUR a non-EU job must pay to stay in the running
+#   liveness_check_limit: 50           # postings checked for closed listings per run
 
 # Job sources. Company boards are where most real postings originate — the large
 # aggregators mostly re-host them — so filling in the three ATS lists below
@@ -24,6 +36,9 @@ data_dir: ./data
 # last path segment of its careers URL.
 sources:
   enabled:
+    # LinkedIn is scraped logged-out and is best-effort; it may be blocked on any run.
+    - linkedin
+    - indeed
     - greenhouse
     - lever
     - ashby

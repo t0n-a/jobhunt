@@ -2,7 +2,7 @@ import pytest
 from sqlmodel import Session
 
 from jobhunt.db import create_engine_for, init_db
-from jobhunt.jobs.dedupe import is_duplicate, normalize
+from jobhunt.jobs.dedupe import is_duplicate, normalize, role_match, url_key
 from jobhunt.jobs.models import Job, RawPosting, posting_hash
 from jobhunt.jobs.store import JobStore
 
@@ -16,10 +16,11 @@ def store(tmp_path):
 
 
 def make_posting(**over) -> RawPosting:
+    d_slug = (over.get("company", "Acme Inc.") + "-" + over.get("title", "Senior Backend Engineer (m/f)")).lower().replace(" ", "-").replace("(", "").replace(")", "").replace("/", "-")
     d = {
         "source": "greenhouse",
         "external_id": "1",
-        "url": "https://example.com/1",
+        "url": f"https://example.com/{d_slug}",
         "title": "Senior Backend Engineer (m/f)",
         "company": "Acme Inc.",
         "description": "Build APIs.",
@@ -146,4 +147,49 @@ def test_list_jobs_respects_the_limit(store: JobStore):
     store.upsert_posting(make_posting(title="A", company="One"))
     store.upsert_posting(make_posting(title="B", company="Two"))
 
+    assert len(store.list_jobs(limit=10)) == 2
     assert len(store.list_jobs(limit=1)) == 1
+
+
+def test_postings_with_empty_urls_are_not_duplicates_by_url():
+    """Both URLs empty would share a key of ""; that must not count as the same posting."""
+    posting = make_posting(url="", title="Backend Engineer", company="One")
+    job = make_job(url="", title="Platform Engineer", company="Three")
+    assert is_duplicate(posting, job) is False
+
+
+def test_upsert_keeps_first_salary_text(store: JobStore):
+    store.upsert_posting(make_posting(salary_text=None))
+    job = store.upsert_posting(make_posting(external_id="2", salary_text="EUR 40000-50000 yearly"))
+    assert job.salary_text == "EUR 40000-50000 yearly"
+
+    job = store.upsert_posting(make_posting(external_id="3", salary_text="EUR 60000 yearly"))
+    assert job.salary_text == "EUR 40000-50000 yearly"
+
+
+def test_url_key_strips_tracking_and_normalises_linkedin():
+    assert url_key("https://www.Example.com/jobs/1/?utm_source=x&gh_src=y#apply") == "https://example.com/jobs/1"
+    assert url_key("https://boards.greenhouse.io/acme/jobs/1?gh_jid=1") == "https://boards.greenhouse.io/acme/jobs/1?gh_jid=1"
+    assert url_key("https://pt.linkedin.com/jobs/view/backend-dev-at-acme-4012345678?trk=abc") == "linkedin.com/jobs/view/4012345678"
+    assert url_key("https://www.linkedin.com/jobs/search/?currentJobId=4012345678") == "linkedin.com/jobs/view/4012345678"
+
+def test_url_key_fails_safe_on_malformed_urls():
+    assert url_key("http://[bad") == ""
+
+
+def test_is_duplicate_falls_back_to_company_and_title_on_malformed_urls():
+    posting = make_posting(url="http://[bad")
+    assert is_duplicate(posting, make_job(url="http://[bad")) is True
+    assert is_duplicate(posting, make_job(url="http://[bad", title="Data Engineer")) is False
+
+def test_role_match_rules():
+    assert role_match("Backend Developer", "Backend Engineer")
+    assert role_match("Backend Software Engineer", "Backend Engineer")
+    assert not role_match("Senior Backend Engineer", "Backend Engineer")
+    assert not role_match("Software Engineer II", "Software Engineer III")
+    assert not role_match("Python Backend Engineer", "Backend Engineer")
+    assert not role_match("Data Engineer", "Platform Engineer")
+
+def test_same_job_on_linkedin_and_ats_is_duplicate():
+    p = make_posting(title="Backend Developer", company="Acme", url="https://linkedin.com/jobs/view/1")
+    assert is_duplicate(p, make_job(title="Backend Engineer", company="Acme Inc."))
