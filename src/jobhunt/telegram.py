@@ -116,6 +116,11 @@ def queue_message(
 COPY_LIMIT = 256  # Telegram's copy_text button limit
 
 
+def _clean_lines(text: str) -> str:
+    """_clean per line: it strips newlines too, and drafts keep their paragraphs."""
+    return "\n".join(_clean(line) for line in text.split("\n"))
+
+
 def outreach_message(outreach, job, contact, web_url: str) -> list[tuple[str, list[list[dict]] | None]]:
     """Header with buttons, then the draft alone so a long-press copies it cleanly."""
     name = _clean(contact.name or "") or "the talent team"
@@ -127,13 +132,14 @@ def outreach_message(outreach, job, contact, web_url: str) -> list[tuple[str, li
     if contact.profile_url:
         lines.append(_clean(contact.profile_url))
     lines.append("Copy the text below, send it yourself, then tap Sent.")
+    text = _clean_lines(outreach.text)  # model output can echo page text
     buttons: list[list[dict]] = []
-    if len(outreach.text) <= COPY_LIMIT:
-        buttons.append([{"text": "Copy", "copy_text": {"text": outreach.text}}])
+    if len(text) <= COPY_LIMIT:
+        buttons.append([{"text": "Copy", "copy_text": {"text": text}}])
     buttons.append(
         [
             {"text": "Sent", "callback_data": f"osent:{outreach.id}"},
             {"text": "Skip", "callback_data": f"oskip:{outreach.id}"},
         ]
     )
-    return [("\n".join(lines), buttons), (outreach.text, None)]
+    return [("\n".join(lines), buttons), (text, None)]

@@ -180,3 +180,17 @@ def test_queue_message_extra_is_its_own_paragraph_and_capped():
     _, _, rest = text.partition("\n\n")
     assert rest.startswith("line one\nline two")
     assert len(rest) == 1200
+
+
+
+def test_outreach_text_is_cleaned_but_keeps_paragraphs():
+    from types import SimpleNamespace
+
+    from jobhunt.telegram import outreach_message
+
+    o = SimpleNamespace(id=3, kind="message", text="Hi Ana,\n\nI built \u202eX at Acme.")
+    job = SimpleNamespace(title="Dev", company="Acme")
+    contact = SimpleNamespace(name="Ana", role=None, profile_url=None)
+    (_, buttons), (body, _) = outreach_message(o, job, contact, "http://x")
+    assert body == "Hi Ana,\n\nI built X at Acme."
+    assert buttons[0][0]["copy_text"]["text"] == body
