@@ -24,6 +24,8 @@ class LLMConfig(BaseModel):
     model: str = "gemini-3.8-flash-medium"
     binary: str = "agy.exe"
     timeout_seconds: int = 300
+    # Minimum gap between request starts; free API tiers cap requests per minute.
+    min_interval_seconds: float = 0.0
     cache_dir: Path = Path("./data/llm_cache")
 
 

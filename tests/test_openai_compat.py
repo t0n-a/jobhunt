@@ -61,3 +61,30 @@ def test_api_key_is_sent_and_never_appears_in_the_error_message():
 
     assert "k" not in str(excinfo.value).replace("Bearer", "")
     assert route.calls.last.request.headers["authorization"] == "Bearer k"
+
+
+def test_retries_once_on_429_after_retry_after(respx_mock):
+    route = respx_mock.post("https://x/v1/chat/completions").mock(side_effect=[
+        httpx.Response(429, headers={"Retry-After": "7"}),
+        httpx.Response(200, json={"choices": [{"message": {"content": "hi"}}]}),
+    ])
+    slept = []
+    p = OpenAICompatProvider("https://x/v1", "k", "m", sleep=slept.append)
+    assert p.complete("q") == "hi"
+    assert slept == [7] and route.call_count == 2
+
+def test_second_429_raises(respx_mock):
+    respx_mock.post("https://x/v1/chat/completions").mock(return_value=httpx.Response(429))
+    p = OpenAICompatProvider("https://x/v1", "k", "m", sleep=lambda s: None)
+    with pytest.raises(LLMError):
+        p.complete("q")
+
+def test_min_interval_spaces_calls(respx_mock):
+    respx_mock.post("https://x/v1/chat/completions").mock(
+        return_value=httpx.Response(200, json={"choices": [{"message": {"content": "a"}}]}))
+    slept, now = [], [100.0]
+    p = OpenAICompatProvider("https://x/v1", "k", "m", min_interval_seconds=6,
+                             sleep=lambda s: (slept.append(s), now.__setitem__(0, now[0] + s)),
+                             clock=lambda: now[0])
+    p.complete("1"); now[0] += 2; p.complete("2")
+    assert slept == [4]
