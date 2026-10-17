@@ -1,5 +1,6 @@
 """The pay-first shortlist: scored, triaged, still-open jobs in the order worth applying to."""
 
+import re
 from dataclasses import dataclass
 
 from sqlmodel import Session, select
@@ -41,6 +42,13 @@ def shortlist(session: Session, cfg: RankingConfig, limit: int | None = None) ->
     return ranked[:limit]
 
 
+_CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f]")  # C0, DEL, C1 (ESC starts terminal sequences)
+
+
+def _clean(value: str | None) -> str:
+    return _CONTROL.sub("", value or "")
+
+
 def render_line(r: RankedJob) -> str:
     pay = r.facts.pay_yearly_eur
     if pay is None:
@@ -49,5 +57,6 @@ def render_line(r: RankedJob) -> str:
         pay_text = f"€{pay:,}" + (" (est.)" if r.facts.pay_estimated else "")
     return (
         f"{pay_text} | fit {r.score.fit_score} | {r.facts.visa} | "
-        f"{r.job.title} @ {r.job.company} | {r.job.location or 'location ?'} | {r.job.url}"
+        f"{_clean(r.job.title)} @ {_clean(r.job.company)} | "
+        f"{_clean(r.job.location) or 'location ?'} | {_clean(r.job.url)}"
     )

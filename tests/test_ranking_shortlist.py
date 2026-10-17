@@ -85,3 +85,14 @@ def test_render_line_marks_estimates():
     assert render_line(RankedJob(job, score, facts)) == line
     facts.pay_yearly_eur = None
     assert render_line(RankedJob(job, score, facts)).startswith("pay ? | fit 80")
+
+
+def test_render_line_strips_control_characters():
+    job = Job(title="\x1b[31mEvil\x1b[0m", company="A\x07cme", location="B\x9berlin",
+              description="d", url="u\x1b]0;x", content_hash="h")
+    score = Score(job_id=1, fit_score=80, seniority_fit="ok", track="b", rationale="r",
+                  content_hash="h")
+    facts = JobFacts(job_id=1, content_hash="h", level="junior", visa="easy")
+    line = render_line(RankedJob(job, score, facts))
+    assert "\x1b" not in line and "\x07" not in line and "\x9b" not in line
+    assert "[31mEvil[0m @ Acme | Berlin | u]0;x" in line
