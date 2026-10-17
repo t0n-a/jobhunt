@@ -1,5 +1,6 @@
 import os
 import shutil
+import tempfile
 from collections import Counter
 from contextlib import contextmanager
 from datetime import UTC, date, datetime
@@ -49,6 +50,7 @@ from jobhunt.web.home import home_state
 
 HERE = Path(__file__).parent
 CERTIFICATE_MAX_BYTES = 10 * 1024 * 1024
+_CERT_MAGIC = {".pdf": b"%PDF", ".png": b"\x89PNG", ".jpg": b"\xff\xd8\xff"}
 
 
 @contextmanager
@@ -257,17 +259,31 @@ def create_app(config: Config) -> FastAPI:
         filename = sanitized_name if sanitized_name else f"certificate{suffix}"
         certificates = config.data_dir / "certificates"
         certificates.mkdir(parents=True, exist_ok=True)
-        target = certificates / filename
         size = 0
-        with target.open("wb") as out:
-            while chunk := file.file.read(1024 * 1024):
-                size += len(chunk)
-                if size > CERTIFICATE_MAX_BYTES:
-                    break
-                out.write(chunk)
-        if size > CERTIFICATE_MAX_BYTES:
-            target.unlink(missing_ok=True)
-            raise HTTPException(status_code=400, detail="Certificate is larger than 10 MB")
+        head = b""
+        fd, tmp_name = tempfile.mkstemp(dir=certificates, prefix=".upload-")
+        tmp = Path(tmp_name)
+        try:
+            with os.fdopen(fd, "wb") as out:
+                while chunk := file.file.read(1024 * 1024):
+                    head = head or chunk[:4]
+                    size += len(chunk)
+                    if size > CERTIFICATE_MAX_BYTES:
+                        break
+                    out.write(chunk)
+            if size > CERTIFICATE_MAX_BYTES:
+                raise HTTPException(status_code=400, detail="Certificate is larger than 10 MB")
+            if not head.startswith(_CERT_MAGIC[".jpg" if suffix == ".jpeg" else suffix]):
+                raise HTTPException(status_code=400, detail="File content does not match its type")
+            # Never overwrite an earlier certificate: name-1, name-2, ... before the suffix.
+            stem, n = Path(filename).stem, 0
+            target = certificates / filename
+            while target.exists():
+                n += 1
+                target = certificates / f"{stem}-{n}{suffix}"
+            os.replace(tmp, target)
+        finally:
+            tmp.unlink(missing_ok=True)
 
         issuer_part = f" ({issuer})" if issuer else ""
         issued_part = f", issued {issued_on}" if issued_on else ""

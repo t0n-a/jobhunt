@@ -96,3 +96,34 @@ def test_certificate_bad_date_is_400(client):
 
     assert response.status_code == 400
     assert _atoms(client) == []
+
+
+def test_certificate_same_name_never_overwrites(client, tmp_path):
+    for body in (b"%PDF-first", b"%PDF-second"):
+        client.post("/import/certificate", data={"name": "A"}, files={"file": ("aws.pdf", body, "application/pdf")})
+    assert (tmp_path / "certificates" / "aws.pdf").read_bytes() == b"%PDF-first"
+    assert (tmp_path / "certificates" / "aws-1.pdf").read_bytes() == b"%PDF-second"
+    assert [a.source_ref for a in _atoms(client)] == ["certificates/aws.pdf", "certificates/aws-1.pdf"]
+
+
+def test_oversized_same_name_upload_keeps_the_earlier_file(client, tmp_path):
+    client.post("/import/certificate", data={"name": "A"}, files={"file": ("aws.pdf", b"%PDF-first", "application/pdf")})
+    r = client.post(
+        "/import/certificate", data={"name": "B"},
+        files={"file": ("aws.pdf", b"%PDF" + b"0" * TEN_MB, "application/pdf")},
+    )
+    assert r.status_code == 400
+    assert (tmp_path / "certificates" / "aws.pdf").read_bytes() == b"%PDF-first"
+    assert sorted(p.name for p in (tmp_path / "certificates").iterdir()) == ["aws.pdf"]
+
+
+@pytest.mark.parametrize("name", ["c.pdf", "c.png", "c.jpg"])
+def test_certificate_content_must_match_type(client, tmp_path, name):
+    r = client.post("/import/certificate", data={"name": "A"}, files={"file": (name, b"MZ not an image", "x/y")})
+    assert r.status_code == 400 and _atoms(client) == []
+    assert not (tmp_path / "certificates").exists() or list((tmp_path / "certificates").iterdir()) == []
+
+
+def test_certificate_jpeg_magic_accepted(client):
+    r = client.post("/import/certificate", data={"name": "A"}, files={"file": ("c.jpeg", b"\xff\xd8\xff\xe0x", "image/jpeg")})
+    assert r.status_code == 200
