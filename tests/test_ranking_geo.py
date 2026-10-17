@@ -58,3 +58,12 @@ def test_negation_does_not_cross_clause_punctuation():
     assert mentions_sponsorship("We sponsor visas, no remote work")
     assert mentions_sponsorship("Visa sponsorship available, not for contractors")
     assert not mentions_sponsorship("We are unable to offer visa sponsorship.")
+
+def test_us_state_code_beats_a_city_alias():
+    assert country_of("Paris, TX") == "US"
+
+def test_state_code_that_is_also_a_country_code_does_not_win():
+    assert country_of("Delhi, IN") == "IN"
+
+def test_san_francisco_ca_is_us():
+    assert country_of("San Francisco, CA") == "US"

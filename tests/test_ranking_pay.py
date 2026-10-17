@@ -73,3 +73,9 @@ def test_real_salaries_next_to_bonus_or_equity_still_parse():
     ]:
         s = parse_salary(text)
         assert s == Salary(amount, amount, "EUR", "year"), text
+
+def test_range_with_currency_after_the_second_number():
+    assert parse_salary("50-60k EUR") == Salary(50_000, 60_000, "EUR", "year")
+
+def test_range_with_k_on_both_sides():
+    assert parse_salary("40k-55k EUR per year") == Salary(40_000, 55_000, "EUR", "year")

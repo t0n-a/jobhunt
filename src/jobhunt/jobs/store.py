@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 
 from sqlmodel import Session, select
 
-from jobhunt.jobs.dedupe import is_duplicate
+from jobhunt.jobs.dedupe import normalize, role_match, url_key
 from jobhunt.jobs.models import Job, RawPosting, posting_hash
 
 
@@ -11,10 +11,12 @@ class JobStore:
 
     def __init__(self, session: Session):
         self.session = session
+        self._by_url: dict[str, Job] | None = None
+        self._by_company: dict[str, list[Job]] = {}
 
     def upsert_posting(self, posting: RawPosting) -> Job:
         """Attach a raw posting to an existing Job, or create one."""
-        match = next((job for job in self._all_jobs() if is_duplicate(posting, job)), None)
+        match = self._find_duplicate(posting)
 
         if match is None:
             match = Job(
@@ -44,6 +46,7 @@ class JobStore:
         try:
             self.session.commit()
             self.session.refresh(match)
+            self._index(match)
             posting.job_id = match.id
             self.session.add(posting)
             self.session.commit()
@@ -51,6 +54,31 @@ class JobStore:
             self.session.rollback()
             raise
         return match
+
+    def _index(self, job: Job) -> None:
+        if (key := url_key(job.url)) and self._by_url is not None:
+            self._by_url.setdefault(key, job)
+        bucket = self._by_company.setdefault(normalize(job.company), [])
+        if job not in bucket:
+            bucket.append(job)
+
+    def _find_duplicate(self, posting: RawPosting) -> Job | None:
+        # Same matching as dedupe.is_duplicate, via indexes built once per store.
+        if self._by_url is None:
+            self._by_url = {}
+            self._by_company = {}
+            for job in self._all_jobs():
+                self._index(job)
+        if (key := url_key(posting.url)) and key in self._by_url:
+            return self._by_url[key]
+        return next(
+            (
+                j
+                for j in self._by_company.get(normalize(posting.company), [])
+                if role_match(posting.title, j.title)
+            ),
+            None,
+        )
 
     def add_manual(self, title: str, company: str, description: str, url: str) -> Job:
         """Create a job from text the user pasted in themselves."""

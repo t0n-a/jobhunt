@@ -4,16 +4,19 @@ from collections import Counter
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import httpx
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.exception_handlers import http_exception_handler
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from jobhunt.apply import queue
+from jobhunt.apply.tracker import NEXT_STATUSES, next_statuses, set_status
 from jobhunt.coach.engine import Coach
 from jobhunt.coach.models import Energy
 from jobhunt.config import Config
@@ -64,6 +67,9 @@ def _importer_errors():
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
+LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
+
+
 def create_app(config: Config) -> FastAPI:
     app = FastAPI(title="jobhunt")
 
@@ -76,6 +82,24 @@ def create_app(config: Config) -> FastAPI:
     templates.env.globals["profile_name"] = config.profile.name
     templates.env.globals["read_flash"] = read_flash
     app.state.templates = templates
+
+    @app.middleware("http")
+    async def local_only(request: Request, call_next):
+        """Refuse what a web page elsewhere could make the browser send to this local app.
+
+        Any site the candidate visits can post a form to 127.0.0.1, and a rebound DNS name
+        can read pages here; approving an application must only ever be the candidate's click.
+        """
+        host = (request.headers.get("host") or "").rsplit(":", 1)[0].strip("[]")
+        if host not in LOCAL_HOSTS:
+            return PlainTextResponse("jobhunt only answers on localhost.", status_code=403)
+        if request.method not in ("GET", "HEAD", "OPTIONS"):
+            origin = request.headers.get("origin")
+            cross_site = request.headers.get("sec-fetch-site") == "cross-site"
+            # Same host AND port: another local app (localhost:3000) is a different origin.
+            if cross_site or (origin and urlsplit(origin).netloc != request.headers.get("host")):
+                return PlainTextResponse("Cross-site request refused.", status_code=403)
+        return await call_next(request)
 
     @app.middleware("http")
     async def clear_flash(request: Request, call_next):
@@ -415,12 +439,17 @@ def create_app(config: Config) -> FastAPI:
     def application_detail(request: Request, application_id: int):
         with Session(app.state.engine) as db:
             application = _application(db, application_id)
+            if application.status == "queued" and application.reviewed_at is None:
+                application.reviewed_at = datetime.now(UTC)
+                db.add(application)
+                db.commit()
             job = JobStore(db).get(application.job_id)
             return templates.TemplateResponse(
                 request,
                 "application_detail.html",
                 {
                     "application": application,
+                    "next_statuses": next_statuses(application.status),
                     "job": job,
                     "bullets": iter_bullets(application.resume_json),
                 },
@@ -505,6 +534,42 @@ def create_app(config: Config) -> FastAPI:
         with Session(app.state.engine) as db:
             mark_applied(db, _application(db, application_id))
         return flash(RedirectResponse("/applications", status_code=303), "Marked as applied.")
+
+    @app.post("/applications/{application_id}/status")
+    def application_status(application_id: int, status: str = Form(...)):
+        with Session(app.state.engine) as db:
+            application = _application(db, application_id)
+            if application.status not in NEXT_STATUSES.get(status, ()):
+                raise HTTPException(
+                    status_code=409, detail=f"#{application_id} is {application.status}"
+                )
+            set_status(db, application, status)
+        return flash(
+            RedirectResponse(f"/applications/{application_id}", status_code=303),
+            f"Marked as {status}.",
+        )
+
+    @app.post("/applications/{application_id}/approve")
+    def application_approve(application_id: int):
+        with Session(app.state.engine) as db:
+            try:
+                queue.approve(db, _application(db, application_id), config.autopilot)
+            except ValueError as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return flash(
+            RedirectResponse(f"/applications/{application_id}", status_code=303), "Approved."
+        )
+
+    @app.post("/applications/{application_id}/skip")
+    def application_skip(application_id: int):
+        with Session(app.state.engine) as db:
+            try:
+                queue.skip(db, _application(db, application_id))
+            except ValueError as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return flash(
+            RedirectResponse(f"/applications/{application_id}", status_code=303), "Skipped."
+        )
 
     def _previous_texts(store: LinkedinStore, version) -> dict[tuple[str, int], str]:
         """This version's predecessor's text, keyed the same way a field is: by

@@ -45,6 +45,7 @@ class JobSpyConfig(BaseModel):
     results_wanted: int = 50
     hours_old: int = 72
     country_indeed: str = "portugal"
+    deadline_seconds: int = 600
 
 
 class SourcesConfig(BaseModel):
@@ -108,12 +109,27 @@ class RankingConfig(BaseModel):
     liveness_check_limit: int = 50
 
 
+class AutopilotConfig(BaseModel):
+    # Shortlist jobs tailored per daily run; each costs about three LLM calls.
+    tailor_per_run: int = 5
+    # Never more than this many applications waiting on the candidate.
+    max_waiting: int = 10
+    # Clean approvals before autopilot can be switched on (spec: "the first ~10").
+    trust_target: int = 10
+    # An approval with more edited or deleted bullets than this is "heavy" and earns no trust.
+    heavy_edit_limit: int = 2
+    # Where review links in Telegram messages point.
+    web_url: str = "http://127.0.0.1:8000"
+
+
 class Config(BaseModel):
     profile: ProfileConfig
     llm: LLMConfig = Field(default_factory=LLMConfig)
     sources: SourcesConfig = Field(default_factory=SourcesConfig)
     ranking: RankingConfig = Field(default_factory=RankingConfig)
+    autopilot: AutopilotConfig = Field(default_factory=AutopilotConfig)
     data_dir: Path = Path("./data")
+    answers_path: Path = Path("answers.yaml")
 
 
 def load_config(path: Path) -> Config:

@@ -65,3 +65,28 @@ def test_years_range_uses_lower_bound():
     assert level_of("Backend Engineer", "2-5 years of experience.") == "mid"
     assert level_of("Backend Engineer", "5-7 years of experience.") == "senior"
     assert level_of("Backend Engineer", "5+ years of experience.") == "senior"
+
+
+def test_trailing_arabic_digit_is_not_seniority():
+    assert level_of("Python Developer 3", "") == "mid"
+
+def test_level_prefix_digit_is_seniority():
+    assert level_of("Software Engineer L4", "") == "senior"
+    assert level_of("Software Engineer Level 3", "") == "senior"
+
+def test_roman_numeral_stays_senior():
+    assert level_of("Software Engineer III", "") == "senior"
+
+def test_junior_word_beats_lead_head_manager():
+    assert level_of("Lead Generation Intern", "") == "junior"
+    assert level_of("Junior Product Manager", "") == "junior"
+
+def test_lead_alone_is_still_senior():
+    assert level_of("Tech Lead", "") == "senior"
+    assert level_of("Engineering Manager", "") == "senior"
+
+def test_no_pay_means_no_pay_source():
+    job = Job(id=1, title="Dev", company="A", description="d", url="u", content_hash="h",
+              location="Atlantis")
+    facts = triage(job, RankingConfig())
+    assert facts.pay_yearly_eur is None and facts.pay_source is None

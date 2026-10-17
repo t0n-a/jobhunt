@@ -40,6 +40,10 @@ def _closed_banner(text: str) -> bool:
     return False
 
 
+# A closed banner sits near the top; a huge body is noise and a memory risk.
+MAX_BODY_BYTES = 2_000_000
+
+
 def classify(status: int, original_url: str, final_url: str, text: str) -> str:
     if status in (404, 410):
         return "expired"
@@ -83,7 +87,13 @@ def check_liveness(url: str, client: httpx.Client) -> str:
     try:
         if not _probe_allowed(url):
             return "uncertain"
-        resp = client.get(url, follow_redirects=True)
+        with client.stream("GET", url, follow_redirects=True) as resp:
+            body = b""
+            for chunk in resp.iter_bytes():
+                body += chunk
+                if len(body) >= MAX_BODY_BYTES:
+                    break
+            text = body[:MAX_BODY_BYTES].decode(resp.encoding or "utf-8", errors="replace")
+            return classify(resp.status_code, url, str(resp.url), text)
     except (httpx.HTTPError, httpx.InvalidURL, ValueError, UnicodeError):
         return "uncertain"
-    return classify(resp.status_code, url, str(resp.url), resp.text)

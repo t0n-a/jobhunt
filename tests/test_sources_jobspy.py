@@ -66,3 +66,8 @@ def test_uses_the_current_jobspy_description_kwarg():
     list(JobSpySource("linkedin", CFG, scrape=scrape).fetch())
     assert kwargs["fetch_description"] is True
     assert "linkedin_fetch_description" not in kwargs
+
+
+def test_deadline_comes_from_config():
+    src = JobSpySource("linkedin", JobSpyConfig(deadline_seconds=42), scrape=lambda **kw: None)
+    assert src.deadline_seconds == 42

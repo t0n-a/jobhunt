@@ -42,7 +42,21 @@ cp .env.example .env
 uv run jobhunt serve
 ```
 
-Then open http://localhost:8000. Both `config.yaml` and `.env` are gitignored.
+Then open http://localhost:8000. Both `config.yaml` and `.env` are gitignored. On a fresh install,
+`uv run jobhunt setup` (below) does the copying and filling for you.
+
+## Guided Setup
+
+```bash
+uv sync
+uv run jobhunt setup
+```
+
+`setup` asks, in order: your name, email and location; a free AI Studio key (read the training warning first); a Telegram bot token from @BotFather, then a one-time code you send to your bot so only your chat is bound; your standard answers (work authorisation, salary range, and so on); the path to your CV, which it imports and walks you through confirming fact by fact; and whether to install the daily and 5-minute timers. Press Enter to skip any step; rerunning keeps what exists.
+
+Telegram commands: yes N, no N (queue), sent N (you applied), replied N, interview N, offer N, rejected N, done N (follow-up sent), pause, resume, status. "yes" means *you* apply, using the prepared PDF, then send `sent N`. Autopilot stays off in this version.
+
+Timers can be installed later with `uv run jobhunt install-timers`; run `loginctl enable-linger $USER` so they fire while you are logged out.
 
 ## First Run, In Order
 
@@ -61,7 +75,7 @@ The default provider is `agy`, running Google Gemini models via the Antigravity 
 
 - **WSL Path Translation:** When jobhunt runs inside WSL and uses the Windows binary (`agy.exe`), the provider automatically translates temporary JSON-schema paths using `wslpath -w` so the Windows binary can read them.
 - **OpenAI Compatible API:** Set `llm.provider: openai_compat` with `OPENAI_BASE_URL` and `OPENAI_API_KEY` in `.env` to use any OpenAI-compatible endpoint (OpenRouter, Gemini, a local server) instead of the Antigravity CLI.
-- **Free Google AI Studio key:** Get a key at aistudio.google.com/apikey. In `.env`, set `OPENAI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/` and `OPENAI_API_KEY=<key>`. In `config.yaml`, set `llm.provider: openai_compat`, `llm.model: gemini-flash-latest`, and `llm.min_interval_seconds: 6` (the free tier allows about 10 requests a minute). jobhunt spaces requests that far apart and retries once after a 429, waiting the `Retry-After` seconds (default 30, capped at 60). Free-tier prompts may be used by Google for training. On the free tier, Google may use your prompts and responses to improve its products. Your CV and profile are in those prompts. If that is not acceptable, use a paid key (same settings, billing enabled) or the agy provider.
+- **Free Google AI Studio key:** Get a key at aistudio.google.com/apikey. In `.env`, set `OPENAI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/` and `OPENAI_API_KEY=<key>`. In `config.yaml`, set `llm.provider: openai_compat`, `llm.model: gemini-flash-latest`, and `llm.min_interval_seconds: 6` (the free tier allows about 10 requests a minute). jobhunt spaces requests that far apart and retries once after a 429, waiting the `Retry-After` seconds (default 30, capped at 60). On the free tier, Google may use your prompts and responses to improve its products. Your CV and profile are in those prompts. If that is not acceptable, use a paid key (same settings, billing enabled) or the agy provider.
 - **Disk Cache:** All LLM responses are cached on disk under `llm.cache_dir` (default: `./data/llm_cache`), keyed by model, prompt, and schema. Re-runs are free.
 
 ## Environment Variables

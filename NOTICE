@@ -8,6 +8,6 @@ autopilot-jobhunt (https://github.com/tarunlnmiit/autopilot-jobhunt, MIT) was
 evaluated during design and informed the module layout, but no code or data from
 it was used.
 
-career-ops (https://github.com/career-ops-hq/career-ops, MIT) — the dedupe rules, the liveness classifier and the salary text rules are reimplemented from its ideas; no code copied verbatim.
+career-ops (https://github.com/career-ops-hq/career-ops, MIT) — the dedupe rules, the liveness classifier, the salary text rules and the follow-up cadence (nudges at 7 d, then 7 d apart, max 2, then cold; replied 1 d then 3 d; interview thank-you at 1 d) are reimplemented from its ideas; no code copied verbatim.
 
 JobSpy (https://github.com/speedyapply/JobSpy, MIT) is a dependency, used to read LinkedIn and Indeed listings.

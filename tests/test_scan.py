@@ -458,3 +458,58 @@ def test_a_later_salary_replaces_the_estimated_pay(tmp_path):
     with Session(engine) as session:
         facts = session.exec(select(JobFacts)).one()
         assert (facts.pay_estimated, facts.pay_yearly_eur, facts.pay_source) == (False, 50000, "posted")
+
+
+def test_unparseable_salary_text_is_triaged_once(tmp_path):
+    from jobhunt.jobs.models import JobFacts
+
+    engine = fresh(tmp_path)
+    for _ in range(2):
+        p = posting()
+        p.salary_text = "competitive"
+        run_scan(engine, [StubSource("s", [p])], FakeProvider([score_payload()]),
+                 liveness_client=_live_client())
+        with Session(engine) as session:
+            stamp = session.exec(select(JobFacts)).one().triaged_at
+        if _ == 0:
+            first = stamp
+    assert stamp == first
+
+
+def test_expired_counts_only_this_scan(tmp_path):
+    from jobhunt.jobs.models import JobFacts
+
+    engine = fresh(tmp_path)
+    run_scan(engine, [StubSource("s", [posting()])], FakeProvider([score_payload()]))
+    with Session(engine) as session:
+        old = Job(title="Old", company="Z", description="x", url="https://e.com/old",
+                  content_hash=posting_hash("Old", "Z", "x"))
+        session.add(old)
+        session.commit()
+        session.add(JobFacts(job_id=old.id, content_hash=old.content_hash, level="mid", visa="unknown", liveness="expired"))
+        session.commit()
+    result = run_scan(engine, [StubSource("s", [])], FakeProvider([]), liveness_client=_live_client())
+    assert result.expired == 0
+
+
+def test_filtered_ids_use_current_facts(tmp_path, monkeypatch):
+    from jobhunt import scan as scan_mod
+
+    engine = fresh(tmp_path)
+    run_scan(engine, [StubSource("s", [posting("Senior Backend Engineer")])],
+             FakeProvider([score_payload()]), liveness_client=_live_client())
+    monkeypatch.setattr(scan_mod, "triage", lambda job, cfg: 1 / 0)
+    changed = posting("Senior Backend Engineer", description="Python, Redis and much more text.")
+    result = run_scan(engine, [StubSource("s", [changed])], FakeProvider([score_payload()]),
+                      liveness_client=_live_client())
+    assert result.filtered == 0
+    assert result.scored == 1
+
+
+def test_a_source_can_carry_its_own_deadline(tmp_path):
+    items = [posting(f"Backend Engineer {i}", company=f"C{i}") for i in range(10)]
+    slow = StubSource("slow", items, delay=0.2)
+    slow.deadline_seconds = 0.5
+    result = run_scan(fresh(tmp_path), [slow], FakeProvider([]), deadline_seconds=60)
+    assert "slow" in result.timed_out_sources
+    assert 0 < result.fetched < 10

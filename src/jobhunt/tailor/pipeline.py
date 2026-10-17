@@ -1,8 +1,8 @@
-from datetime import UTC, datetime
 from pathlib import Path
 
 from sqlmodel import Session
 
+from jobhunt.apply.tracker import set_status
 from jobhunt.config import ProfileConfig
 from jobhunt.jobs.models import Job
 from jobhunt.llm import LLMProvider
@@ -100,12 +100,10 @@ def render_application(
 
 
 def mark_applied(session: Session, application: Application) -> Application:
-    application.status = "applied"
-    application.applied_at = datetime.now(UTC)
-    session.add(application)
-    _commit(session)
-    session.refresh(application)
-    return application
+    # Past "sent" already: re-marking would restart the follow-up clock.
+    if application.status not in ("drafted", "queued", "approved"):
+        return application
+    return set_status(session, application, "sent")
 
 
 def _commit(session: Session) -> None:

@@ -221,5 +221,17 @@ def test_mark_applied_records_when(session):
 
     updated = mark_applied(session, application)
 
-    assert updated.status == "applied"
+    assert updated.status == "sent"
     assert updated.applied_at is not None
+
+
+def test_mark_applied_never_moves_a_reply_back_to_sent(session):
+    from jobhunt.apply.tracker import events_for, set_status
+
+    job, atom = seed_job(session), seed_atom(session)
+    application = tailor_job(session, job, FakeProvider(responses(atom.id)), profile=profile())
+    set_status(session, application, "sent")
+    set_status(session, application, "replied")
+    mark_applied(session, application)
+    assert application.status == "replied"
+    assert [e.kind for e in events_for(session, application.id)] == ["sent", "replied"]

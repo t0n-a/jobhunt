@@ -1,0 +1,20 @@
+# Standard answers for application forms.
+# Copy to answers.yaml, or run `jobhunt setup`.
+
+# Work authorisation, as you would state it on a form.
+work_authorization: "EU citizen; no sponsorship needed in the EU/EEA"  # used only for work-authorisation questions (wave 3)
+# Whether you need visa sponsorship for roles outside the EU/EEA.
+needs_sponsorship_outside_eu: true  # used only for sponsorship questions (wave 3)
+notice_period: "2 weeks"  # used only for notice-period questions (wave 3)
+# Expected gross annual salary range, in euros.
+salary_min_eur: 45000  # used only for salary questions (wave 3)
+salary_max_eur: 60000  # used only for salary questions (wave 3)
+relocation: false  # used only for relocation questions (wave 3)
+remote: true  # used only for remote-work questions (wave 3)
+
+# EEO and diversity questions. "Prefer not to say" unless you choose otherwise.
+gender: "Prefer not to say"  # used only for gender EEO questions (wave 3)
+ethnicity: "Prefer not to say"  # used only for ethnicity EEO questions (wave 3)
+disability: "Prefer not to say"  # used only for disability EEO questions (wave 3)
+veteran: "Prefer not to say"  # used only for veteran EEO questions (wave 3)
+data_processing_consent: true  # used only for data-processing consent checkboxes (wave 3)

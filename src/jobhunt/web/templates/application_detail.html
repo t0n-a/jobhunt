@@ -4,7 +4,7 @@
 {% block content %}
 <h2>{{ job.title if job }} — {{ job.company if job }}</h2>
 <p>
-  <span class="pill{% if application.status == 'applied' %} ok{% endif %}">{{ application.status }}</span>
+  <span class="pill{% if application.status in ('sent', 'replied', 'interview', 'offer') %} ok{% endif %}">{{ application.status }}</span>
   {%- if application.coverage is not none %} <span class="pill">{{ application.coverage }}% keyword coverage</span>{% endif %}
 </p>
 
@@ -53,8 +53,24 @@
   {% if application.pdf_path %}
     <a href="/applications/{{ application.id }}/pdf">Download the PDF</a>
   {% endif %}
+  {% if application.status in ('drafted', 'queued', 'approved') %}
   <form method="post" action="/applications/{{ application.id }}/applied">
     <button type="submit">Mark as applied</button>
   </form>
+  {% endif %}
+  {% for next in next_statuses %}
+    <form method="post" action="/applications/{{ application.id }}/status">
+      <input type="hidden" name="status" value="{{ next }}">
+      <button type="submit">Mark as {{ next }}</button>
+    </form>
+  {% endfor %}
+  {% if application.status == 'queued' %}
+    <form method="post" action="/applications/{{ application.id }}/approve">
+      <button type="submit" class="primary">Approve</button>
+    </form>
+    <form method="post" action="/applications/{{ application.id }}/skip">
+      <button type="submit">Skip</button>
+    </form>
+  {% endif %}
 </div>
 {% endblock %}

@@ -9,7 +9,12 @@ def create_engine_for(path: Path):
     """Create a SQLite engine, making the parent directory if needed."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    return create_engine(f"sqlite:///{path}", echo=False)
+    return create_engine(
+        f"sqlite:///{path}",
+        echo=False,
+        # The tick and the daily timer share this file: wait for the lock, don't fail.
+        connect_args={"timeout": 30},
+    )
 
 
 def init_db(engine) -> None:
@@ -19,10 +24,14 @@ def init_db(engine) -> None:
     import jobhunt.jobs.models
     import jobhunt.linkedin.models
     import jobhunt.profile.models
+    import jobhunt.state
     import jobhunt.tailor.models  # noqa: F401  (registers tables)
 
     SQLModel.metadata.create_all(engine)
     ensure_columns(engine)
+    # One-off rename of the pre-tracker status; a no-op once no row says 'applied'.
+    with engine.begin() as conn:
+        conn.exec_driver_sql("UPDATE application SET status='sent' WHERE status='applied'")
 
 
 def ensure_columns(engine) -> list[str]:

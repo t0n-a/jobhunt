@@ -62,3 +62,12 @@ def test_loopback_aliases_and_non_global_ips_are_never_probed():
                     "http://2130706433/x", "http://0177.0.0.1/x", "http://100.64.0.1/x"):
             assert check_liveness(url, c) == "uncertain"
         assert calls == []
+
+
+@respx.mock
+def test_body_beyond_the_cap_is_ignored():
+    respx.get(U).mock(
+        return_value=httpx.Response(200, text="x" * 3_000_000 + "no longer accepting applications")
+    )
+    with httpx.Client() as c:
+        assert check_liveness(U, c) == "active"
