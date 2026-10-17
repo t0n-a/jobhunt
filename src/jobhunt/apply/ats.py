@@ -14,9 +14,11 @@ _ASHBY_HOST = "jobs.ashbyhq.com"
 
 # Board and job slugs are free text; the Lever and Ashby ids are plain UUIDs.
 _UUID = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
-_GREENHOUSE_PATH = re.compile(r"/([^/]+)/jobs/([0-9]+)/?")
-_LEVER_PATH = re.compile(rf"/([^/]+)/({_UUID})(?:/apply)?/?")
-_ASHBY_PATH = re.compile(rf"/([^/]+)/({_UUID})(?:/application)?/?")
+# Slugs go into API URLs and a browser address: letters, digits, "-" and "_" only.
+_SLUG = r"[A-Za-z0-9_-]+"
+_GREENHOUSE_PATH = re.compile(rf"/({_SLUG})/jobs/([0-9]+)/?")
+_LEVER_PATH = re.compile(rf"/({_SLUG})/({_UUID})(?:/apply)?/?")
+_ASHBY_PATH = re.compile(rf"/({_SLUG})/({_UUID})(?:/application)?/?")
 
 
 @dataclass(frozen=True)
@@ -28,8 +30,12 @@ class AtsTarget:
 
 
 def detect_ats(url: str) -> AtsTarget | None:
-    parts = urlsplit(url or "")
-    if parts.scheme not in ("http", "https"):
+    # A browser reads "https://evil\\@ats-host/..." as evil: the form (and the candidate's
+    # details) must only ever go to the host we checked.
+    if not url or "\\" in url:
+        return None
+    parts = urlsplit(url)
+    if parts.scheme not in ("http", "https") or parts.username or parts.password:
         return None
     host = parts.hostname or ""
     path = parts.path
@@ -37,13 +43,15 @@ def detect_ats(url: str) -> AtsTarget | None:
     if host in _GREENHOUSE_HOSTS:
         m = _GREENHOUSE_PATH.fullmatch(path)
         if m:
-            return AtsTarget("greenhouse", m[1], m[2], url)
+            return AtsTarget("greenhouse", m[1], m[2], f"https://{host}/{m[1]}/jobs/{m[2]}")
         if path.rstrip("/") == "/embed/job_app":
             query = parse_qs(parts.query)
             board = query.get("for", [""])[0]
             token = query.get("token", [""])[0]
-            if board and token.isascii() and token.isdigit():
-                return AtsTarget("greenhouse", board, token, url)
+            if re.fullmatch(_SLUG, board) and token.isascii() and token.isdigit():
+                return AtsTarget(
+                    "greenhouse", board, token, f"https://{host}/{board}/jobs/{token}"
+                )
         return None
 
     if host in _LEVER_HOSTS:
