@@ -243,7 +243,7 @@ def _triage_all(session: Session, cfg: RankingConfig) -> None:
             continue
         try:
             new = triage(job, cfg)
-        except Exception:  # noqa: BLE001 - one bad job must not abort the scan
+        except Exception:
             logger.warning("triage failed for job %s; skipping", job.id, exc_info=True)
             continue
         if old is not None:
