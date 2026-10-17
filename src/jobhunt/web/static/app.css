@@ -358,9 +358,8 @@ table.jobs tr[aria-selected="true"] td:first-child { box-shadow: inset 3px 0 0 v
 .proposal .because { margin: 0; padding: 4px 0 4px 12px; border-left: 3px solid var(--st-waiting); color: var(--ink-soft); font-size: 14px; }
 .proposal .because b { color: var(--ink); font-weight: 500; }
 .proposal .actions { margin: 0; }
-.recorded { margin-top: 10px; color: var(--ink-soft); font-size: 14px; }
-.recorded::before { content: "✓"; display: inline-grid; place-items: center; width: 22px; height: 22px; margin-right: 6px; vertical-align: -5px; border-radius: 50%;
-  background: var(--st-sent); color: var(--pill-ink); font-weight: 800; font-size: 13px; }
+.recorded { display: inline-block; margin-top: 10px; padding: 3px 12px 3px 8px; border-radius: 12px; background: var(--panel-2); color: var(--ink-soft); font-size: 13px; }
+.recorded::before { content: "✓"; color: var(--st-sent); font-weight: 800; margin-right: 6px; }
 
 .thinking { padding: 0 22px 8px; }
 .thinking.htmx-request { display: grid; grid-template-columns: 26px auto; gap: 12px; align-items: center; justify-content: start; }
