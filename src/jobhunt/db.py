@@ -23,6 +23,7 @@ def init_db(engine) -> None:
     import jobhunt.counselor.models
     import jobhunt.jobs.models
     import jobhunt.linkedin.models
+    import jobhunt.outreach.models
     import jobhunt.profile.models
     import jobhunt.state
     import jobhunt.tailor.models  # noqa: F401  (registers tables)
