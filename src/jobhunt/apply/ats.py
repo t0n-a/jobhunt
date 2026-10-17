@@ -41,6 +41,7 @@ def detect_ats(url: str) -> AtsTarget | None:
     path = parts.path
 
     if host in _GREENHOUSE_HOSTS:
+        host = "job-boards.greenhouse.io" if host == "boards.greenhouse.io" else host  # it 301s there
         m = _GREENHOUSE_PATH.fullmatch(path)
         if m:
             return AtsTarget("greenhouse", m[1], m[2], f"https://{host}/{m[1]}/jobs/{m[2]}")

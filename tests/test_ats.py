@@ -10,7 +10,7 @@ UUID = "8f3c2a1e-4b5d-4e6f-9a7b-0c1d2e3f4a5b"
     [
         (
             "https://boards.greenhouse.io/acme/jobs/4001",
-            AtsTarget("greenhouse", "acme", "4001", "https://boards.greenhouse.io/acme/jobs/4001"),
+            AtsTarget("greenhouse", "acme", "4001", "https://job-boards.greenhouse.io/acme/jobs/4001"),
         ),
         (
             "https://JOB-BOARDS.GREENHOUSE.IO/acme/jobs/4001/",
@@ -26,7 +26,7 @@ UUID = "8f3c2a1e-4b5d-4e6f-9a7b-0c1d2e3f4a5b"
                 "greenhouse",
                 "acme",
                 "4001",
-                "https://boards.greenhouse.io/acme/jobs/4001",
+                "https://job-boards.greenhouse.io/acme/jobs/4001",
             ),
         ),
         (

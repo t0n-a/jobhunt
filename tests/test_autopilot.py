@@ -115,11 +115,11 @@ def test_gate_reasons_in_order(session):
     assert check(session, app, AutopilotConfig(trust_target=1, ats_allowlist=["lever"])) == (
         "unsupported form"
     )
-    block_host(session, "boards.greenhouse.io", "x")
+    block_host(session, "job-boards.greenhouse.io", "x")
     assert check(session, app, cfg) == "blocked host"
     from jobhunt.state import BlockedHost
 
-    session.delete(session.get(BlockedHost, "boards.greenhouse.io"))
+    session.delete(session.get(BlockedHost, "job-boards.greenhouse.io"))
     session.commit()
     assert check(session, app, cfg, plan=None) == "form not fully answered"
     hard = FormPlan(unknown=[FormField(name="q", label="Why?", kind="text", required=True)])
@@ -143,7 +143,7 @@ def test_submitted_is_sent_with_autopilot_channel(session, tmp_path):
     [(done, run)] = go(session, tmp_path, runner)
     assert (done.status, done.channel, run.status) == ("sent", "autopilot", "submitted")
     url, kw = runner.calls[0]
-    assert url == URL.format(n=1)
+    assert url == URL.format(n=1).replace("//boards.", "//job-boards.")
     assert kw["headless"] and kw["submit"] and not kw["allow_obstacles"]
     assert kw["screenshot_dir"] == tmp_path / "screenshots"
     assert app.applied_at is not None
@@ -277,7 +277,7 @@ def test_block_expiry_by_cause(session, tmp_path):
 
     add(session)
     go(session, tmp_path, Runner(FormRun("error", "http 429")))
-    row = session.get(BlockedHost, "boards.greenhouse.io")
+    row = session.get(BlockedHost, "job-boards.greenhouse.io")
     assert row.until is not None and timedelta(hours=23) < row.until.replace(tzinfo=UTC) - NOW <= timedelta(hours=24)
 
 
@@ -286,7 +286,7 @@ def test_no_confirmation_block_is_permanent(session, tmp_path):
 
     add(session)
     go(session, tmp_path, Runner(FormRun("error", "no confirmation")))
-    assert session.get(BlockedHost, "boards.greenhouse.io").until is None
+    assert session.get(BlockedHost, "job-boards.greenhouse.io").until is None
 
 
 def test_expired_block_is_ignored(session):
