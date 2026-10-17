@@ -55,6 +55,7 @@ def test_full_digest_layout(session):
         "  #1 Dev1 @ Co1\n"
         "Waiting on you: 1\n"
         "  #2 Dev2 @ Co2: yes 2 / no 2\n"
+        "Approved, apply when ready: 0\n"
         "Follow-ups due: 1\n"
         "  #3 Dev3 @ Co3: "
         + _followup_text(session)
@@ -97,3 +98,11 @@ def test_lists_cap_at_ten(session):
     out = digest(session)
     assert "Waiting on you: 15" in out
     assert sum(line.startswith("  #") for line in out.split("\n")) == 10
+
+
+def test_approved_not_yet_sent_are_listed(session):
+    add(session, 1, "approved")
+    text = digest(session)
+    assert "Approved, apply when ready: 1" in text
+    assert "#1 Dev1 @ Co1: sent 1 once it's out" in text
+    assert text.index("Waiting on you") < text.index("Approved, apply when ready")

@@ -9,7 +9,12 @@ def create_engine_for(path: Path):
     """Create a SQLite engine, making the parent directory if needed."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    return create_engine(f"sqlite:///{path}", echo=False)
+    return create_engine(
+        f"sqlite:///{path}",
+        echo=False,
+        # The tick and the daily timer share this file: wait for the lock, don't fail.
+        connect_args={"timeout": 30},
+    )
 
 
 def init_db(engine) -> None:

@@ -7,6 +7,7 @@ from jobhunt.apply.queue import autopilot_available, trust_count
 from jobhunt.apply.tracker import funnel
 from jobhunt.config import Config
 from jobhunt.jobs.models import Job
+from jobhunt.ranking.shortlist import _clean
 from jobhunt.state import is_paused
 from jobhunt.tailor.models import Application, ApplicationEvent
 
@@ -17,7 +18,7 @@ MAX_LINES = 10
 def _label(session: Session, application_id: int) -> str:
     application = session.get(Application, application_id)
     job = session.get(Job, application.job_id) if application else None
-    title, company = (job.title, job.company) if job else ("?", "?")
+    title, company = (_clean(job.title), _clean(job.company)) if job else ("?", "?")
     return f"#{application_id} {title} @ {company}"
 
 
@@ -53,6 +54,11 @@ def build_digest(
     out += _section(
         "Waiting on you",
         [f"{_label(session, a.id)}: yes {a.id} / no {a.id}" for a in queued],
+    )
+    approved = session.exec(select(Application).where(Application.status == "approved")).all()
+    out += _section(
+        "Approved, apply when ready",
+        [f"{_label(session, a.id)}: sent {a.id} once it's out" for a in approved],
     )
     due = followups_due(session, now)
     out += _section(

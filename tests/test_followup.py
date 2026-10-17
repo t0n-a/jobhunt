@@ -101,3 +101,11 @@ def test_other_statuses_have_no_followups(session):
     for status in ("queued", "skipped", "rejected"):
         make_app(session, status)
     assert followups_due(session, days(365)) == []
+
+
+def test_ignored_nudges_go_cold_at_21_days(session):
+    app = make_app(session, "sent")
+    assert mark_cold(session, days(20)) == []
+    assert mark_cold(session, days(21)) == [app]
+    assert app.status == "ghosted"
+    assert followups_due(session, days(22)) == []

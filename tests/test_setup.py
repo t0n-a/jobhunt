@@ -15,7 +15,7 @@ from jobhunt.setup import Prompter, run_setup, setup_evidence
 KEY = "AIza-SECRET-KEY"
 TOKEN = "123:SECRET-TOKEN"
 CONFIG = ["Hugo", "hugo@example.com", "Lisbon", ""]
-ANSWERS = ["EU citizen", "n", "1 month", "40000", "60000", "n", "y", "", "", "", ""]
+ANSWERS = ["EU citizen", "n", "1 month", "40000", "60000", "n", "y", "", "", "", "", "y"]
 
 
 class Script:
@@ -115,8 +115,14 @@ def test_answers_written(tmp_path):
     assert a.gender == a.ethnicity == a.disability == a.veteran == "Prefer not to say"
 
 
+def test_consent_is_asked_and_recorded(tmp_path):
+    answers = [*ANSWERS[:-1], "n"]
+    run(tmp_path, CONFIG + ["", *answers, "", "n"], [KEY, TOKEN])
+    assert load_answers(tmp_path / "answers.yaml").data_processing_consent is False
+
+
 def test_bad_int_is_reasked(tmp_path):
-    asks = CONFIG + [""] + ["EU", "n", "1 month", "lots", "40000", "60000", "n", "y", "", "", "", "", "", "n"]
+    asks = CONFIG + [""] + ["EU", "n", "1 month", "lots", "40000", "60000", "n", "y", "", "", "", "", "y", "", "n"]
     s = run(tmp_path, asks, [KEY, TOKEN])
     assert load_answers(tmp_path / "answers.yaml").salary_min_eur == 40000
     assert any("whole number" in m for m in s.said)
@@ -129,7 +135,7 @@ def test_secrets_never_echoed(tmp_path):
 
 
 def test_max_salary_below_min_is_reasked(tmp_path):
-    asks = CONFIG + [""] + ["EU", "n", "1 month", "40000", "30000", "60000", "n", "y", "", "", "", "", "", "n"]
+    asks = CONFIG + [""] + ["EU", "n", "1 month", "40000", "30000", "60000", "n", "y", "", "", "", "", "y", "", "n"]
     s = run(tmp_path, asks, [KEY, TOKEN])
     assert load_answers(tmp_path / "answers.yaml").salary_max_eur == 60000
     assert any("at least 40000" in m for m in s.said)

@@ -2,6 +2,8 @@ import logging
 
 import httpx
 
+from jobhunt.ranking.shortlist import _clean
+
 # httpx logs request URLs at INFO and the bot token is in the URL.
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
@@ -63,7 +65,7 @@ def discover_chat_id(token: str, http: httpx.Client, code: str) -> str | None:
     return None
 
 
-_NEEDS_ID = {"yes", "no", "sent", "done"}
+_NEEDS_ID = {"yes", "no", "sent", "done", "replied", "interview", "offer", "rejected"}
 _NO_ARG = {"pause", "resume", "status", "help"}
 
 
@@ -85,8 +87,8 @@ def queue_message(application, job, score, facts, web_url: str) -> tuple[str, li
         pay = f"€{facts.pay_yearly_eur:,}" + (" (est.)" if facts.pay_estimated else "")
     fit = "?" if score is None or score.fit_score is None else score.fit_score
     text = (
-        f"#{application.id} {job.title} @ {job.company}\n"
-        f"{pay} | fit {fit} | {job.location or 'location ?'}\n"
+        f"#{application.id} {_clean(job.title)} @ {_clean(job.company)}\n"
+        f"{pay} | fit {fit} | {_clean(job.location) or 'location ?'}\n"
         f"{job.url}\n"
         f"Review: {web_url}/applications/{application.id}"
     )

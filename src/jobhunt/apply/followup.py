@@ -13,6 +13,8 @@ MAX_NUDGES = 2
 REPLY_FIRST = timedelta(days=1)
 REPLY_GAP = timedelta(days=3)
 THANKS_AT = timedelta(days=1)
+# 7 + 7 + 7: two nudge windows, then cold, even if the nudges were ignored.
+COLD_AFTER = timedelta(days=21)
 COLD_NOTE = "no reply after 2 follow-ups"
 
 
@@ -47,8 +49,9 @@ def mark_cold(session: Session, now: datetime) -> list[Application]:
         events = _stage_events(session, application)
         if events is None:
             continue
-        _, followups = events
-        if len(followups) >= MAX_NUDGES and _utc(followups[-1].at) + NUDGE_GAP <= now:
+        stage, followups = events
+        nudged_out = len(followups) >= MAX_NUDGES and _utc(followups[-1].at) + NUDGE_GAP <= now
+        if nudged_out or _utc(stage.at) + COLD_AFTER <= now:
             set_status(session, application, "ghosted", note=COLD_NOTE, now=now)
             cold.append(application)
     return cold

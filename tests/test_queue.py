@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 import pytest
 from sqlmodel import Session, select
 
@@ -205,6 +207,9 @@ def queued_app(session, tmp_path, atom, bullets=None):
     add(session, "Backend Engineer", 90_000, company=f"Co{len(apps(session))}")
     c = cfg(tmp_path)
     run = tailor_shortlist(session, FakeProvider(responses(atom.id, 1, bullets)), c)
+    run.queued[0].reviewed_at = datetime.now(UTC)  # the candidate opened the review page
+    session.add(run.queued[0])
+    session.commit()
     return run.queued[0]
 
 
@@ -281,3 +286,48 @@ def test_an_unexpected_error_skips_the_job_and_rolls_back(session, tmp_path, mon
     run = tailor_shortlist(session, FakeProvider(responses(atom.id)), cfg(tmp_path))
 
     assert run.failed == 1 and [a.status for a in run.queued] == ["queued"]
+
+
+def test_approving_an_unreviewed_application_earns_no_trust(session, tmp_path):
+    application = queued_app(session, tmp_path, seed_atom(session))
+    application.reviewed_at = None
+
+    assert approve(session, application, AutopilotConfig()) is False
+    assert trust_count(session) == 0
+
+
+def test_a_full_queue_tailors_nothing_and_skips_the_llm(session, tmp_path):
+    atom = seed_atom(session)
+    three(session)
+    tailor_shortlist(session, FakeProvider(responses(atom.id, 1)), cfg(tmp_path, tailor_per_run=1))
+
+    class Counting(FakeProvider):
+        calls = 0
+
+        def complete(self, prompt, schema=None):
+            Counting.calls += 1
+            return super().complete(prompt, schema)
+
+    run = tailor_shortlist(
+        session, Counting(responses(atom.id, 3)), cfg(tmp_path, tailor_per_run=5, max_waiting=1)
+    )
+
+    assert run.queued == [] and run.stopped is None
+    assert Counting.calls == 0 and len(apps(session)) == 1
+
+
+def test_the_waiting_cap_limits_the_run_to_the_space_left(session, tmp_path):
+    atom = seed_atom(session)
+    three(session)
+    c = cfg(tmp_path, tailor_per_run=5, max_waiting=2)
+    tailor_shortlist(session, FakeProvider(responses(atom.id, 1)), cfg(tmp_path, tailor_per_run=1))
+
+    run = tailor_shortlist(session, FakeProvider(responses(atom.id, 3)), c)
+
+    assert len(run.queued) == 1
+
+
+def test_engine_waits_for_a_busy_database(tmp_path):
+    engine = create_engine_for(tmp_path / "w.db")
+    with engine.connect() as conn:
+        assert conn.exec_driver_sql("PRAGMA busy_timeout").scalar() == 30000

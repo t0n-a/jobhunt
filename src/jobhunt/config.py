@@ -112,6 +112,8 @@ class RankingConfig(BaseModel):
 class AutopilotConfig(BaseModel):
     # Shortlist jobs tailored per daily run; each costs about three LLM calls.
     tailor_per_run: int = 5
+    # Never more than this many applications waiting on the candidate.
+    max_waiting: int = 10
     # Clean approvals before autopilot can be switched on (spec: "the first ~10").
     trust_target: int = 10
     # An approval with more edited or deleted bullets than this is "heavy" and earns no trust.

@@ -55,7 +55,8 @@ def session(tmp_path):
     init_db(engine)
     with Session(engine) as s:
         s.add(Job(id=1, title="Dev", company="A", description="d", url="http://job", content_hash="h"))
-        s.add(Application(id=1, job_id=1, status="queued"))
+        s.add(Application(id=1, job_id=1, status="queued", reviewed_at=NOW))
+        s.add(Application(id=2, job_id=1, status="queued"))
         s.commit()
         yield s
 
@@ -123,3 +124,70 @@ def test_done_records_followup(session):
 def test_unknown_text_gets_help(session):
     _, client = tick(session, msg(1, "hello"))
     assert client.sent == [HELP]
+
+
+@pytest.mark.parametrize(
+    "verb,start,ok",
+    [
+        ("replied", "sent", True),
+        ("replied", "queued", False),
+        ("replied", "interview", False),
+        ("interview", "sent", True),
+        ("interview", "replied", True),
+        ("interview", "offer", False),
+        ("offer", "interview", True),
+        ("offer", "sent", False),
+        ("rejected", "sent", True),
+        ("rejected", "replied", True),
+        ("rejected", "interview", True),
+        ("rejected", "queued", False),
+        ("rejected", "offer", False),
+    ],
+)
+def test_outcome_verbs_follow_the_transition_table(session, verb, start, ok):
+    application = session.get(Application, 1)
+    if start != "queued":
+        set_status(session, application, start, now=NOW - timedelta(days=1))
+    _, client = tick(session, msg(1, f"{verb} 1"))
+    if ok:
+        assert client.sent == [f"Marked #1 as {verb}."]
+        assert session.get(Application, 1).status == verb
+    else:
+        assert client.sent == [f"#1 is {start}; nothing changed."]
+        assert session.get(Application, 1).status == start
+
+
+def test_a_rejected_application_is_not_nudged_or_ghosted(session):
+    from jobhunt.apply.followup import mark_cold
+
+    set_status(session, session.get(Application, 1), "sent", now=NOW - timedelta(days=30))
+    tick(session, msg(1, "rejected 1"))
+    assert not followups_due(session, NOW)
+    assert mark_cold(session, NOW) == []
+    assert session.get(Application, 1).status == "rejected"
+
+
+def test_help_lists_the_outcome_verbs():
+    for verb in ("replied N", "interview N", "offer N", "rejected N"):
+        assert verb in HELP
+
+
+def test_yes_without_a_review_earns_no_trust_and_says_so(session):
+    _, client = tick(session, msg(1, "yes 2"))
+    assert trust_count(session) == 0
+    assert client.sent[0].endswith("\nOpen the review page before approving to count toward trust.")
+
+
+def test_yes_after_a_review_earns_trust(session):
+    _, client = tick(session, msg(1, "yes 1"))
+    assert trust_count(session) == 1
+    assert "Open the review page" not in client.sent[0]
+
+
+def test_yes_reply_points_at_the_pdf_only_when_there_is_one(session):
+    _, client = tick(session, msg(1, "yes 1"))
+    assert "Review (no PDF yet; render it there): http://127.0.0.1:8000/applications/1" in client.sent[0]
+    session.get(Application, 2).pdf_path = "x.pdf"
+    session.commit()
+    _, client = tick(session, msg(2, "yes 2"))
+    assert "PDF and answers: http://127.0.0.1:8000/applications/2" in client.sent[0]

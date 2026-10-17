@@ -18,7 +18,18 @@ STATUSES = (
     "skipped",
 )
 # In order: a stage counts as reached once any later stage is.
+# Where the candidate can move an application next (Telegram verbs and the detail page buttons).
+NEXT_STATUSES: dict[str, tuple[str, ...]] = {
+    "replied": ("sent",),
+    "interview": ("sent", "replied"),
+    "offer": ("interview",),
+    "rejected": ("sent", "replied", "interview"),
+}
 FUNNEL = ("sent", "replied", "interview", "offer")
+
+
+def next_statuses(status: str) -> list[str]:
+    return [target for target, sources in NEXT_STATUSES.items() if status in sources]
 
 
 def set_status(

@@ -58,6 +58,12 @@
     <button type="submit">Mark as applied</button>
   </form>
   {% endif %}
+  {% for next in next_statuses %}
+    <form method="post" action="/applications/{{ application.id }}/status">
+      <input type="hidden" name="status" value="{{ next }}">
+      <button type="submit">Mark as {{ next }}</button>
+    </form>
+  {% endfor %}
   {% if application.status == 'queued' %}
     <form method="post" action="/applications/{{ application.id }}/approve">
       <button type="submit" class="primary">Approve</button>

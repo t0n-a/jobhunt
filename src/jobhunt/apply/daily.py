@@ -46,7 +46,9 @@ def run_daily(
     with Session(engine) as session:
         ghosted = mark_cold(session, now)
         stopped = None
-        if not is_paused(session):
+        if llm is None:
+            stopped = "No LLM key; tailoring skipped. Run jobhunt setup."
+        elif not is_paused(session):
             try:
                 run = tailor_shortlist(session, llm, config)
                 stopped = run.stopped

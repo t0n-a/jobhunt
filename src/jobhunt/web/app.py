@@ -16,6 +16,7 @@ from sqlmodel import Session, select
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from jobhunt.apply import queue
+from jobhunt.apply.tracker import NEXT_STATUSES, next_statuses, set_status
 from jobhunt.coach.engine import Coach
 from jobhunt.coach.models import Energy
 from jobhunt.config import Config
@@ -438,12 +439,17 @@ def create_app(config: Config) -> FastAPI:
     def application_detail(request: Request, application_id: int):
         with Session(app.state.engine) as db:
             application = _application(db, application_id)
+            if application.status == "queued" and application.reviewed_at is None:
+                application.reviewed_at = datetime.now(UTC)
+                db.add(application)
+                db.commit()
             job = JobStore(db).get(application.job_id)
             return templates.TemplateResponse(
                 request,
                 "application_detail.html",
                 {
                     "application": application,
+                    "next_statuses": next_statuses(application.status),
                     "job": job,
                     "bullets": iter_bullets(application.resume_json),
                 },
@@ -528,6 +534,20 @@ def create_app(config: Config) -> FastAPI:
         with Session(app.state.engine) as db:
             mark_applied(db, _application(db, application_id))
         return flash(RedirectResponse("/applications", status_code=303), "Marked as applied.")
+
+    @app.post("/applications/{application_id}/status")
+    def application_status(application_id: int, status: str = Form(...)):
+        with Session(app.state.engine) as db:
+            application = _application(db, application_id)
+            if application.status not in NEXT_STATUSES.get(status, ()):
+                raise HTTPException(
+                    status_code=409, detail=f"#{application_id} is {application.status}"
+                )
+            set_status(db, application, status)
+        return flash(
+            RedirectResponse(f"/applications/{application_id}", status_code=303),
+            f"Marked as {status}.",
+        )
 
     @app.post("/applications/{application_id}/approve")
     def application_approve(application_id: int):

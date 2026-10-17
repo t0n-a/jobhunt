@@ -38,6 +38,8 @@ class Application(SQLModel, table=True):
     channel: str = "manual"
     bullets_at_draft: int | None = None
     trust_credit: bool = False
+    # First time the candidate opened the review page; trust only counts after this.
+    reviewed_at: datetime | None = None
 
 
 class ApplicationEvent(SQLModel, table=True):

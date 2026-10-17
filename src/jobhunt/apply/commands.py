@@ -5,7 +5,7 @@ from sqlmodel import Session, select
 
 from jobhunt.apply.followup import followups_due, mark_followup_done
 from jobhunt.apply.queue import approve, autopilot_available, skip, trust_count
-from jobhunt.apply.tracker import set_status
+from jobhunt.apply.tracker import NEXT_STATUSES, set_status
 from jobhunt.config import Config
 from jobhunt.jobs.models import Job
 from jobhunt.state import get_state, is_paused, set_paused, set_state
@@ -15,8 +15,8 @@ from jobhunt.telegram import TelegramClient, parse_command
 logger = logging.getLogger(__name__)
 
 HELP = (
-    "Commands: yes N, no N (queue), sent N (you applied), done N (follow-up sent), "
-    "pause, resume, status."
+    "Commands: yes N, no N (queue), sent N, replied N, interview N, offer N, rejected N, "
+    "done N (follow-up sent), pause, resume, status."
 )
 SENDABLE = ("drafted", "queued", "approved")
 
@@ -56,11 +56,14 @@ def handle_command(
         before = autopilot_available(session, cfg)
         approve(session, application, cfg)
         job = session.get(Job, application.job_id)
+        review = "PDF and answers" if application.pdf_path else "Review (no PDF yet; render it there)"
         reply = (
             f"Approved #{arg}. Apply here: {job.url}\n"
-            f"PDF and answers: {cfg.web_url}/applications/{arg}\n"
+            f"{review}: {cfg.web_url}/applications/{arg}\n"
             f'Send "sent {arg}" once it\'s out.'
         )
+        if application.reviewed_at is None:
+            reply += "\nOpen the review page before approving to count toward trust."
         if not before and autopilot_available(session, cfg):
             reply += f"\nTrust {trust_count(session)}/{target}: autopilot can now be switched on."
         return reply
@@ -69,6 +72,11 @@ def handle_command(
             return unchanged
         set_status(session, application, "sent", now=now)
         return f"Marked #{arg} as sent."
+    if verb in NEXT_STATUSES:
+        if application.status not in NEXT_STATUSES[verb]:
+            return unchanged
+        set_status(session, application, verb, now=now)
+        return f"Marked #{arg} as {verb}."
     # verb == "done"
     if any(f.application_id == arg for f in followups_due(session, now)):
         mark_followup_done(session, application, now=now)

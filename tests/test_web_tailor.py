@@ -236,3 +236,56 @@ def test_approving_a_non_queued_application_is_409(make_client):
     client.post(f"/jobs/{job_id}/tailor", follow_redirects=True)
 
     assert client.post("/applications/1/approve").status_code == 409
+
+
+def _set(client, status):
+    from jobhunt.apply.tracker import set_status
+    from jobhunt.tailor.models import Application
+
+    with Session(client.engine) as db:
+        set_status(db, db.get(Application, 1), status)
+
+
+def test_status_route_follows_the_transition_table(make_client):
+    client = make_client(responses())
+    job_id = seed(client)
+    client.post(f"/jobs/{job_id}/tailor", follow_redirects=True)
+    _set(client, "sent")
+
+    response = client.post("/applications/1/status", data={"status": "replied"}, follow_redirects=True)
+
+    assert "Marked as replied." in response.text
+    assert client.post("/applications/1/status", data={"status": "offer"}).status_code == 409
+    assert client.post("/applications/1/status", data={"status": "bogus"}).status_code == 409
+
+
+def test_detail_page_offers_the_allowed_next_statuses(make_client):
+    client = make_client(responses())
+    job_id = seed(client)
+    client.post(f"/jobs/{job_id}/tailor", follow_redirects=True)
+    _set(client, "replied")
+
+    html = client.get("/applications/1").text
+
+    assert 'name="status" value="interview"' in html
+    assert 'name="status" value="rejected"' in html
+    assert 'name="status" value="offer"' not in html
+
+
+def test_opening_a_queued_application_marks_it_reviewed(make_client):
+    from jobhunt.apply.queue import trust_count
+    from jobhunt.tailor.models import Application
+
+    client = make_client(responses())
+    job_id = seed(client)
+    client.post(f"/jobs/{job_id}/tailor", follow_redirects=True)
+    _queue(client)
+    with Session(client.engine) as db:
+        assert db.get(Application, 1).reviewed_at is None
+
+    client.get("/applications/1")
+    client.post("/applications/1/approve")
+
+    with Session(client.engine) as db:
+        assert db.get(Application, 1).reviewed_at is not None
+        assert trust_count(db) == 1

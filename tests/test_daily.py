@@ -43,8 +43,11 @@ def scan_ok():
     return ScanResult()
 
 
-def go(engine, client, scan=scan_ok):
-    return daily.run_daily(CONFIG, engine=engine, llm=None, client=client, scan=scan, now=NOW)
+LLM = object()
+
+
+def go(engine, client, scan=scan_ok, llm=LLM):
+    return daily.run_daily(CONFIG, engine=engine, llm=llm, client=client, scan=scan, now=NOW)
 
 
 def fake_tailor(monkeypatch, engine, stopped=None):
@@ -128,3 +131,12 @@ def test_a_tailoring_crash_still_sends_the_digest(engine, monkeypatch):
     out = go(engine, client)
     assert "Tailoring failed: RuntimeError" in out
     assert client.sent[-1] == (out, None)
+
+
+def test_no_llm_skips_tailoring_but_sends_the_digest(engine, monkeypatch):
+    calls = fake_tailor(monkeypatch, engine)
+    client = FakeClient()
+    digest = go(engine, client, llm=None)
+    assert calls == []
+    assert "Tailoring stopped: No LLM key; tailoring skipped. Run jobhunt setup." in digest
+    assert client.sent

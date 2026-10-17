@@ -127,7 +127,7 @@ def main() -> None:
         from jobhunt.coach.models import Energy
         from jobhunt.coach.notify import render_task_line, send_telegram
         from jobhunt.db import create_engine_for, init_db
-        from jobhunt.llm import build_provider
+        from jobhunt.llm import LLMError, build_provider
 
         engine = create_engine_for(config.data_dir / "jobhunt.db")
         init_db(engine)
@@ -182,20 +182,24 @@ def main() -> None:
 
         from jobhunt.apply.daily import run_daily
         from jobhunt.db import create_engine_for, init_db
-        from jobhunt.llm import build_provider
+        from jobhunt.llm import LLMError, build_provider
         from jobhunt.telegram import TelegramClient
 
         engine = create_engine_for(config.data_dir / "jobhunt.db")
         init_db(engine)
         token = os.environ.get("TELEGRAM_BOT_TOKEN")
         chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+        try:
+            llm = build_provider(config.llm)
+        except LLMError:  # no key: the digest and follow-ups don't need the LLM
+            llm = None
         with httpx.Client(timeout=15) as http:
             client = TelegramClient(token, chat_id, http) if token and chat_id else None
             print(
                 run_daily(
                     config,
                     engine=engine,
-                    llm=build_provider(config.llm),
+                    llm=llm,
                     client=client,
                     scan=lambda: scan_result(config),
                     now=datetime.now(UTC),

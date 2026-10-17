@@ -24,6 +24,10 @@ TOKEN = "123:SECRET"
         ("/YES@jobhunt_bot 12", ("yes", 12)),
         ("yes:12", ("yes", 12)),
         ("pause", ("pause", None)),
+        ("replied 3", ("replied", 3)),
+        ("interview 3", ("interview", 3)),
+        ("offer 3", ("offer", 3)),
+        ("rejected 3", ("rejected", 3)),
         ("yes", None),
         ("hello", None),
         ("sent twelve", None),
@@ -91,3 +95,14 @@ def test_token_never_logged(caplog):
     with caplog.at_level(logging.INFO), httpx.Client() as http:
         TelegramClient(TOKEN, "5", http).send("hi")
     assert TOKEN not in caplog.text
+
+
+def test_queue_message_strips_control_and_bidi_characters():
+    app = SimpleNamespace(id=1)
+    job = SimpleNamespace(
+        title="Dev\u202eevil", company="Acme\u2066x\x07", location="Po\u200eto", url="http://j"
+    )
+    text, _ = queue_message(app, job, None, None, "http://w")
+    assert "\u202e" not in text and "\u2066" not in text and "\x07" not in text
+    assert "\u200e" not in text
+    assert "Devevil @ Acmex" in text

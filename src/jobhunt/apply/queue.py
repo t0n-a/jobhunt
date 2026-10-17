@@ -33,12 +33,16 @@ def tailor_shortlist(session: Session, llm, config: Config) -> TailorRun:
             "No confirmed evidence yet. Confirm some facts at /atoms, then tailoring starts."
         )
         return run
+    waiting = len(session.exec(select(Application).where(Application.status == "queued")).all())
+    budget = min(config.autopilot.tailor_per_run, config.autopilot.max_waiting - waiting)
+    if budget <= 0:
+        return run
     taken = [
         (normalize(job.company), job.title)
         for job in session.exec(select(Job).join(Application, Application.job_id == Job.id)).all()
     ]
     for ranked in shortlist(session, config.ranking):
-        if len(run.queued) >= config.autopilot.tailor_per_run:
+        if len(run.queued) >= budget:
             break
         job = ranked.job
         company = normalize(job.company)
@@ -87,7 +91,10 @@ def _require_queued(application: Application) -> None:
 
 def approve(session: Session, application: Application, cfg: AutopilotConfig) -> bool:
     _require_queued(application)
-    application.trust_credit = edit_count(application) <= cfg.heavy_edit_limit
+    # Trust only counts once the candidate has seen the application.
+    application.trust_credit = (
+        application.reviewed_at is not None and edit_count(application) <= cfg.heavy_edit_limit
+    )
     set_status(session, application, "approved")
     return application.trust_credit
 

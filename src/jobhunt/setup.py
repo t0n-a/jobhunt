@@ -129,6 +129,8 @@ def setup_answers(root: Path, p: Prompter) -> bool:
             # The maximum salary can't be below the minimum the candidate just gave.
             minimum = values.get("salary_min_eur") if name == "salary_max_eur" else None
             values[name] = _ask_field(label, field.annotation, p, minimum)
+        elif field.annotation is bool:
+            values[name] = _ask_field(label, bool, p)
         elif field.annotation is str and (typed := p.ask(f"{label} [{field.default}]: ").strip()):
             values[name] = typed
     save_answers(path, StandardAnswers.model_validate(values))
