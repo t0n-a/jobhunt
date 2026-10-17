@@ -1,0 +1,47 @@
+{
+  "id": 4001,
+  "title": "Backend Engineer",
+  "questions": [
+    {"label": "First Name", "required": true,
+     "fields": [{"name": "first_name", "type": "input_text", "values": []}]},
+    {"label": "Last Name", "required": true,
+     "fields": [{"name": "last_name", "type": "input_text", "values": []}]},
+    {"label": "Email", "required": true,
+     "fields": [{"name": "email", "type": "input_text", "values": []}]},
+    {"label": "Phone", "required": false,
+     "fields": [{"name": "phone", "type": "input_text", "values": []}]},
+    {"label": "Resume/CV", "required": true,
+     "fields": [
+       {"name": "resume", "type": "input_file", "values": []},
+       {"name": "resume_text", "type": "textarea", "values": []}
+     ]},
+    {"label": "Cover Letter", "required": false,
+     "fields": [
+       {"name": "cover_letter", "type": "input_file", "values": []},
+       {"name": "cover_letter_text", "type": "textarea", "values": []}
+     ]},
+    {"label": "LinkedIn Profile", "required": false,
+     "fields": [{"name": "question_1", "type": "input_text", "values": []}]},
+    {"label": "Will you now or in the future require sponsorship for a visa?", "required": true,
+     "fields": [{"name": "question_2", "type": "multi_value_single_select",
+                 "values": [{"label": "Yes", "value": 1}, {"label": "No", "value": 2}]}]},
+    {"label": "Have you previously worked at Acme?", "required": true,
+     "fields": [{"name": "question_3", "type": "multi_value_single_select",
+                 "values": [{"label": "Yes", "value": 3}, {"label": "No", "value": 4}]}]},
+    {"label": "Pick your tools", "required": false,
+     "fields": [{"name": "question_4", "type": "multi_value_multi_select",
+                 "values": [{"label": "Python", "value": 5}, {"label": "Go", "value": 6}]}]},
+    {"label": "Unsupported widget", "required": false,
+     "fields": [{"name": "question_5", "type": "some_new_type", "values": []}]}
+  ],
+  "location_questions": [],
+  "compliance": [
+    {"type": "eeoc", "description": "Voluntary self-identification",
+     "questions": [
+       {"label": "Veteran status", "required": false,
+        "fields": [{"name": "veteran_status", "type": "multi_value_single_select",
+                    "values": [{"label": "I don't wish to answer", "value": 7},
+                               {"label": "I am a veteran", "value": 8}]}]}
+     ]}
+  ]
+}
