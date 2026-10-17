@@ -117,3 +117,13 @@ def test_queue_message_autopilot_note():
     job = SimpleNamespace(title="T", company="C", location="", url="u")
     text, _ = queue_message(app, job, None, None, "http://w", "captcha")
     assert text.endswith("\nAutopilot stopped: captcha")
+
+
+def test_stopped_note_is_cleaned_and_capped():
+    from types import SimpleNamespace
+
+    app = SimpleNamespace(id=1)
+    job = SimpleNamespace(title="Dev", company="A", location=None, url="u")
+    text, _ = queue_message(app, job, None, None, "http://x", note="field ‮evil" + "x" * 500)
+    line = text.splitlines()[-1]
+    assert "‮" not in line and len(line) <= len("Autopilot stopped: ") + 200

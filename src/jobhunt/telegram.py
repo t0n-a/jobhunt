@@ -97,7 +97,7 @@ def queue_message(
         f"Review: {web_url}/applications/{application.id}"
     )
     if note:
-        text += f"\nAutopilot stopped: {note}"
+        text += f"\nAutopilot stopped: {_clean(note)[:200]}"  # reasons quote page labels
     buttons = [
         [
             {"text": "Yes", "callback_data": f"yes:{application.id}"},
