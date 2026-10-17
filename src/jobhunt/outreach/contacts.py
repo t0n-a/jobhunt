@@ -7,12 +7,23 @@ from sqlmodel import Session, select
 from jobhunt.jobs.dedupe import normalize
 from jobhunt.jobs.models import Job
 from jobhunt.outreach.models import Contact
+from jobhunt.ranking.geo import _ALIASES
 from jobhunt.ranking.shortlist import _clean
 
-# A shared inbox is not a person, so it never becomes a contact.
+# Role and team words: a "name" or mailbox containing one is a role or inbox, not a person.
+ROLE_WORDS = frozenset({
+    "recruiter", "recruiting", "recruitment", "talent", "acquisition", "hiring", "manager",
+    "director", "head", "lead", "engineering", "engineer", "technical", "people", "team",
+    "office", "department", "hr", "careers", "partner", "operations", "the", "our",
+    "remote", "first", "linkedin", "profile",  # review probe: "Remote First"
+})  # fmt: skip
+# Extra words that mark a shared or generic mailbox part (with ROLE_WORDS).
+_MAILBOX_WORDS = ROLE_WORDS | {
+    "jobs", "job", "career", "recruit", "privacy", "dpo", "gdpr", "info", "support", "hello",
+    "apply", "noreply", "pt", "en", "es", "no", "reply",
+}  # fmt: skip
 ROLE_MAILBOX = re.compile(
-    r"^(no-?reply|careers?|jobs?|recruit(ing|ment)?|talent|hr|hello|info|apply|people|team)@",
-    re.IGNORECASE,
+    r"(?:^|[._+-])(" + "|".join(sorted(_MAILBOX_WORDS)) + r")(?=$|[._+-]|\d)", re.IGNORECASE
 )
 _LINKEDIN = re.compile(r"https?://([a-z]{2,3}\.)?linkedin\.com/in/[A-Za-z0-9_-]+/?")
 _RECRUITER = re.compile(
@@ -33,7 +44,7 @@ _NOT_NAMES = {
 }  # fmt: skip
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 # "first.last" local parts are the only emails whose name we can read off the address.
-_LOCAL_NAME = re.compile(r"^([a-z]+)[._]([a-z]+)$", re.IGNORECASE)
+_LOCAL_NAME = re.compile(r"^([a-z]+(?:-[a-z]+)?)\.([a-z]+(?:-[a-z]+)?)$", re.IGNORECASE)
 _MAX_NAME = 60  # names on a posting are short; a longer match is cut, not dropped
 
 
@@ -48,6 +59,12 @@ class ContactCandidate:
 
 def _name(text: str) -> str:
     return text[:_MAX_NAME]
+
+
+def _not_person(name: str) -> bool:
+    """A role phrase or a place ("Technical Recruiter", "Lisbon Office"): never greeted by name."""
+    words = name.casefold().split()
+    return any(w in ROLE_WORDS or w in _ALIASES for w in words) or name.casefold() in _ALIASES
 
 
 def find_contacts(job: Job) -> list[ContactCandidate]:
@@ -71,30 +88,31 @@ def find_contacts(job: Job) -> list[ContactCandidate]:
             name = None
             if before and before.group(1).casefold() not in _NOT_NAMES:
                 name = _name(f"{before.group(1)} {before.group(2)}")
+                name = None if _not_person(name) else name
             slug = url.group(0).rstrip("/").rsplit("/", 1)[-1]
-            add(
-                ContactCandidate(
-                    name, None, f"https://www.linkedin.com/in/{slug}", None, "posting"
-                )
-            )
+            kw = [m.group(0) for m in _RECRUITER.finditer(line)]
+            role = max(kw, key=len).title() if kw else None
+            add(ContactCandidate(name, role, f"https://www.linkedin.com/in/{slug}", None, "posting"))
 
     # Recruiter lines: a name bound to the role keyword; the role from its longest recruiter phrase.
     for line in lines:
         bound = _AFTER_ROLE.search(line) or _BEFORE_ROLE.search(line)
-        if bound:
+        if bound and not _not_person(bound.group("name")):
             keywords = list(_RECRUITER.finditer(line))
             role = max(keywords, key=lambda m: len(m.group(0))).group(0).title()
             add(ContactCandidate(_name(re.sub(r"\s+", " ", bound.group("name"))), role, None, None, "posting"))
 
     for match in _EMAIL.finditer("\n".join(lines)):
         address = match.group(0)
-        if ROLE_MAILBOX.match(address):
+        local = address.split("@", 1)[0]
+        # Only a clean first.last address is a person; anything else may be a shared inbox.
+        person = _LOCAL_NAME.match(local)
+        if not person or ROLE_MAILBOX.search(local) or _not_person(" ".join(person.groups())):
             continue
-        local = _LOCAL_NAME.match(address.split("@", 1)[0])
-        name = _name(" ".join(p.capitalize() for p in local.groups())) if local else None
-        add(ContactCandidate(name, None, None, address, "posting"))
+        add(ContactCandidate(_name(" ".join(p.title() for p in person.groups())), None, None, address, "posting"))
 
-    return found
+    # Candidates bound to a recruiter keyword rank before bare LinkedIn or email ones (stable).
+    return sorted(found, key=lambda c: c.role is None)
 
 
 def fallback_contact(company: str) -> ContactCandidate:
@@ -113,11 +131,22 @@ def contact_for(session: Session, job: Job) -> Contact:
     """The job's first contact, reusing the stored row for the same person at the same company."""
     found = find_contacts(job)
     best = found[0] if found else fallback_contact(job.company)
-    field = "profile_url" if best.profile_url else "email" if best.email else "name"
-    value = getattr(best, field)
     company = normalize(job.company)
-    for row in session.exec(select(Contact).where(getattr(Contact, field) == value)).all():
-        if normalize(row.company) == company:
+    name = best.name.casefold() if best.name else None
+    for row in session.exec(select(Contact)).all():
+        if normalize(row.company) != company:
+            continue
+        if (
+            (best.profile_url and row.profile_url == best.profile_url)
+            or (best.email and row.email == best.email)
+            or (name and row.name and row.name.casefold() == name)
+        ):
+            for f in ("name", "role", "profile_url", "email"):
+                if not getattr(row, f) and getattr(best, f):
+                    setattr(row, f, getattr(best, f))
+            session.add(row)
+            session.commit()
+            session.refresh(row)
             return row
     row = Contact(
         company=job.company,

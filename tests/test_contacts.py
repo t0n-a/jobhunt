@@ -99,3 +99,42 @@ def test_unbound_name_is_no_contact():
 def test_name_before_comma_role():
     found = find_contacts(_job("Contact Maria Silva, Recruiter"))
     assert found[0].name == "Maria Silva" and found[0].role == "Recruiter"
+
+
+def test_role_phrases_and_places_are_never_names():
+    for text in (
+        "Technical Recruiter: https://www.linkedin.com/in/joaoc",
+        "Hiring Manager - https://www.linkedin.com/in/xyz",
+        "Hiring Manager: Engineering Director",
+        "Talent Partner: Lisbon Office",
+        "Head of Talent Acquisition: Remote First",
+        "Recruiter: Porto Team",
+    ):
+        assert all(c.name is None for c in find_contacts(_job(text))), text
+
+
+def test_dotted_role_mailboxes_are_not_people():
+    for addr in ("careers.pt", "talent.acquisition", "hr.portugal", "privacy.officer", "dpo", "info.pt"):
+        assert find_contacts(_job(f"Write to {addr}@acme.com")) == [], addr
+    assert find_contacts(_job("Write to ana-maria.lopes@acme.com"))[0].name == "Ana-Maria Lopes"
+
+
+def test_same_person_by_name_then_url_is_one_contact(tmp_path):
+    engine = create_engine_for(tmp_path / "c.db")
+    init_db(engine)
+    with Session(engine) as s:
+        a = _job("Your recruiter: Maria Silva, Recruiter", url="https://x/1")
+        b = _job("Maria Silva https://www.linkedin.com/in/msilva", url="https://x/2")
+        s.add(a)
+        s.add(b)
+        s.commit()
+        one, two = contact_for(s, a), contact_for(s, b)
+        assert one.id == two.id and two.profile_url.endswith("/in/msilva")
+        assert len(s.exec(select(Contact)).all()) == 1
+
+
+def test_recruiter_bound_candidate_outranks_bare_linkedin_url():
+    job = _job(
+        "Our CEO Jane Doe https://www.linkedin.com/in/janedoe\nRecruiter: Maria Silva"
+    )
+    assert find_contacts(job)[0].name == "Maria Silva"

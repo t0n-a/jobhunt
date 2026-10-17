@@ -14,7 +14,7 @@ from jobhunt.outreach.draft import draft_followup, draft_outreach
 from jobhunt.outreach.models import Contact, Outreach
 from jobhunt.profile.store import AtomStore
 from jobhunt.ranking.shortlist import shortlist
-from jobhunt.state import is_paused
+from jobhunt.state import get_state, is_paused, set_state
 from jobhunt.tailor.models import Application
 
 log = logging.getLogger(__name__)
@@ -24,6 +24,8 @@ LIVE_STATUSES = ("queued", "approved", "sent")
 OPEN = ("drafted", "sent")
 # An unanswered draft must not block its company forever.
 STALE_DRAFT_DAYS = 14
+# A job whose draft keeps failing would take a per_run slot every day and starve the rest.
+MAX_DRAFT_ATTEMPTS = 2
 FIRST_KINDS = ("message", "connection_note")
 # status -> statuses it may move to
 TRANSITIONS = {"drafted": ("sent", "skipped"), "sent": ("replied",)}
@@ -49,6 +51,24 @@ def _open_companies(session: Session) -> set[str]:
         .where(Outreach.status.in_(OPEN))
     ).all()
     return {normalize(c) for c, status, made in rows if status == "sent" or _utc(made) > cutoff}
+
+
+def _skip_stale(session: Session, company: str) -> None:
+    """A stale draft no longer blocks its company, so its Sent/Skip buttons must stop working."""
+    cutoff = datetime.now(UTC) - timedelta(days=STALE_DRAFT_DAYS)
+    rows = session.exec(
+        select(Outreach, Job.company)
+        .join(Job, Outreach.job_id == Job.id)
+        .where(Outreach.status == "drafted")
+    ).all()
+    for row, c in rows:
+        if normalize(c) == company and _utc(row.created_at) <= cutoff:
+            row.status = "skipped"
+            session.add(row)
+
+
+def _fail_key(job: Job) -> str:
+    return f"outreach_fail:{job.id}"
 
 
 def _contacted(session: Session, contact: Contact) -> bool:
@@ -86,6 +106,8 @@ def candidates(session: Session, config: Config) -> list[Job]:
     out, companies = [], set()
     for job in _strong(session, config):
         company = normalize(job.company)
+        if int(get_state(session, _fail_key(job), "0") or 0) >= MAX_DRAFT_ATTEMPTS:
+            continue
         if company in companies or _eligible(session, job) is None:
             continue
         companies.add(company)  # one draft per company per run
@@ -108,7 +130,11 @@ def draft_for_run(session: Session, config: Config, llm: LLMProvider) -> list[Ou
         # A lone note would mark the contact contacted and never get its message.
         if not any(d.kind == "message" for d in result.drafts):
             log.warning("outreach: no usable draft for job %s (%s); retry next run", job.id, result.dropped)
+            if not any(d.get("reason") == "llm error" for d in result.dropped):  # an outage is not the job's fault
+                n = int(get_state(session, _fail_key(job), "0") or 0)
+                set_state(session, _fail_key(job), str(n + 1))
             continue
+        _skip_stale(session, normalize(job.company))
         for d in result.drafts:
             row = Outreach(
                 job_id=job.id, contact_id=contact.id, kind=d.kind, text=d.text, atom_ids=list(d.atom_ids)

@@ -99,6 +99,16 @@ def test_never_twice_to_the_same_contact(session, tmp_path):
     assert len({o.contact_id for o in out}) == 1
 
 
+def test_skipped_person_is_not_messaged_again_on_another_job(session, tmp_path):
+    seed_atom(session)
+    add(session, "One", 90000)
+    for o in draft_for_run(session, cfg(tmp_path), None):
+        mark(session, o.id, "skipped", NOW)
+    add(session, "Two", 80000)  # same recruiter, same company
+    assert draft_for_run(session, cfg(tmp_path), None) == []
+    assert {o.status for o in session.exec(select(Outreach)).all()} == {"skipped"}
+
+
 def test_one_open_outreach_per_company(session, tmp_path):
     seed_atom(session)
     add(session, "One", 90000, recruiter="Ann Lee")
@@ -202,3 +212,41 @@ def test_stale_drafted_does_not_block_company(session, tmp_path):
     session.add(old)
     session.commit()
     assert candidates(session, cfg(tmp_path)) == []
+
+
+def test_job_whose_draft_fails_twice_stops_being_a_candidate(session, tmp_path, monkeypatch):
+    seed_atom(session)
+    bad = add(session, "Bad", 90000, company="A")
+    good = add(session, "Good", 80000, company="B")
+    real = outlog.draft_outreach
+    monkeypatch.setattr(
+        outlog, "draft_outreach",
+        lambda job, *a, **k: DraftResult() if job.id == bad.id else real(job, *a, **k),
+    )
+    c = cfg(tmp_path)
+    assert [j.id for j in candidates(session, c)] == [bad.id, good.id]
+    draft_for_run(session, c, None)
+    assert bad.id in [j.id for j in candidates(session, c)]
+    draft_for_run(session, c, None)
+    assert bad.id not in [j.id for j in candidates(session, c)]
+
+
+def test_llm_outage_does_not_count_as_a_failed_attempt(session, tmp_path, monkeypatch):
+    seed_atom(session)
+    job = add(session, "One", 90000)
+    down = DraftResult(dropped=[{"kind": "all", "text": "", "reason": "llm error"}])
+    monkeypatch.setattr(outlog, "draft_outreach", lambda *a, **k: down)
+    for _ in range(3):
+        draft_for_run(session, cfg(tmp_path), None)
+    assert [j.id for j in candidates(session, cfg(tmp_path))] == [job.id]
+
+
+def test_stale_drafted_row_is_skipped_when_a_new_draft_replaces_it(session, tmp_path):
+    seed_atom(session)
+    job = add(session, "One", 90000)
+    old = Outreach(job_id=job.id, kind="message", text="x", created_at=datetime.now(UTC) - timedelta(days=15))
+    session.add(old)
+    session.commit()
+    assert len(draft_for_run(session, cfg(tmp_path), None)) == 1
+    session.refresh(old)
+    assert old.status == "skipped"

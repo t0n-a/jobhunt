@@ -102,3 +102,27 @@ def test_company_matches_through_legal_suffix():
     job = Job(id=1, title="Python Developer", company="Acme GmbH", description="d", url="u", content_hash="h")
     r = draft_outreach(job, CONTACT, ATOMS, FakeProvider([_resp()]), profile=PROFILE)
     assert len(r.drafts) == 2
+
+
+def test_short_title_words_count_when_no_long_one():
+    from jobhunt.outreach.draft import _check
+
+    job = Job(id=1, title="SRE", company="Acme", description="d", url="u", content_hash="h")
+    text = "Hi Bo, I would love the SRE role at Acme: I built a Flask URL shortener."
+    assert not isinstance(_check("message", {"text": text, "atom_ids": [1]}, job, ATOMS, 600), str)
+    text = "Hi Bo, I would love a role at Acme: I built a Flask URL shortener."
+    assert isinstance(_check("message", {"text": text, "atom_ids": [1]}, job, ATOMS, 600), str)
+
+
+def test_draft_must_greet_the_contact():
+    r = _run(_resp(msg=MSG.replace("Hi Bo", "Hi Sam"), note=NOTE.replace("Hi Bo", "Hi Sam")))
+    assert not r.drafts
+
+
+def test_unnamed_contact_draft_must_not_name_a_posting_person():
+    job = Job(id=1, title="Python Developer", company="Acme",
+              description="Recruiter: Maria Silva", url="u", content_hash="h")
+    anon = Contact(id=2, company="Acme", name=None, role="talent team", source="fallback")
+    bad = MSG.replace("Hi Bo", "Hi Maria Silva")
+    r = draft_outreach(job, anon, ATOMS, FakeProvider([_resp(msg=bad, note=NOTE)]), profile=PROFILE)
+    assert [d.kind for d in r.drafts] == ["connection_note"]

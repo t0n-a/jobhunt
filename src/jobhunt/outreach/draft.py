@@ -10,6 +10,7 @@ from jobhunt.config import ProfileConfig
 from jobhunt.jobs.dedupe import normalize
 from jobhunt.jobs.models import Job
 from jobhunt.llm import LLMError, LLMProvider
+from jobhunt.outreach.contacts import find_contacts
 from jobhunt.outreach.models import Contact, Outreach
 from jobhunt.profile.models import EvidenceAtom
 from jobhunt.tailor.verify import verify_prose
@@ -55,7 +56,10 @@ def _job_json(job: Job) -> str:
     )
 
 
-def _check(kind: str, part, job: Job, atoms: list[EvidenceAtom], limit: int) -> Draft | str:
+def _check(
+    kind: str, part, job: Job, atoms: list[EvidenceAtom], limit: int,
+    contact: Contact | None = None, others: tuple[str, ...] = (),
+) -> Draft | str:
     """The Draft, or the reason it is dropped."""
     part = part if isinstance(part, dict) else {}
     text = str(part.get("text") or "").strip()
@@ -85,11 +89,16 @@ def _check(kind: str, part, job: Job, atoms: list[EvidenceAtom], limit: int) -> 
         return "generic: mentions no specific evidence"
     low = text.casefold()
     company = normalize(job.company) or job.company.casefold()
-    # Title word: any word of length >= 4 from the job title, casefolded.
-    if f" {company} " not in f" {normalize(text) or low} " or not any(
-        len(w) >= 4 and w in low for w in job.title.casefold().split()
-    ):
+    # Title word: any word of >= 4 letters; a title with none ("SRE", "QA") takes any word of >= 2.
+    words = re.findall(r"[^\W\d_]+", job.title.casefold())
+    words = [w for w in words if len(w) >= 4] or [w for w in words if len(w) >= 2]
+    if f" {company} " not in f" {normalize(text) or low} " or not any(w in low for w in words):
         return "generic: does not name the company and the role"
+    if contact is not None:
+        if contact.name and contact.name.split()[0].casefold() not in low:
+            return "does not greet the contact"
+        if not contact.name and any(n.casefold() in low for n in others):
+            return "names a person in an unnamed-contact draft"
     if len(text) > limit:
         return f"over the {limit} character limit"
     return Draft(kind, text, list(ids))
@@ -121,8 +130,9 @@ def draft_outreach(
         res.dropped.append({"kind": "all", "text": "", "reason": "llm error"})
         return res
     raw = raw if isinstance(raw, dict) else {}
+    others = tuple(c.name for c in find_contacts(job) if c.name)
     for kind, key, limit in (("message", "message", MESSAGE_MAX), ("connection_note", "connection_note", NOTE_MAX)):
-        out = _check(kind, raw.get(key), job, atoms, limit)
+        out = _check(kind, raw.get(key), job, atoms, limit, contact, others)
         if isinstance(out, Draft):
             res.drafts.append(out)
         else:
@@ -151,5 +161,8 @@ def draft_followup(
         raw = llm.complete(prompt, _PART)
     except LLMError:
         return None
-    out = _check("followup", raw, job, atoms, FOLLOWUP_MAX)
+    out = _check(
+        "followup", raw, job, atoms, FOLLOWUP_MAX, contact,
+        tuple(c.name for c in find_contacts(job) if c.name),
+    )
     return out if isinstance(out, Draft) else None
