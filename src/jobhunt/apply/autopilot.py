@@ -140,7 +140,11 @@ def autosubmit(
         except Exception as exc:
             log.warning("autopilot run failed for #%s", application.id, exc_info=True)
             run, crashed = browser.FormRun("error", f"{type(exc).__name__}"), True
-        if run.status == "submitted":
+        session.refresh(application)
+        if application.status != "approved":  # the candidate answered while the form ran
+            log.warning("#%s changed to %s during the run; result not recorded",
+                        application.id, application.status)
+        elif run.status == "submitted":
             set_status(session, application, "sent", note="autopilot", now=now)
         elif run.status == "stopped":
             set_status(
@@ -148,18 +152,15 @@ def autosubmit(
             )
         else:
             # A permanent block only where the click may really have sent it; a blip expires.
-            # run_form returns an error only for http/navigation failures (before the click) and
-            # "no confirmation"; anything raised is a crash, possibly after the click.
-            transient = not crashed and "no confirmation" not in run.reason
+            maybe = crashed or run.clicked
             block_host(
                 session, host, run.reason,
-                until=now + timedelta(hours=24) if transient else None,
+                until=None if maybe else now + timedelta(hours=24),
             )
-            note = (
-                NO_CONFIRMATION
-                if "no confirmation" in run.reason
-                else f"autopilot error: {run.reason} - {MAYBE}"
-            )
+            if "no confirmation" in run.reason:
+                note = NO_CONFIRMATION
+            else:
+                note = f"autopilot error: {run.reason}" + (f" - {MAYBE}" if maybe else "")
             set_status(session, application, "queued", note=note, now=now)
         done.append((application, run))
     return done

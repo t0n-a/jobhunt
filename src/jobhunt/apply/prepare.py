@@ -101,7 +101,13 @@ def assisted_apply(
         .where(ApplicationEvent.application_id == n)
         .order_by(ApplicationEvent.id.desc())
     ).first()
-    if last and "may have gone through" in last.note:
+    crashed = (  # the process died after autosubmit's pre-click note
+        application.status == "approved"
+        and application.channel == "autopilot"
+        and last
+        and last.note == "autopilot: submitting"
+    )
+    if last and ("may have gone through" in last.note or crashed):
         return (
             f"#{n}: autopilot may already have sent this ({last.note}). Check your email / the "
             f'company\'s portal; send "sent {n}" if it went out.'

@@ -86,6 +86,7 @@ class FormRun:
     status: str  # submitted | ready | stopped | error
     reason: str = ""
     screenshot: str | None = None
+    clicked: bool = False  # the submit button was pressed: the application may have gone out
 
     def __post_init__(self) -> None:
         # Reasons quote page labels and reach notes, the terminal and Telegram.
@@ -171,7 +172,16 @@ def submit_control(page):
     return btn.first if btn.count() else None
 
 
-def run_form(
+def run_form(*args, **kwargs) -> FormRun:
+    """Never raises: a failure is an error run, and `clicked` says whether it came after the click."""
+    state: dict = {}
+    try:
+        return _run_form(*args, _state=state, **kwargs)
+    except Exception as e:  # noqa: BLE001 - launch, scan, screenshot: all end the run, not the caller
+        return FormRun("error", type(e).__name__, clicked=state.get("clicked", False))
+
+
+def _run_form(
     apply_url: str,
     plan: FormPlan,
     *,
@@ -181,6 +191,7 @@ def run_form(
     allow_obstacles: bool = False,
     wait_for_human: bool = False,
     timeout_ms: int = 30_000,
+    _state: dict,
 ) -> FormRun:
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=headless)
@@ -193,7 +204,7 @@ def run_form(
                     screenshot_dir.mkdir(parents=True, exist_ok=True)
                     path = str(screenshot_dir / f"{int(time.time())}-{status}.png")
                     page.screenshot(path=path)
-                return FormRun(status, reason, path)
+                return FormRun(status, reason, path, clicked=_state.get("clicked", False))
 
             try:
                 resp = page.goto(apply_url, timeout=timeout_ms)
@@ -239,6 +250,7 @@ def run_form(
                 return done("stopped", f"redirected to {urlparse(page.url).hostname}")
             # Boilerplate ("once we have received your application...") may already be on the page.
             before = len(CONFIRM_RE.findall(_body(page)))
+            _state["clicked"] = True
             btn.click()
             try:
                 page.wait_for_function(

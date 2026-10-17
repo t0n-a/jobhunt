@@ -168,7 +168,7 @@ def test_error_requeues_and_blocks_host(session, tmp_path):
 
     app = add(session)
     add(session, 2, url="https://boards.greenhouse.io/acme/jobs/2")
-    runner = Runner(FormRun("error", "no confirmation"))
+    runner = Runner(FormRun("error", "no confirmation", clicked=True))
     go(session, tmp_path, runner)
     assert len(runner.calls) == 1  # the host block stops the second job in the same run
     assert app.status == "queued"
@@ -268,8 +268,30 @@ def test_runner_crash_note_says_it_may_have_gone_through(session, tmp_path):
 
 def test_any_error_result_says_it_may_have_gone_through(session, tmp_path):
     add(session)
-    go(session, tmp_path, Runner(FormRun("error", "TimeoutError")))
+    go(session, tmp_path, Runner(FormRun("error", "TimeoutError", clicked=True)))
     assert _notes(session)[-1] == f"autopilot error: TimeoutError - {MAYBE}"
+
+
+def test_error_before_the_click_is_transient_without_a_warning(session, tmp_path):
+    from jobhunt.state import BlockedHost
+
+    add(session)
+    go(session, tmp_path, Runner(FormRun("error", "Error")))
+    assert _notes(session)[-1] == "autopilot error: Error"
+    row = session.get(BlockedHost, "job-boards.greenhouse.io")
+    assert row.until is not None and row.until.replace(tzinfo=UTC) - NOW <= timedelta(hours=24)
+
+
+def test_status_changed_during_the_run_is_not_overwritten(session, tmp_path):
+    app = add(session)
+
+    def runner(url, plan, **kw):
+        session.connection().exec_driver_sql("update application set status='sent' where id=1")
+        return FormRun("stopped", "captcha")
+
+    go(session, tmp_path, runner)
+    assert session.get(Application, 1).status == "sent"
+    assert app.id == 1
 
 
 def test_block_expiry_by_cause(session, tmp_path):
@@ -285,7 +307,7 @@ def test_no_confirmation_block_is_permanent(session, tmp_path):
     from jobhunt.state import BlockedHost
 
     add(session)
-    go(session, tmp_path, Runner(FormRun("error", "no confirmation")))
+    go(session, tmp_path, Runner(FormRun("error", "no confirmation", clicked=True)))
     assert session.get(BlockedHost, "job-boards.greenhouse.io").until is None
 
 

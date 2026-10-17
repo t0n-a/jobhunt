@@ -173,3 +173,36 @@ def test_reasons_are_cleaned_of_control_characters():
     from jobhunt.apply.browser import FormRun
 
     assert FormRun("stopped", "unrecognised field: A\x1b[31mB\u202e").reason == "unrecognised field: A[31mB"
+
+
+def test_error_before_the_click_is_not_clicked(base, tmp_path, monkeypatch):
+    import jobhunt.apply.browser as b
+
+    def boom(page):
+        raise RuntimeError("x")
+
+    monkeypatch.setattr(b, "scan_fields", boom)
+    r = _run(base, tmp_path, "simple.html")
+    assert (r.status, r.reason, r.clicked) == ("error", "RuntimeError", False)
+
+
+def test_error_after_the_click_is_clicked(base, tmp_path, monkeypatch):
+    import jobhunt.apply.browser as b
+
+    real, calls = b.settle, []
+
+    def settle_then_boom(page):
+        calls.append(1)
+        if len(calls) > 1:  # the first settle is after goto, the second after the click
+            raise RuntimeError("x")
+        real(page)
+
+    monkeypatch.setattr(b, "settle", settle_then_boom)
+    r = _run(base, tmp_path, "simple.html")
+    assert (r.status, r.reason, r.clicked) == ("error", "RuntimeError", True)
+
+
+def test_no_confirmation_counts_as_clicked(base, tmp_path):
+    assert _run(base, tmp_path, "no_confirm.html", timeout_ms=800).clicked is True
+    assert _run(base, tmp_path, "simple.html").clicked is True
+    assert _run(base, tmp_path, "simple.html", submit=False).clicked is False

@@ -155,3 +155,16 @@ def test_assisted_apply_refuses_after_a_maybe_sent_autopilot_run(tmp_path, http)
     assert not run.calls
     assert out.startswith("#1: autopilot may already have sent this (autopilot error: Error")
     assert out.endswith('send "sent 1" if it went out.')
+
+
+def test_assisted_apply_refuses_a_row_left_mid_autopilot_submit(tmp_path, http):
+    from jobhunt.apply.tracker import set_status
+
+    s, cfg = make(tmp_path, LEVER)
+    app = s.get(Application, 1)
+    app.channel = "autopilot"
+    set_status(s, app, "approved", note="autopilot: submitting")
+    run = runner("ready")
+    out = assisted_apply(s, app, cfg, None, http, runner=run, ask=lambda q: "y", scan=lever_scan)
+    assert not run.calls
+    assert "autopilot may already have sent this" in out
