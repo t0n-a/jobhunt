@@ -93,3 +93,16 @@ def test_personal_data_signals(tmp_path):
 def test_clone_failure_blocks(tmp_path):
     a = audit_repo(FakeGh(), "me/x", readme_text="", description="", paths=[], workdir=tmp_path)
     assert a.blocking and a.flags == ["could not audit: nope"]
+
+
+
+def test_failed_or_oversized_log_blocks(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from jobhunt.growth import audit
+
+    failed = lambda *a, **k: SimpleNamespace(returncode=128, stdout="", stderr="bad")
+    assert audit.scan_history(tmp_path, run=failed) == ["could not audit: git log failed"]
+    monkeypatch.setattr(audit, "_MAX_LOG", 10)
+    big = lambda *a, **k: SimpleNamespace(returncode=0, stdout="+" * 11, stderr="")
+    assert audit.scan_history(tmp_path, run=big) == ["could not audit: history larger than 50 MB"]

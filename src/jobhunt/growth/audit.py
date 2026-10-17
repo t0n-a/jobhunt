@@ -47,9 +47,15 @@ def scan_history(repo_dir: Path, run=subprocess.run) -> list[str]:
         ["git", "-C", str(repo_dir), "log", "-p", "--all", "--no-color"],
         capture_output=True, text=True, errors="replace",
     )
+    # An audit that could not read the whole history must block, never pass as clean.
+    if proc.returncode != 0:
+        return ["could not audit: git log failed"]
+    out = proc.stdout or ""
+    if len(out) > _MAX_LOG:
+        return ["could not audit: history larger than 50 MB"]
     found: dict[tuple[str, str], None] = {}
     path = ""
-    for line in (proc.stdout or "")[:_MAX_LOG].splitlines():
+    for line in out.splitlines():
         if line.startswith("+++ "):
             path = line[4:].removeprefix("b/")
             if _is_env(path):
