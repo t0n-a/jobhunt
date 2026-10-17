@@ -51,6 +51,10 @@ data_dir: ./data
 #   per_run: 3              # recruiter drafts per daily run (one LLM call each)
 #   min_fit: 80             # default: ranking.strong_fit
 #   followup_days: 7        # days after "sent" with no reply before a follow-up draft
+# growth:
+#   refresh_days: 7         # how often GitHub profile suggestions refresh
+#   max_pins: 6             # GitHub shows six pinned repos
+#   min_cert_jobs: 2        # a cert this many shortlisted jobs ask for is suggested
 
 sources:
   enabled:

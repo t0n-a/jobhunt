@@ -253,3 +253,50 @@ def test_outreach_callback_from_another_chat_is_ignored(session):
     n, c = tick(session, cb(1, "osent:5", chat="99"))
     assert n == 0 and c.sent == []
     assert session.get(Outreach, 5).status == "drafted"
+
+
+class FakeGh:
+    calls: list  # reset per test
+
+    def make_public(self, name):
+        FakeGh.calls.append(name)
+
+    def readme(self, name):
+        return "", None
+
+    def tree(self, name):
+        return []
+
+    def put_file(self, *a):
+        FakeGh.calls.append(a)
+
+
+def test_growth_commands(session, monkeypatch):
+    from jobhunt.growth import act
+    from jobhunt.growth.audit import Audit
+    from jobhunt.growth.models import upsert_suggestion
+
+    monkeypatch.setattr(commands, "Gh", FakeGh)
+    monkeypatch.setattr(act, "audit_repo", lambda *a, **k: Audit([], False))
+    FakeGh.calls = []
+    p = upsert_suggestion(session, "publish", "ada/x", title="t", shown_at=datetime.now(UTC), shown_flags=[])
+    r = upsert_suggestion(session, "readme", "ada/y", title="t", body="# y", shown_at=datetime.now(UTC), base_sha=FakeGh().readme("ada/y")[1])
+    d = upsert_suggestion(session, "pin", "ada/z", title="t")
+    _, c = tick(session, msg(1, "approve 99"), msg(2, f"approve {p.id}"), msg(3, f"approve {r.id}"),
+                msg(4, f"decline {d.id}"), msg(5, f"publish {p.id}"))
+    assert c.sent == [
+        "No suggestion #99.",
+        f"Use publish {p.id} to make a repo public.",
+        "README committed to ada/y.",
+        f"Declined #{d.id}.",
+        "ada/x is public now.",
+    ]
+
+
+def test_growth_callback_from_another_chat_is_ignored(session, monkeypatch):
+    from jobhunt.growth.models import Suggestion, upsert_suggestion
+
+    monkeypatch.setattr(commands, "Gh", FakeGh)
+    p = upsert_suggestion(session, "publish", "ada/x", title="t", shown_at=datetime.now(UTC), shown_flags=[])
+    n, c = tick(session, cb(1, f"publish:{p.id}", chat="99"))
+    assert n == 0 and c.sent == [] and session.get(Suggestion, p.id).status == "suggested"

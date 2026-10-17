@@ -54,7 +54,7 @@ uv run jobhunt setup
 
 `setup` asks, in order: your name, email and location; a free AI Studio key (read the training warning first); a Telegram bot token from @BotFather, then a one-time code you send to your bot so only your chat is bound; your standard answers (work authorisation, salary range, and so on); the path to your CV, which it imports and walks you through confirming fact by fact; whether to install the browser that fills application forms (about 150 MB); and whether to install the daily and 5-minute timers. Press Enter to skip any step; rerunning keeps what exists.
 
-Telegram commands: yes N, no N (queue), sent N (you applied), replied N, interview N, offer N, rejected N, done N (follow-up sent), osent N, oskip N, oreplied N (outreach), pause, resume, status, autopilot on|off, unblock HOST (lift a blocked ATS host). "yes" means *you* apply, using the prepared PDF, then send `sent N`. Autopilot is off until you switch it on after enough clean approvals.
+Telegram commands: yes N, no N (queue), sent N (you applied), replied N, interview N, offer N, rejected N, done N (follow-up sent), osent N, oskip N, oreplied N (outreach), pause, resume, status, autopilot on|off, unblock HOST (lift a blocked ATS host), publish N, approve N, decline N (GitHub profile suggestions; publish makes a private repo public and is refused if a secret is found). "yes" means *you* apply, using the prepared PDF, then send `sent N`. Autopilot is off until you switch it on after enough clean approvals.
 
 Timers can be installed later with `uv run jobhunt install-timers`; run `loginctl enable-linger $USER` so they fire while you are logged out.
 
@@ -188,6 +188,16 @@ Fields longer than LinkedIn accepts are flagged rather than cut. The limits are 
 The counselor is not an interviewer with a topic box. It decides what to ask from what the system already knows: atoms with no numbers get probed, skills your best-fit jobs want get asked about, repositories no atom covers get pulled up. Each turn the model answers with one structured action — ask, look something up, propose an atom, write a note, or stop — and the engine runs it; there is no free-form generation between you and the database.
 
 Proposed atoms quote your own words and arrive unconfirmed, like everything else a model writes. Notes of kind goal and constraint are appended to the scoring prompt ("Lower fit_score for a job that violates a stated constraint"), so telling the counselor "no on-site in Lisbon" shapes every job scored afterwards — newly scanned jobs and any job you re-score — and a wrong note would too, which is why they are listed on the page with a Forget button. Jobs already scored keep their score until you press Re-score on them.
+
+### Profile growth
+
+Once a week (`growth.refresh_days`, 7 by default; never while paused or with no `profile.github_username` set), jobhunt checks your GitHub profile and your shortlisted jobs and sends suggestions to Telegram. Each suggestion has a number.
+
+- **README drafts:** a profile README is committed only after you send `approve N`. If one already exists, the reply says it will be replaced, and the commit fails rather than overwrite an edit you made in the meantime.
+- **Making a repo public:** send `publish N`. It is refused when the audit finds a secret, whatever you reply: rotate the secret and rewrite the history first. jobhunt never force-pushes your repositories; it tells you how.
+- **Pins:** pinning is manual, because GitHub has no API for it. Pin the repositories you want yourself, up to six.
+- **Certifications:** suggested only when at least two shortlisted jobs ask for one. Costs are approximate and marked as such; free and cheap options come first.
+- **Certificates as evidence:** upload a PDF, PNG or JPG at `/import` (Certificate). It arrives as an unconfirmed atom; confirm it on `/atoms` before it counts as evidence.
 
 ## Repository Layout
 

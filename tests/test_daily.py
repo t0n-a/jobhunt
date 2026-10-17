@@ -318,3 +318,147 @@ def test_paused_daily_drafts_no_outreach(engine, monkeypatch):
         set_paused(s, True)
     go(engine, FakeClient())
     assert calls == []
+
+
+def test_daily_growth_failure_does_not_stop_digest(engine, monkeypatch):
+    monkeypatch.setattr(daily, "is_paused", lambda s: False)
+    monkeypatch.setattr(daily, "refresh", lambda *a, **k: 1 / 0)
+    monkeypatch.setattr(daily, "tailor_shortlist", lambda s, l, c: TailorRun(queued=[], stopped=None))
+    monkeypatch.setattr(daily, "draft_for_run", lambda *a: [])
+    monkeypatch.setattr(daily, "draft_followups", lambda *a: [])
+    cfg = CONFIG.model_copy(update={"profile": CONFIG.profile.model_copy(update={"github_username": "ada"})})
+    client = FakeClient()
+    out = daily.run_daily(cfg, engine=engine, llm=LLM, client=client, scan=scan_ok, now=NOW)
+    assert out.startswith("jobhunt daily") and client.sent[-1][0] == out
+
+
+def test_daily_sends_new_suggestions_and_skips_without_username(engine, monkeypatch):
+    from jobhunt.growth.models import Suggestion
+
+    monkeypatch.setattr(daily, "tailor_shortlist", lambda s, l, c: TailorRun(queued=[], stopped=None))
+    monkeypatch.setattr(daily, "draft_for_run", lambda *a: [])
+    monkeypatch.setattr(daily, "draft_followups", lambda *a: [])
+    monkeypatch.setattr(daily, "Gh", lambda: object())
+    monkeypatch.setattr(daily, "refresh", lambda *a, **k: [Suggestion(id=9, kind="pin", target="ada/x", title="t", body="b")])
+    cfg = CONFIG.model_copy(update={"profile": CONFIG.profile.model_copy(update={"github_username": "ada"})})
+    client = FakeClient()
+    daily.run_daily(cfg, engine=engine, llm=None, client=client, scan=scan_ok, now=NOW)
+    assert client.sent[0][0] == "#9 Pin ada/x on your GitHub profile: b"
+    client = FakeClient()
+    go(engine, client, llm=None)  # no username: nothing growth-related
+    assert all("Pin ada/x" not in t for t, _ in client.sent)
+
+
+def test_readme_drafts_only_for_thin_readmes(engine, monkeypatch):
+    from types import SimpleNamespace
+
+    from jobhunt.growth.models import upsert_suggestion
+
+    with Session(engine) as s:
+        upsert_suggestion(s, "pin", "ada/thin", title="t")
+        upsert_suggestion(s, "pin", "ada/rich", title="t")
+    drafted = []
+
+    class Gh:
+        def readme(self, full):
+            return ("x" * 1000 if full == "ada/rich" else "", None)
+
+        def repos(self, *a):
+            return []
+
+    monkeypatch.setattr(daily, "Gh", Gh)
+    monkeypatch.setattr(daily, "refresh", lambda *a, **k: [])
+    monkeypatch.setattr(daily, "draft_repo_readme", lambda s, gh, t, *a: drafted.append(t))
+    monkeypatch.setattr(daily, "draft_profile_readme", lambda *a: None)
+    cfg = CONFIG.model_copy(deep=True)
+    cfg.profile.github_username = "ada"
+    fake_tailor(monkeypatch, engine)
+    daily.run_daily(cfg, engine=engine, llm=SimpleNamespace(), client=None, scan=scan_ok, now=NOW)
+    assert drafted == ["ada/thin"]
+
+
+def _grow_cfg():
+    cfg = CONFIG.model_copy(deep=True)
+    cfg.profile.github_username = "ada"
+    return cfg
+
+
+def test_grow_sends_created_rows_even_when_a_later_step_fails_and_marks_shown(engine, monkeypatch):
+    from types import SimpleNamespace
+
+    from jobhunt.growth.gh import GhError
+    from jobhunt.growth.models import Suggestion, upsert_suggestion
+
+    with Session(engine) as s:
+        draft = upsert_suggestion(s, "readme", "ada/x", title="t", body="# x\n")
+        draft_id = draft.id
+
+    class Gh:
+        def repos(self, *a):
+            raise GhError("offline")
+
+        def readme(self, full):
+            return "", None
+
+    monkeypatch.setattr(daily, "Gh", Gh)
+    monkeypatch.setattr(daily, "refresh", lambda *a, **k: [draft])
+    cfg = _grow_cfg()
+    for ok in (False, True):
+        client = FakeClient(ok=ok)
+        with Session(engine) as s:
+            daily._grow(s, cfg, SimpleNamespace(), client, NOW)
+            row = s.get(Suggestion, draft_id)
+            assert len(client.sent) == 1 and client.sent[0][0].startswith(f"#{draft_id} README draft")
+            assert (row.shown_at is not None) is ok
+
+
+def test_profile_readme_not_drafted_over_a_real_one_and_repo_drafts_capped(engine, monkeypatch):
+    from types import SimpleNamespace
+
+    from jobhunt.growth.models import upsert_suggestion
+
+    with Session(engine) as s:
+        for i in range(5):
+            upsert_suggestion(s, "pin", f"ada/r{i}", title="t")
+    drafted, profile = [], []
+
+    class Gh:
+        def readme(self, full):
+            return ("x" * 500 if full == "ada/ada" else "", None)
+
+        def repos(self, *a):
+            return []
+
+    monkeypatch.setattr(daily, "Gh", Gh)
+    monkeypatch.setattr(daily, "refresh", lambda *a, **k: [])
+    monkeypatch.setattr(daily, "draft_repo_readme", lambda s, gh, t, *a: drafted.append(t))
+    monkeypatch.setattr(daily, "draft_profile_readme", lambda *a: profile.append(1))
+    with Session(engine) as s:
+        daily._grow(s, _grow_cfg(), SimpleNamespace(), None, NOW)
+    assert len(drafted) == daily.MAX_README_DRAFTS == 3 and profile == []
+
+
+
+def test_unsent_readme_draft_is_sent_again(engine, monkeypatch):
+    from jobhunt.growth.models import Suggestion, upsert_suggestion
+
+    with Session(engine) as s:
+        sid = upsert_suggestion(s, "readme", "ada/r", title="t", body="# r").id
+
+    class Gh:
+        def readme(self, full):
+            return ("", None)
+
+        def repos(self, *a):
+            return []
+
+    monkeypatch.setattr(daily, "Gh", Gh)
+    monkeypatch.setattr(daily, "refresh", lambda *a, **k: [])
+    cfg = CONFIG.model_copy(deep=True)
+    cfg.profile.github_username = "ada"
+    fake_tailor(monkeypatch, engine)
+    client = FakeClient()
+    daily.run_daily(cfg, engine=engine, llm=None, client=client, scan=scan_ok, now=NOW)
+    assert any("README draft for ada/r" in text for text, _ in client.sent)
+    with Session(engine) as s:
+        assert s.get(Suggestion, sid).shown_at is not None

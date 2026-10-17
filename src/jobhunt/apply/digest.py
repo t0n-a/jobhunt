@@ -7,6 +7,7 @@ from jobhunt.apply.followup import followups_due
 from jobhunt.apply.queue import autopilot_available, trust_count
 from jobhunt.apply.tracker import funnel
 from jobhunt.config import Config
+from jobhunt.growth.models import Suggestion
 from jobhunt.jobs.models import Job
 from jobhunt.outreach.log import followups_due as outreach_followups_due
 from jobhunt.outreach.models import Outreach
@@ -95,6 +96,10 @@ def build_digest(
             out.append(f"  #{o.id} {_company(session, o)}: osent {o.id} / oskip {o.id}")
         for o in outreach_followups_due(session, now, config):
             out.append(f"  Follow-up due: #{o.id} {_company(session, o)}")
+    waiting = session.exec(select(Suggestion).where(Suggestion.status == "suggested")).all()
+    if waiting:
+        out.append(f"Profile: {len(waiting)} suggestions waiting")
+        out += [f"  #{g.id} {_clean(g.title)}" for g in waiting[:5]]
     if ghosted:
         out.append(f"Marked ghosted: {len(ghosted)}")
 

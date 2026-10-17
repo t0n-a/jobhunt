@@ -14,13 +14,18 @@ from jobhunt.apply.prepare import prepare_plan
 from jobhunt.apply.queue import tailor_shortlist
 from jobhunt.cli import summarize_scan
 from jobhunt.config import Config
+from jobhunt.growth.gh import Gh, GhError
+from jobhunt.growth.models import Suggestion
+from jobhunt.growth.readme import draft_profile_readme, draft_repo_readme
+from jobhunt.growth.suggest import _find, refresh
 from jobhunt.jobs.models import Job, JobFacts, Score
 from jobhunt.outreach.log import draft_followups, draft_for_run
 from jobhunt.outreach.models import Contact
+from jobhunt.profile.store import AtomStore
 from jobhunt.scan import ScanResult
 from jobhunt.state import is_paused
 from jobhunt.tailor.models import ApplicationEvent
-from jobhunt.telegram import TelegramClient, outreach_message, queue_message
+from jobhunt.telegram import TelegramClient, growth_message, outreach_message, queue_message
 
 log = logging.getLogger(__name__)
 
@@ -63,6 +68,76 @@ def _send_outreach(session: Session, client: TelegramClient, outreach, web_url: 
         if not client.send(text, buttons) and i == 0 and buttons:
             # Some clients or API versions reject copy_text; the Sent/Skip row still works.
             client.send(text, [r for r in buttons if not any("copy_text" in b for b in r)])
+
+
+MAX_README_DRAFTS = 3  # each draft is an LLM call plus several gh calls; the rest follow tomorrow
+
+
+def _grow(session: Session, config: Config, llm, client, now: datetime) -> None:
+    user = config.profile.github_username
+    new: list = []
+    try:
+        gh = Gh()
+    except GhError as e:  # gh missing or logged out: skip growth, keep going
+        log.warning("growth skipped: %s", e)
+        return
+
+    def refreshed():
+        new.extend(refresh(session, gh, config, now=now, workdir=config.data_dir / "growth_audit"))
+
+    def repo_drafts():
+        atoms = AtomStore(session).confirmed_only()
+        # Repos he just made public, and pin candidates: draft only where the README is thin,
+        # so a README he wrote himself is never offered a replacement.
+        targets = session.exec(
+            select(Suggestion).where(
+                ((Suggestion.kind == "publish") & (Suggestion.status == "done"))
+                | (Suggestion.kind == "pin")
+            )
+        ).all()
+        drafted = 0
+        for p in targets:
+            if drafted >= MAX_README_DRAFTS:
+                break
+            if _find(session, "readme", p.target) is None and len(gh.readme(p.target)[0] or "") < 300:
+                drafted += 1
+                draft = draft_repo_readme(session, gh, p.target, atoms, llm)
+                if draft is not None:
+                    new.append(draft)
+
+    def profile_draft():
+        mine = f"{user}/{user}"
+        # Same thin-README gate as repos: a profile README he wrote is never offered a replacement.
+        if _find(session, "profile_readme", mine) is None and len(gh.readme(mine)[0] or "") < 300:
+            atoms = AtomStore(session).confirmed_only()
+            profile = draft_profile_readme(session, gh, user, atoms, gh.repos(user, "public"), llm)
+            if profile is not None:
+                new.append(profile)
+
+    # One failing step must not drop the suggestions the others already created.
+    for step in (refreshed, *((repo_drafts, profile_draft) if llm is not None else ())):
+        try:
+            step()
+        except GhError as e:
+            log.warning("growth step skipped: %s", e)
+    if client:
+        # A draft whose message never arrived is sent again, or approve would refuse it forever.
+        unsent = session.exec(
+            select(Suggestion).where(
+                Suggestion.kind.in_(("readme", "profile_readme")),
+                Suggestion.status == "suggested",
+                Suggestion.shown_at.is_(None),
+            )
+        ).all()
+        ids = {s.id for s in new}
+        for s in [*new, *(u for u in unsent if u.id not in ids)]:
+            if client.send(growth_message(s)) and s.kind in ("readme", "profile_readme", "publish"):
+                row = session.get(Suggestion, s.id)
+                if row is not None:  # only now can approve/publish act: he has seen it
+                    row.shown_at = now
+                    row.shown_flags = list(row.flags or [])
+                    session.add(row)
+                    session.commit()
 
 
 def run_daily(
@@ -125,6 +200,12 @@ def run_daily(
                         _send_outreach(session, client, outreach, config.autopilot.web_url)
             except Exception:  # the digest must still go out
                 log.warning("daily outreach failed", exc_info=True)
+                session.rollback()
+        if not is_paused(session) and config.profile.github_username:
+            try:
+                _grow(session, config, llm, client, now)
+            except Exception:  # the digest must still go out
+                log.warning("daily growth failed", exc_info=True)
                 session.rollback()
         lines = build_digest(
             session,
