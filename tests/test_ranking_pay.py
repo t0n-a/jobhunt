@@ -60,3 +60,16 @@ def test_large_amounts_that_are_not_pay_are_skipped():
     assert parse_salary("$30,000 MRR") is None
     assert parse_salary("We raised $2M") is None
     assert parse_salary("raised $50,000 in funding. Salary €45,000 per year").low == 45000
+
+
+def test_real_salaries_next_to_bonus_or_equity_still_parse():
+    for text, amount in [
+        ("€50,000 base + bonus", 50000),
+        ("Salary: €60,000 (plus equity)", 60000),
+        ("Salary €70,000 + equity", 70000),
+        ("€55,000 + 10% bonus", 55000),
+        ("€60,000 base, plus equity and stock options", 60000),
+        ("bonus up to $20,000 on top of €70,000 base", 70000),
+    ]:
+        s = parse_salary(text)
+        assert s == Salary(amount, amount, "EUR", "year"), text

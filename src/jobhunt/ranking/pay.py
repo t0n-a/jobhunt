@@ -77,11 +77,18 @@ _NOT_PAY = re.compile(
 )
 
 
+_PAY_WORD = re.compile(r"\b(?:salary|base|compensation|ote|pay|wage)\b", re.IGNORECASE)
+_DIRECT_NOT_PAY = re.compile(rf"\s*(?:(?:signing|seed|in)\s+)?(?:{_NOT_PAY.pattern})", re.IGNORECASE)
+
+
 def _not_pay(text: str, m: re.Match) -> bool:
-    """A bare large amount sitting next to money-that-is-not-pay words (same sentence)."""
-    after = re.split(r"[.!?\n]", text[m.end() : m.end() + 30])[0]
+    """A bare large amount next to money-that-is-not-pay words (same sentence)."""
+    # the after-window stops at the next amount so another figure's "base" does not rescue this one
+    after = re.split(r"[.!?\n€$£]", text[m.end() : m.end() + 30])[0]
     before = re.split(r"[.!?\n]", text[max(0, m.start() - 30) : m.start()])[-1]
-    return bool(_NOT_PAY.search(after) or _NOT_PAY.search(before))
+    if _PAY_WORD.search(before) or _PAY_WORD.search(after):
+        return False
+    return bool(_DIRECT_NOT_PAY.match(after) or _NOT_PAY.search(before))
 
 
 def parse_salary(text: str | None) -> Salary | None:

@@ -42,7 +42,8 @@ def test_non_http_and_private_targets_are_never_probed():
 
     with httpx.Client(transport=httpx.MockTransport(handler)) as c:
         for url in ("file:///etc/passwd", "http://127.0.0.1/x", "http://169.254.169.254/",
-                    "http://localhost/x", "http://10.0.0.5/x", "http://[::1]/x"):
+                    "http://localhost/x", "http://10.0.0.5/x", "http://127.0.0.1./",
+                    "http://192.168.1.1./", "http://[::1]/x"):
             assert check_liveness(url, c) == "uncertain"
         assert calls == []
         assert check_liveness(U, c) == "active"

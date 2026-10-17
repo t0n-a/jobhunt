@@ -66,12 +66,12 @@ def _probe_allowed(url: str) -> bool:
     if bare == "localhost" or bare.endswith(".localhost"):
         return False
     try:
-        ip = ipaddress.ip_address(host)
+        ip = ipaddress.ip_address(bare)
     except ValueError:
-        if not re.fullmatch(r"[0-9a-fx.]+", host) or not re.match(r"\d", host):
+        if not re.fullmatch(r"[0-9a-fx.]+", bare) or not re.match(r"\d", bare):
             return True
         try:  # legacy IPv4 forms: 0x7f000001, 2130706433, 0177.0.0.1
-            ip = ipaddress.IPv4Address(socket.inet_aton(host))
+            ip = ipaddress.IPv4Address(socket.inet_aton(bare))
         except OSError:
             return True
     return ip.is_global
