@@ -12,6 +12,8 @@ def test_country_from_city_country_and_state():
     assert country_of("Zürich") == "CH"
     assert country_of("Remote") is None
     assert country_of(None) is None
+    assert country_of("Delhi, IN") == "IN"
+    assert country_of("Springfield, IL") == "US"
 
 
 def test_eu_is_easy_regardless_of_pay():

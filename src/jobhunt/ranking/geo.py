@@ -375,12 +375,14 @@ def country_of(location: str | None) -> str | None:
     if not location:
         return None
     text = location.strip()
-    # A US state code is checked before aliases: "Paris, TX" is not France.
+    m = _ALIAS_RE.search(text.lower())
+    if m:
+        return _ALIASES[m.group(1)]
+    # Fallback only: an unknown city with a US state code, e.g. "Springfield, IL".
     state = _TRAILING_CODE.search(text)
     if state and state.group(1) in _US_STATES:
         return "US"
-    m = _ALIAS_RE.search(text.lower())
-    return _ALIASES[m.group(1)] if m else None
+    return None
 
 
 def mentions_sponsorship(text: str) -> bool:
