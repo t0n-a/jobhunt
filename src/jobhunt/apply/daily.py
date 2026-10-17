@@ -15,10 +15,12 @@ from jobhunt.apply.queue import tailor_shortlist
 from jobhunt.cli import summarize_scan
 from jobhunt.config import Config
 from jobhunt.jobs.models import Job, JobFacts, Score
+from jobhunt.outreach.log import draft_followups, draft_for_run
+from jobhunt.outreach.models import Contact
 from jobhunt.scan import ScanResult
 from jobhunt.state import is_paused
 from jobhunt.tailor.models import ApplicationEvent
-from jobhunt.telegram import TelegramClient, queue_message
+from jobhunt.telegram import TelegramClient, outreach_message, queue_message
 
 log = logging.getLogger(__name__)
 
@@ -51,6 +53,16 @@ def _send_queued(
         application, job, score, session.get(JobFacts, job.id), web_url, note, extra
     )
     client.send(text, buttons)
+
+
+def _send_outreach(session: Session, client: TelegramClient, outreach, web_url: str) -> None:
+    job, contact = session.get(Job, outreach.job_id), session.get(Contact, outreach.contact_id)
+    if job is None or contact is None:
+        return
+    for i, (text, buttons) in enumerate(outreach_message(outreach, job, contact, web_url)):
+        if not client.send(text, buttons) and i == 0 and buttons:
+            # Some clients or API versions reject copy_text; the Sent/Skip row still works.
+            client.send(text, [r for r in buttons if not any("copy_text" in b for b in r)])
 
 
 def run_daily(
@@ -105,6 +117,15 @@ def run_daily(
                 log.warning("daily tailoring failed", exc_info=True)
                 session.rollback()
                 stopped = f"Tailoring failed: {type(exc).__name__}"
+        if llm is not None and not is_paused(session):
+            try:
+                new = draft_for_run(session, config, llm) + draft_followups(session, config, llm, now)
+                if client:
+                    for outreach in new:
+                        _send_outreach(session, client, outreach, config.autopilot.web_url)
+            except Exception:  # the digest must still go out
+                log.warning("daily outreach failed", exc_info=True)
+                session.rollback()
         lines = build_digest(
             session,
             now=now,
