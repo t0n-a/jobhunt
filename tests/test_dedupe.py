@@ -193,3 +193,14 @@ def test_role_match_rules():
 def test_same_job_on_linkedin_and_ats_is_duplicate():
     p = make_posting(title="Backend Developer", company="Acme", url="https://linkedin.com/jobs/view/1")
     assert is_duplicate(p, make_job(title="Backend Engineer", company="Acme Inc."))
+
+
+def test_upsert_computes_each_url_key_once(store, monkeypatch):
+    from jobhunt.jobs import store as store_mod
+
+    calls = []
+    real = store_mod.url_key
+    monkeypatch.setattr(store_mod, "url_key", lambda u: calls.append(u) or real(u))
+    for i in range(50):
+        store.upsert_posting(make_posting(title=f"Role{i} Alpha{i}", company=f"Co{i}"))
+    assert len(calls) <= 100

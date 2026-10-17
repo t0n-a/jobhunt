@@ -45,6 +45,7 @@ class JobSpyConfig(BaseModel):
     results_wanted: int = 50
     hours_old: int = 72
     country_indeed: str = "portugal"
+    deadline_seconds: int = 600
 
 
 class SourcesConfig(BaseModel):

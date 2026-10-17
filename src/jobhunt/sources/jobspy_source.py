@@ -23,6 +23,7 @@ class JobSpySource:
     def __init__(self, site: str, cfg: JobSpyConfig, scrape: Callable | None = None, shuffle=random.shuffle):
         self.name = site
         self.cfg = cfg
+        self.deadline_seconds = cfg.deadline_seconds
         self._scrape = scrape
         self._shuffle = shuffle
 
@@ -32,8 +33,7 @@ class JobSpySource:
             from jobspy import scrape_jobs as scrape  # lazy: keeps tests off the network
         got_rows = False
         pairs = [(t, loc) for t in self.cfg.search_terms for loc in self.cfg.locations]
-        # shortcut: the source deadline still caps calls per run; add a per-source rotation
-        # cursor or own deadline if coverage looks thin.
+        # LinkedIn's 3-7 s page delay needs the longer per-source deadline.
         self._shuffle(pairs)
         for term, loc in pairs:
             try:

@@ -14,7 +14,7 @@ from jobhunt.jobs.store import JobStore
 from jobhunt.llm import LLMError, LLMProvider
 from jobhunt.matching.score import score_job
 from jobhunt.profile.store import AtomStore
-from jobhunt.ranking.rules import triage
+from jobhunt.ranking.rules import _posted_eur, triage
 from jobhunt.ranking.shortlist import shortlist
 from jobhunt.sources.ats import AshbySource, GreenhouseSource, LeverSource
 from jobhunt.sources.hackernews import HackerNewsSource
@@ -148,7 +148,7 @@ def run_scan(
 
     for source in sources:
         try:
-            fetched, timed_out = _drain(source, deadline_seconds)
+            fetched, timed_out = _drain(source, getattr(source, "deadline_seconds", deadline_seconds))
         except Exception as exc:  # noqa: BLE001 - isolation is the requirement
             logger.warning("source %s failed: %s", source.name, exc)
             result.failed_sources.append(source.name)
@@ -185,7 +185,14 @@ def run_scan(
         _triage_all(session, ranking)
         filtered_ids = {
             f.job_id
-            for f in session.exec(select(JobFacts).where(JobFacts.filtered_reason.is_not(None)))
+            for f in session.exec(
+                select(JobFacts)
+                .join(Job, Job.id == JobFacts.job_id)
+                .where(
+                    JobFacts.filtered_reason.is_not(None),
+                    JobFacts.content_hash == Job.content_hash,
+                )
+            )
         }
         result.filtered = len(filtered_ids & seen_job_ids)
 
@@ -240,7 +247,7 @@ def _triage_all(session: Session, cfg: RankingConfig) -> None:
     for job in session.exec(select(Job)).all():
         old = facts.get(job.id)
         # The hash ignores salary_text, so a salary that arrived later needs its own trigger.
-        late_salary = bool(job.salary_text) and old is not None and old.pay_estimated
+        late_salary = old is not None and old.pay_estimated and _posted_eur(job) is not None
         if old is not None and old.content_hash == job.content_hash and not late_salary:
             continue
         try:
@@ -257,17 +264,19 @@ def _triage_all(session: Session, cfg: RankingConfig) -> None:
 
 
 def _check_liveness(session: Session, cfg: RankingConfig, client: httpx.Client) -> int:
-    """Probe the top shortlist entries not checked in 24h; return how many are expired."""
+    """Probe the top shortlist entries not checked in 24h; return how many of this call's probes were expired."""
     cutoff = datetime.now(UTC) - timedelta(hours=24)
+    expired = 0
     for r in shortlist(session, cfg)[: cfg.liveness_check_limit]:
         checked = r.facts.liveness_checked_at
         if checked is not None and checked.replace(tzinfo=UTC) > cutoff:
             continue
         r.facts.liveness = check_liveness(r.job.url, client)
+        expired += r.facts.liveness == "expired"
         r.facts.liveness_checked_at = datetime.now(UTC)
         session.add(r.facts)
     session.commit()
-    return len(session.exec(select(JobFacts).where(JobFacts.liveness == "expired")).all())
+    return expired
 
 
 def _unscored_job_ids(session: Session) -> list[int]:
