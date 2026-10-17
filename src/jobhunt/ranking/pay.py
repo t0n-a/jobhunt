@@ -41,7 +41,8 @@ _NUM = r"(?:\d{1,3}(?:[.,]\d{3}){1,3}|\d+(?:[.,]\d+)?)(?:\s?[kK]\b)?"
 _SEP = r"\s*(?:-|–|—|\bto\b|\ba\b)\s*"
 _SALARY = re.compile(
     rf"(?P<c1>{_CUR})\s?(?P<n1>{_NUM})(?:{_SEP}(?:{_CUR}\s?)?(?P<n2>{_NUM}))?"
-    rf"|(?P<n3>{_NUM})\s?(?P<c2>{_CUR})(?:{_SEP}(?P<n4>{_NUM})\s?(?:{_CUR})?)?",
+    rf"|(?P<n3>{_NUM})\s?(?P<c2>{_CUR})(?:{_SEP}(?P<n4>{_NUM})\s?(?:{_CUR})?)?"
+    rf"|(?P<n5>{_NUM}){_SEP}(?P<n6>{_NUM})\s?(?P<c3>{_CUR})",  # "50-60k EUR": currency last
     re.IGNORECASE,
 )
 _PERIOD = re.compile(
@@ -100,10 +101,14 @@ def parse_salary(text: str | None) -> Salary | None:
             continue
         if m.group("n1"):
             cur, low_tok, high_tok = m.group("c1"), m.group("n1"), m.group("n2")
-        else:
+        elif m.group("n3"):
             cur, low_tok, high_tok = m.group("c2"), m.group("n3"), m.group("n4")
+        else:
+            cur, low_tok, high_tok = m.group("c3"), m.group("n5"), m.group("n6")
         low = _num(low_tok)
         high = _num(high_tok) if high_tok else low
+        if high_tok and high_tok.rstrip()[-1] in "kK" and low < 1000:  # "50-60k": k covers both
+            low *= 1000
         currency = _SYMBOL_CODE.get(cur, cur.upper())
         period_match = _PERIOD.search(text, m.end(), m.end() + _PERIOD_NEAR)
         if period_match:

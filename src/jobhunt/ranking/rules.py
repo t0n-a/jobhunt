@@ -8,10 +8,13 @@ from jobhunt.ranking.geo import country_of, visa_class
 from jobhunt.ranking.pay import PAY_SOURCE, annual_eur, estimate_pay, parse_salary
 
 _SENIOR_TITLE = re.compile(
-    r"\b(senior|sr|staff|principal|lead|head|director|architect|manager|vp)\b"
-    r"|\b(iii|iv|v|3|4|5)$",
+    r"\b(senior|sr|staff|principal|director|architect|vp)\b"
+    r"|\b(iii|iv|v)$"
+    r"|\b(?:l|level)\s?[3-9]\b",  # "L4", "Level 3"; a bare trailing digit is not seniority
     re.IGNORECASE,
 )
+# Alone these mean senior ("Tech Lead"), but "Lead Generation Intern" is junior.
+_LEAD_TITLE = re.compile(r"\b(lead|head|manager)\b", re.IGNORECASE)
 _JUNIOR_TITLE = re.compile(
     r"\b(junior|jr|graduate|grad|entry[- ]level|intern|internship|trainee|apprentice"
     r"|new grad|associate)\b"
@@ -64,14 +67,17 @@ _SENTENCE_END = re.compile(r"[.!?;\n]")
 
 
 def level_of(title: str, description: str) -> str:
-    if _SENIOR_TITLE.search(title.strip()):
+    title = title.strip()
+    if _SENIOR_TITLE.search(title):
+        return "senior"
+    if _LEAD_TITLE.search(title) and not _JUNIOR_TITLE.search(title):
         return "senior"
     for m in _YEARS.finditer(description):
         if int(m.group(1)) >= 5:
             window = description[max(0, m.start() - 40) : m.end() + 40]
             if _EXPERIENCE_NEAR.search(window):
                 return "senior"
-    if _JUNIOR_TITLE.search(title.strip()):
+    if _JUNIOR_TITLE.search(title):
         return "junior"
     return "mid"
 
@@ -103,7 +109,8 @@ def triage(job: Job, cfg: RankingConfig) -> JobFacts:
     if posted is not None:
         pay, estimated, source = posted, False, "posted"
     else:
-        pay, estimated, source = estimate_pay(country, level), True, PAY_SOURCE
+        pay, estimated = estimate_pay(country, level), True
+        source = PAY_SOURCE if pay is not None else None
 
     reason = None
     if level == "senior":

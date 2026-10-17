@@ -380,11 +380,14 @@ def country_of(location: str | None) -> str | None:
     if not location:
         return None
     text = location.strip()
+    state = _TRAILING_CODE.search(text)
+    # "Paris, TX" is Texas, but "Delhi, IN" and "San Francisco, CA" are real country codes too.
+    if state and state.group(1) in _US_STATES and state.group(1) not in _BY_COUNTRY:
+        return "US"
     m = _ALIAS_RE.search(text.lower())
     if m:
         return _ALIASES[m.group(1)]
-    # Fallback only: an unknown city with a US state code, e.g. "Springfield, IL".
-    state = _TRAILING_CODE.search(text)
+    # Fallback only: an unknown city with a US state code, e.g. "Springfield, IL" (IL is Israel too).
     if state and state.group(1) in _US_STATES:
         return "US"
     return None

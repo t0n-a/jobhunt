@@ -42,7 +42,8 @@ def shortlist(session: Session, cfg: RankingConfig, limit: int | None = None) ->
     return ranked[:limit]
 
 
-_CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f]")  # C0, DEL, C1 (ESC starts terminal sequences)
+# C0, DEL, C1 (ESC starts terminal sequences); bidi marks and overrides can spoof a company name
+_CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f\u200e\u200f\u202a-\u202e\u2066-\u2069]")
 
 
 def _clean(value: str | None) -> str:

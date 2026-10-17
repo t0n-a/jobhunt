@@ -4,7 +4,7 @@ from sqlmodel import Session
 from jobhunt.config import RankingConfig
 from jobhunt.db import create_engine_for, init_db
 from jobhunt.jobs.models import Job, JobFacts, Score
-from jobhunt.ranking.shortlist import RankedJob, render_line, shortlist
+from jobhunt.ranking.shortlist import RankedJob, _clean, render_line, shortlist
 
 
 @pytest.fixture
@@ -96,3 +96,7 @@ def test_render_line_strips_control_characters():
     line = render_line(RankedJob(job, score, facts))
     assert "\x1b" not in line and "\x07" not in line and "\x9b" not in line
     assert "[31mEvil[0m @ Acme | Berlin | u]0;x" in line
+
+
+def test_bidi_overrides_are_stripped():
+    assert _clean("Acme\u202eevil\u2066x\u2069") == "Acmeevilx"
