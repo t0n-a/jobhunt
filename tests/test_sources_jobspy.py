@@ -42,3 +42,27 @@ def test_one_malformed_row_is_skipped_not_the_source():
     rows = [dict(ROW, id="bad", date_posted="not a date"), dict(ROW, id="ok")]
     out = list(JobSpySource("indeed", CFG, scrape=lambda **kw: pd.DataFrame(rows)).fetch())
     assert [p.external_id for p in out] == ["ok"]
+
+
+def test_term_location_pairs_follow_the_injected_shuffle():
+    seen = []
+
+    def scrape(**kw):
+        seen.append((kw["search_term"], kw["location"]))
+        return pd.DataFrame([ROW])
+
+    cfg = JobSpyConfig(search_terms=["a", "b"], locations=["x", "y"])
+    list(JobSpySource("linkedin", cfg, scrape=scrape, shuffle=lambda pairs: pairs.reverse()).fetch())
+    assert seen == [("b", "y"), ("b", "x"), ("a", "y"), ("a", "x")]
+
+
+def test_uses_the_current_jobspy_description_kwarg():
+    kwargs = {}
+
+    def scrape(**kw):
+        kwargs.update(kw)
+        return pd.DataFrame([ROW])
+
+    list(JobSpySource("linkedin", CFG, scrape=scrape).fetch())
+    assert kwargs["fetch_description"] is True
+    assert "linkedin_fetch_description" not in kwargs

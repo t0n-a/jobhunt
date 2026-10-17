@@ -1,4 +1,5 @@
 import logging
+import random
 from collections.abc import Callable, Iterable
 
 import pandas as pd
@@ -19,44 +20,48 @@ def _val(row, key):
 class JobSpySource:
     """LinkedIn (logged-out, best-effort) and Indeed through the JobSpy scraper."""
 
-    def __init__(self, site: str, cfg: JobSpyConfig, scrape: Callable | None = None):
+    def __init__(self, site: str, cfg: JobSpyConfig, scrape: Callable | None = None, shuffle=random.shuffle):
         self.name = site
         self.cfg = cfg
         self._scrape = scrape
+        self._shuffle = shuffle
 
     def fetch(self) -> Iterable[RawPosting]:
         scrape = self._scrape
         if scrape is None:
             from jobspy import scrape_jobs as scrape  # lazy: keeps tests off the network
         got_rows = False
-        for term in self.cfg.search_terms:
-            for loc in self.cfg.locations:
+        pairs = [(t, loc) for t in self.cfg.search_terms for loc in self.cfg.locations]
+        # shortcut: the source deadline still caps calls per run; add a per-source rotation
+        # cursor or own deadline if coverage looks thin.
+        self._shuffle(pairs)
+        for term, loc in pairs:
+            try:
+                df = scrape(
+                    site_name=[self.name],
+                    search_term=term,
+                    location=loc,
+                    results_wanted=self.cfg.results_wanted,
+                    hours_old=self.cfg.hours_old,
+                    country_indeed=self.cfg.country_indeed,
+                    fetch_description=True,
+                    enforce_annual_salary=True,
+                    verbose=0,
+                )
+            except Exception as exc:  # noqa: BLE001 - scraper failures are many and untyped
+                logger.warning("%s: scrape %r/%r failed: %s", self.name, term, loc, exc)
+                continue
+            if df is None or df.empty:
+                continue
+            got_rows = True
+            for row in df.to_dict("records"):
                 try:
-                    df = scrape(
-                        site_name=[self.name],
-                        search_term=term,
-                        location=loc,
-                        results_wanted=self.cfg.results_wanted,
-                        hours_old=self.cfg.hours_old,
-                        country_indeed=self.cfg.country_indeed,
-                        linkedin_fetch_description=True,
-                        enforce_annual_salary=True,
-                        verbose=0,
-                    )
-                except Exception as exc:  # noqa: BLE001 - scraper failures are many and untyped
-                    logger.warning("%s: scrape %r/%r failed: %s", self.name, term, loc, exc)
+                    posting = self._to_posting(row)
+                except Exception as exc:  # noqa: BLE001 - one malformed row must not sink the source
+                    logger.warning("%s: skipping malformed row: %s", self.name, exc)
                     continue
-                if df is None or df.empty:
-                    continue
-                got_rows = True
-                for row in df.to_dict("records"):
-                    try:
-                        posting = self._to_posting(row)
-                    except Exception as exc:  # noqa: BLE001 - one malformed row must not sink the source
-                        logger.warning("%s: skipping malformed row: %s", self.name, exc)
-                        continue
-                    if posting:
-                        yield posting
+                if posting:
+                    yield posting
         if not got_rows:
             raise SourceError(f"{self.name} returned nothing; likely blocked or rate-limited")
 
