@@ -66,7 +66,7 @@ def discover_chat_id(token: str, http: httpx.Client, code: str) -> str | None:
     return None
 
 
-_NEEDS_ID = {"yes", "no", "sent", "done", "replied", "interview", "offer", "rejected"}
+_NEEDS_ID = {"yes", "no", "sent", "done", "replied", "interview", "offer", "rejected", "osent", "oskip", "oreplied"}
 _NO_ARG = {"pause", "resume", "status", "help"}
 
 
@@ -108,3 +108,29 @@ def queue_message(
         ]
     ]
     return text, buttons
+
+
+COPY_LIMIT = 256  # Telegram's copy_text button limit
+
+
+def outreach_message(outreach, job, contact, web_url: str) -> list[tuple[str, list[list[dict]] | None]]:
+    """Header with buttons, then the draft alone so a long-press copies it cleanly."""
+    name = _clean(contact.name or "") or "the talent team"
+    to = f"{name}, {_clean(contact.role)}" if contact.role else name
+    lines = [
+        f"Outreach #{outreach.id} ({outreach.kind}): {_clean(job.title)} @ {_clean(job.company)}",
+        f"To: {to}",
+    ]
+    if contact.profile_url:
+        lines.append(_clean(contact.profile_url))
+    lines.append("Copy the text below, send it yourself, then tap Sent.")
+    buttons: list[list[dict]] = []
+    if len(outreach.text) <= COPY_LIMIT:
+        buttons.append([{"text": "Copy", "copy_text": {"text": outreach.text}}])
+    buttons.append(
+        [
+            {"text": "Sent", "callback_data": f"osent:{outreach.id}"},
+            {"text": "Skip", "callback_data": f"oskip:{outreach.id}"},
+        ]
+    )
+    return [("\n".join(lines), buttons), (outreach.text, None)]

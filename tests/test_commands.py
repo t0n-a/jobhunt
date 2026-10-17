@@ -11,6 +11,7 @@ from jobhunt.apply.tracker import set_status
 from jobhunt.config import Config, ProfileConfig
 from jobhunt.db import create_engine_for, init_db
 from jobhunt.jobs.models import Job
+from jobhunt.outreach.models import Outreach
 from jobhunt.state import get_state, is_paused
 from jobhunt.tailor.models import Application
 
@@ -225,3 +226,30 @@ def test_unblock_lifts_a_blocked_host(session):
     assert not is_blocked(session, "jobs.lever.co")
     assert commands.handle_command(session, "unblock", "jobs.lever.co", CONFIG, NOW) == "jobs.lever.co was not blocked."
     assert "unblock" in HELP
+
+
+def test_outreach_commands(session):
+    session.add(Outreach(id=1, job_id=1, kind="message", text="hi"))
+    session.commit()
+    _, c = tick(session, msg(1, "osent 1"), msg(2, "osent 1"), msg(3, "oreplied 1"), msg(4, "oskip 1"))
+    assert c.sent == [
+        "Logged outreach #1 as sent. I'll remind you about a follow-up in 7 days.",
+        "Outreach #1 is sent; nothing changed.",
+        "Nice. Logged the reply to outreach #1.",
+        "Outreach #1 is replied; nothing changed.",
+    ]
+
+
+def test_oskip_and_missing_outreach(session):
+    session.add(Outreach(id=1, job_id=1, kind="message", text="hi"))
+    session.commit()
+    _, c = tick(session, cb(1, "oskip:1"), msg(2, "osent 9"))
+    assert c.sent == ["Skipped outreach #1.", "No outreach #9."]
+
+
+def test_outreach_callback_from_another_chat_is_ignored(session):
+    session.add(Outreach(id=5, job_id=1, kind="message", text="hi"))
+    session.commit()
+    n, c = tick(session, cb(1, "osent:5", chat="99"))
+    assert n == 0 and c.sent == []
+    assert session.get(Outreach, 5).status == "drafted"

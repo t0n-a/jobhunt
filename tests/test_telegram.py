@@ -10,6 +10,7 @@ from jobhunt.telegram import (
     MAX_TEXT,
     TelegramClient,
     discover_chat_id,
+    outreach_message,
     parse_command,
     queue_message,
 )
@@ -140,3 +141,33 @@ def test_queue_message_shows_autopilot_notes():
     assert "Autopilot: stopped: captcha" in t
     t, _ = queue_message(app, job, None, None, "w", "autopilot error: X - it may have gone through")
     assert "Autopilot: error: X - it may have gone through" in t
+
+
+def _outreach(text):
+    o = SimpleNamespace(id=5, kind="message", text=text)
+    job = SimpleNamespace(title="Dev", company="Acme")
+    contact = SimpleNamespace(name="Ana", role="Recruiter", profile_url="https://linkedin.com/in/ana")
+    return outreach_message(o, job, contact, "http://web")
+
+
+def test_outreach_message_has_copy_button_when_short():
+    (header, buttons), (body, none) = _outreach("Hi Ana")
+    assert header.splitlines()[0] == "Outreach #5 (message): Dev @ Acme"
+    assert "To: Ana, Recruiter" in header and "Copy the text below" in header
+    assert buttons[0] == [{"text": "Copy", "copy_text": {"text": "Hi Ana"}}]
+    assert [b["callback_data"] for b in buttons[1]] == ["osent:5", "oskip:5"]
+    assert body == "Hi Ana" and none is None
+
+
+def test_long_text_has_no_copy_button_but_its_own_message():
+    text = "x" * 257
+    (_, buttons), (body, _) = _outreach(text)
+    assert len(buttons) == 1 and "copy_text" not in str(buttons)
+    assert body == text
+
+
+def test_parse_outreach_commands():
+    assert parse_command("osent 5") == ("osent", 5)
+    assert parse_command("oskip:5") == ("oskip", 5)
+    assert parse_command("/oreplied 5") == ("oreplied", 5)
+    assert parse_command("osent") is None
