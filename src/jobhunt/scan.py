@@ -191,7 +191,7 @@ def run_scan(
 
         queue = [
             j
-            for j in list(seen_job_ids) + _sweep_unscored(session, skip=seen_job_ids)
+            for j in list(seen_job_ids) + _sweep_unscored(session, skip=seen_job_ids | filtered_ids)
             if j not in filtered_ids
         ]
         started = time.monotonic()
@@ -239,7 +239,9 @@ def _triage_all(session: Session, cfg: RankingConfig) -> None:
     facts = {f.job_id: f for f in session.exec(select(JobFacts)).all()}
     for job in session.exec(select(Job)).all():
         old = facts.get(job.id)
-        if old is not None and old.content_hash == job.content_hash:
+        # The hash ignores salary_text, so a salary that arrived later needs its own trigger.
+        late_salary = bool(job.salary_text) and old is not None and old.pay_estimated
+        if old is not None and old.content_hash == job.content_hash and not late_salary:
             continue
         try:
             new = triage(job, cfg)

@@ -429,3 +429,32 @@ def test_one_bad_job_in_triage_is_skipped_not_the_scan(tmp_path, monkeypatch):
     )
     with Session(engine) as session:
         assert len(session.exec(select(JobFacts)).all()) == 1
+
+
+def test_filtered_jobs_do_not_fill_the_unscored_sweep(tmp_path, monkeypatch):
+    from jobhunt import scan
+
+    monkeypatch.setattr(scan, "SWEEP_LIMIT", 2)
+    engine = fresh(tmp_path)
+    seniors = [posting(f"Senior Engineer {i}", company=f"Co{i}") for i in range(3)]
+    run_scan(engine, [StubSource("s", [*seniors, posting()])], FakeProvider([]))  # scoring fails
+    second = run_scan(engine, [StubSource("s", [])], FakeProvider([score_payload()]))
+
+    assert second.scored == 1
+
+
+def test_a_later_salary_replaces_the_estimated_pay(tmp_path):
+    from jobhunt.jobs.models import JobFacts
+
+    engine = fresh(tmp_path)
+    client = _live_client()
+    run_scan(engine, [StubSource("s", [posting()])], FakeProvider([score_payload()]), liveness_client=client)
+    with Session(engine) as session:
+        assert session.exec(select(JobFacts)).one().pay_estimated is True
+    paid = posting()
+    paid.salary_text = "€50,000 per year"
+    run_scan(engine, [StubSource("s", [paid])], FakeProvider([score_payload()]), liveness_client=client)
+
+    with Session(engine) as session:
+        facts = session.exec(select(JobFacts)).one()
+        assert (facts.pay_estimated, facts.pay_yearly_eur, facts.pay_source) == (False, 50000, "posted")
