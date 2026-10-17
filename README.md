@@ -42,20 +42,10 @@ cp .env.example .env
 uv run jobhunt serve
 ```
 
-Then open http://localhost:8000. Both `config.yaml` and `.env` are gitignored.
+Then open http://localhost:8000. Both `config.yaml` and `.env` are gitignored. On a fresh install,
+`uv run jobhunt setup` (below) does the copying and filling for you.
 
-## First Run, In Order
-
-The Home page shows the four stages and names the one thing to do next. Everything in this system is downstream of **confirmed evidence atoms**, so the order matters more than it looks:
-
-1. **Put something in the profile.** Import a CV, your GitHub, or a course list at `/import`, or talk to the counselor at `/counselor`.
-2. **Confirm the atoms at `/atoms`.** Imported atoms arrive *unconfirmed* — they are unreviewed model output, and nothing downstream will touch them until you have read each one. This is the step people skip.
-3. **`uv run jobhunt scan`.** Finds and scores jobs against what you confirmed. Start it and walk away; the first run is slow.
-4. **Then everything else works:** `/jobs` to see ranked matches, `/gaps` and `/today` for daily tasks, "Tailor a resume for this" on any job, and `/linkedin` for profile text.
-
-Steps 3 onward all **refuse to run** against an empty profile rather than producing something plausible. That is deliberate: with no evidence to match against, the scorer rates whichever job asks for least, and a generator with nothing to draw on writes confident fiction. An early refusal is the honest answer.
-
-## First run
+## Guided Setup
 
 ```bash
 uv sync
@@ -67,6 +57,17 @@ uv run jobhunt setup
 Telegram commands: yes N, no N (queue), sent N (you applied), done N (follow-up sent), pause, resume, status. "yes" means *you* apply, using the prepared PDF, then send `sent N`. Autopilot stays off in this version.
 
 Timers can be installed later with `uv run jobhunt install-timers`; run `loginctl enable-linger $USER` so they fire while you are logged out.
+
+## First Run, In Order
+
+The Home page shows the four stages and names the one thing to do next. Everything in this system is downstream of **confirmed evidence atoms**, so the order matters more than it looks:
+
+1. **Put something in the profile.** Import a CV, your GitHub, or a course list at `/import`, or talk to the counselor at `/counselor`.
+2. **Confirm the atoms at `/atoms`.** Imported atoms arrive *unconfirmed* — they are unreviewed model output, and nothing downstream will touch them until you have read each one. This is the step people skip.
+3. **`uv run jobhunt scan`.** Finds and scores jobs against what you confirmed. Start it and walk away; the first run is slow.
+4. **Then everything else works:** `/jobs` to see ranked matches, `/gaps` and `/today` for daily tasks, "Tailor a resume for this" on any job, and `/linkedin` for profile text.
+
+Steps 3 onward all **refuse to run** against an empty profile rather than producing something plausible. That is deliberate: with no evidence to match against, the scorer rates whichever job asks for least, and a generator with nothing to draw on writes confident fiction. An early refusal is the honest answer.
 
 ## LLM Provider
 
