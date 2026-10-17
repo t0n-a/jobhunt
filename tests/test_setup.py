@@ -1,5 +1,7 @@
 import os
 import stat
+import subprocess
+import sys
 
 import httpx
 import pytest
@@ -16,6 +18,21 @@ KEY = "AIza-SECRET-KEY"
 TOKEN = "123:SECRET-TOKEN"
 CONFIG = ["Hugo", "hugo@example.com", "Lisbon", ""]
 ANSWERS = ["EU citizen", "n", "1 month", "40000", "60000", "n", "y", "", "", "", "", "y"]
+
+
+BROWSER = [sys.executable, "-m", "playwright", "install", "chromium"]
+
+
+class Browser:
+    """Stands in for subprocess.run: records the install command and never runs it."""
+
+    def __init__(self, error=None):
+        self.calls, self.error = [], error
+
+    def __call__(self, cmd, **kwargs):
+        self.calls.append(cmd)
+        if self.error:
+            raise self.error
 
 
 class Script:
@@ -53,11 +70,11 @@ def run(tmp_path, asks, secrets, result=None):
             200, json=result or updates()
         )
         with httpx.Client() as http:
-            run_setup(tmp_path, s.prompter, http, llm=FakeProvider([]), install=lambda r: "ok")
+            run_setup(tmp_path, s.prompter, http, llm=FakeProvider([]), install=lambda r: "ok", run=Browser())
     return s
 
 
-FULL = CONFIG + ["", *ANSWERS, "", "n"]  # config, chat-id Enter, answers, no CV, no timers
+FULL = CONFIG + ["", *ANSWERS, "", "n", "n"]  # config, chat-id Enter, answers, no CV, no browser, no timers
 
 
 def test_fresh_config_is_written_and_loads(tmp_path):
@@ -68,8 +85,8 @@ def test_fresh_config_is_written_and_loads(tmp_path):
 def test_rerun_keeps_existing_files(tmp_path):
     run(tmp_path, FULL, [KEY, TOKEN])
     before = {n: (tmp_path / n).read_bytes() for n in ("config.yaml", "answers.yaml", ".env")}
-    s = run(tmp_path, ["", "n"], [])
-    assert s.calls == 2  # only the CV and timers questions
+    s = run(tmp_path, ["", "n", "n"], [])
+    assert s.calls == 3  # only the CV, browser and timers questions
     assert before == {n: (tmp_path / n).read_bytes() for n in before}
 
 
@@ -91,7 +108,7 @@ def test_training_warning_is_shown_before_the_key_prompt(tmp_path):
     with respx.mock:
         respx.post(f"https://api.telegram.org/bot{TOKEN}/getUpdates").respond(200, json=updates())
         with httpx.Client() as http:
-            run_setup(tmp_path, s.prompter, http, llm=FakeProvider([]), install=str)
+            run_setup(tmp_path, s.prompter, http, llm=FakeProvider([]), install=str, run=Browser())
     assert order[0][0] == "say" and "may use your prompts" in order[0][1]
     assert order[1] == ("secret", "AI Studio key: ")
 
@@ -117,12 +134,12 @@ def test_answers_written(tmp_path):
 
 def test_consent_is_asked_and_recorded(tmp_path):
     answers = [*ANSWERS[:-1], "n"]
-    run(tmp_path, CONFIG + ["", *answers, "", "n"], [KEY, TOKEN])
+    run(tmp_path, CONFIG + ["", *answers, "", "n", "n"], [KEY, TOKEN])
     assert load_answers(tmp_path / "answers.yaml").data_processing_consent is False
 
 
 def test_bad_int_is_reasked(tmp_path):
-    asks = CONFIG + [""] + ["EU", "n", "1 month", "lots", "40000", "60000", "n", "y", "", "", "", "", "y", "", "n"]
+    asks = CONFIG + [""] + ["EU", "n", "1 month", "lots", "40000", "60000", "n", "y", "", "", "", "", "y", "", "n", "n"]
     s = run(tmp_path, asks, [KEY, TOKEN])
     assert load_answers(tmp_path / "answers.yaml").salary_min_eur == 40000
     assert any("whole number" in m for m in s.said)
@@ -135,7 +152,7 @@ def test_secrets_never_echoed(tmp_path):
 
 
 def test_max_salary_below_min_is_reasked(tmp_path):
-    asks = CONFIG + [""] + ["EU", "n", "1 month", "40000", "30000", "60000", "n", "y", "", "", "", "", "y", "", "n"]
+    asks = CONFIG + [""] + ["EU", "n", "1 month", "40000", "30000", "60000", "n", "y", "", "", "", "", "y", "", "n", "n"]
     s = run(tmp_path, asks, [KEY, TOKEN])
     assert load_answers(tmp_path / "answers.yaml").salary_max_eur == 60000
     assert any("at least 40000" in m for m in s.said)
@@ -201,18 +218,18 @@ def test_bad_path_is_reasked_then_skipped(tmp_path):
 
 
 def test_import_failure_does_not_abort_setup(tmp_path):
-    s = Script(CONFIG + ["", *ANSWERS, CV, "n"], [KEY, TOKEN])
+    s = Script(CONFIG + ["", *ANSWERS, CV, "n", "n"], [KEY, TOKEN])
     with respx.mock:
         respx.post(f"https://api.telegram.org/bot{TOKEN}/getUpdates").respond(200, json=updates())
         with httpx.Client() as http:
-            run_setup(tmp_path, s.prompter, http, llm=FakeProvider([]), install=str)
+            run_setup(tmp_path, s.prompter, http, llm=FakeProvider([]), install=str, run=Browser())
     assert any("CV import failed" in m for m in s.said) and not s.asks
 
 
 def test_timers_installed_only_on_yes(tmp_path):
     calls = []
     for answer in ("n", "y"):
-        s = Script(["", answer], [])
+        s = Script(["", "n", answer], [])
         (tmp_path / "config.yaml").write_text(yaml.safe_dump(
             {"profile": {"name": "H", "email": "h@e.com", "location": "L"},
              "llm": {"provider": "openai_compat", "model": "m"}}))
@@ -220,5 +237,42 @@ def test_timers_installed_only_on_yes(tmp_path):
         (tmp_path / ".env").write_text("OPENAI_API_KEY=k\nTELEGRAM_BOT_TOKEN=t\nTELEGRAM_CHAT_ID=1\n")
         with httpx.Client() as http:
             run_setup(tmp_path, s.prompter, http, llm=FakeProvider([]),
-                      install=lambda r: calls.append(r) or "ok")
+                      install=lambda r: calls.append(r) or "ok",
+                      run=Browser())
     assert calls == [tmp_path]
+
+
+def ready(tmp_path):
+    (tmp_path / "config.yaml").write_text(yaml.safe_dump(
+        {"profile": {"name": "H", "email": "h@e.com", "location": "L"},
+         "llm": {"provider": "openai_compat", "model": "m"}}))
+    (tmp_path / "answers.yaml").write_text("x")
+    (tmp_path / ".env").write_text("OPENAI_API_KEY=k\nTELEGRAM_BOT_TOKEN=t\nTELEGRAM_CHAT_ID=1\n")
+
+
+BROWSER_Q = "Install the browser jobhunt uses to fill application forms (about 150 MB)? [y/N] "
+
+
+@pytest.mark.parametrize("answer, expected", [("n", []), ("y", [BROWSER])])
+def test_browser_install_only_on_yes(tmp_path, answer, expected):
+    ready(tmp_path)
+    s = Script(["", answer, "n"], [])
+    asked = []
+    prompter = Prompter(lambda q: (asked.append(q), s._ask(q))[1], s._secret, s.said.append)
+    browser = Browser()
+    with httpx.Client() as http:
+        run_setup(tmp_path, prompter, http, llm=FakeProvider([]), install=str, run=browser)
+    assert browser.calls == expected
+    assert asked[-2:] == [BROWSER_Q, "Install the daily and 5-minute timers now? [y/N] "]
+
+
+@pytest.mark.parametrize("exc", [subprocess.CalledProcessError(1, "playwright"), OSError("no uv")])
+def test_browser_install_failure_is_reported(tmp_path, exc):
+    ready(tmp_path)
+    s = Script(["", "y", "n"], [])
+    with httpx.Client() as http:
+        run_setup(tmp_path, s.prompter, http, llm=FakeProvider([]), install=str,
+                  run=Browser(error=exc))
+    assert any(m.startswith("Browser install failed: ")
+               and m.endswith("Run: uv run playwright install chromium") for m in s.said)
+    assert not s.asks  # the timers question still follows

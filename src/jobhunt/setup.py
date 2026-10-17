@@ -2,6 +2,8 @@
 
 import os
 import secrets
+import subprocess
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -178,7 +180,15 @@ def setup_evidence(root: Path, p: Prompter, llm) -> int:
     return confirmed
 
 
-def run_setup(root: Path, p: Prompter, http: httpx.Client, *, llm=None, install=install_timers):
+def run_setup(
+    root: Path,
+    p: Prompter,
+    http: httpx.Client,
+    *,
+    llm=None,
+    install=install_timers,
+    run=subprocess.run,
+):
     setup_config(root, p)
     setup_keys(root, p, http)
     setup_answers(root, p)
@@ -189,5 +199,13 @@ def run_setup(root: Path, p: Prompter, http: httpx.Client, *, llm=None, install=
         setup_evidence(root, p, llm)
     except Exception as exc:  # noqa: BLE001 - a bad key or CV must not skip the timers question
         p.say(f"CV import failed: {exc}. You can import it later at /import.")
+    # Chromium is a one-off ~150 MB download for the form filler, so it is asked, not assumed.
+    browser_q = ("Install the browser jobhunt uses to fill application forms "
+                 "(about 150 MB)? [y/N] ")
+    if p.ask(browser_q).strip().lower() == "y":
+        try:
+            run([sys.executable, "-m", "playwright", "install", "chromium"], check=True)
+        except (subprocess.CalledProcessError, OSError) as exc:
+            p.say(f"Browser install failed: {exc}. Run: uv run playwright install chromium")
     if p.ask("Install the daily and 5-minute timers now? [y/N] ").strip().lower() == "y":
         p.say(install(root))
