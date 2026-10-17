@@ -100,6 +100,9 @@ def render_application(
 
 
 def mark_applied(session: Session, application: Application) -> Application:
+    # Past "sent" already: re-marking would restart the follow-up clock.
+    if application.status not in ("drafted", "queued", "approved"):
+        return application
     return set_status(session, application, "sent")
 
 

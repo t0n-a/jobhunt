@@ -53,6 +53,11 @@ def tailor_shortlist(session: Session, llm, config: Config) -> TailorRun:
         except LLMError:
             run.failed += 1
             continue
+        except Exception:
+            log.warning("tailoring failed for job %s", job.id, exc_info=True)
+            session.rollback()
+            run.failed += 1
+            continue
         try:
             application = render_application(
                 session, application, profile=config.profile, data_dir=config.data_dir

@@ -47,11 +47,16 @@ def run_daily(
         ghosted = mark_cold(session, now)
         stopped = None
         if not is_paused(session):
-            run = tailor_shortlist(session, llm, config)
-            stopped = run.stopped
-            if client:
-                for application in run.queued:
-                    _send_queued(session, client, application, config.autopilot.web_url)
+            try:
+                run = tailor_shortlist(session, llm, config)
+                stopped = run.stopped
+                if client:
+                    for application in run.queued:
+                        _send_queued(session, client, application, config.autopilot.web_url)
+            except Exception as exc:
+                log.warning("daily tailoring failed", exc_info=True)
+                session.rollback()
+                stopped = f"Tailoring failed: {type(exc).__name__}"
         lines = build_digest(
             session,
             now=now,

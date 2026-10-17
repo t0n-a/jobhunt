@@ -23,7 +23,10 @@ def test_cross_site_post_is_refused(tmp_path):
 
 def test_same_origin_post_passes_the_guard(tmp_path):
     c = client(tmp_path)
-    r = c.post("/applications/1/approve", headers={"Origin": "http://127.0.0.1:8000"})
+    r = c.post(
+        "/applications/1/approve",
+        headers={"Origin": "http://127.0.0.1:8000", "Host": "127.0.0.1:8000"},
+    )
     assert r.status_code == 404  # reached the route: no such application
 
 
@@ -32,3 +35,11 @@ def test_foreign_host_is_refused(tmp_path):
     assert c.get("/healthz", headers={"Host": "rebound.evil.example"}).status_code == 403
     assert c.get("/healthz", headers={"Host": "localhost:8000"}).status_code == 200
 
+
+
+def test_another_local_port_is_refused(tmp_path):
+    r = client(tmp_path).post(
+        "/applications/1/approve",
+        headers={"Origin": "http://localhost:3000", "Host": "localhost:8000"},
+    )
+    assert r.status_code == 403

@@ -95,7 +95,8 @@ def create_app(config: Config) -> FastAPI:
         if request.method not in ("GET", "HEAD", "OPTIONS"):
             origin = request.headers.get("origin")
             cross_site = request.headers.get("sec-fetch-site") == "cross-site"
-            if cross_site or (origin and urlsplit(origin).hostname not in LOCAL_HOSTS):
+            # Same host AND port: another local app (localhost:3000) is a different origin.
+            if cross_site or (origin and urlsplit(origin).netloc != request.headers.get("host")):
                 return PlainTextResponse("Cross-site request refused.", status_code=403)
         return await call_next(request)
 

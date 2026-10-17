@@ -117,3 +117,14 @@ def test_cold_applications_are_ghosted(engine, monkeypatch):
     assert "Marked ghosted: 1" in out
     with Session(engine) as s:
         assert s.get(Application, 1).status == "ghosted"
+
+
+def test_a_tailoring_crash_still_sends_the_digest(engine, monkeypatch):
+    def boom(session, llm, config):
+        raise RuntimeError("database is locked")
+
+    monkeypatch.setattr(daily, "tailor_shortlist", boom)
+    client = FakeClient()
+    out = go(engine, client)
+    assert "Tailoring failed: RuntimeError" in out
+    assert client.sent[-1] == (out, None)

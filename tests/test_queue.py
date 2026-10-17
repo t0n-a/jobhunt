@@ -264,3 +264,20 @@ def test_a_job_matching_no_evidence_does_not_stop_the_run(session, tmp_path, mon
 
     assert run.stopped is None and run.failed == 1
     assert [a.status for a in run.queued] == ["queued"]
+
+
+def test_an_unexpected_error_skips_the_job_and_rolls_back(session, tmp_path, monkeypatch):
+    atom = seed_atom(session)
+    add(session, "Backend Engineer", 90_000)
+    add(session, "Frontend Engineer", 80_000, company="Beta")
+    real = queue.tailor_job
+
+    def flaky(session, job, llm, **kw):
+        if job.title == "Backend Engineer":
+            raise KeyError("sections")
+        return real(session, job, llm, **kw)
+
+    monkeypatch.setattr(queue, "tailor_job", flaky)
+    run = tailor_shortlist(session, FakeProvider(responses(atom.id)), cfg(tmp_path))
+
+    assert run.failed == 1 and [a.status for a in run.queued] == ["queued"]

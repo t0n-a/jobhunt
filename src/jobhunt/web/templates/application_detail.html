@@ -53,9 +53,11 @@
   {% if application.pdf_path %}
     <a href="/applications/{{ application.id }}/pdf">Download the PDF</a>
   {% endif %}
+  {% if application.status in ('drafted', 'queued', 'approved') %}
   <form method="post" action="/applications/{{ application.id }}/applied">
     <button type="submit">Mark as applied</button>
   </form>
+  {% endif %}
   {% if application.status == 'queued' %}
     <form method="post" action="/applications/{{ application.id }}/approve">
       <button type="submit" class="primary">Approve</button>
