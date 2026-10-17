@@ -54,3 +54,14 @@ def test_triage_prefers_posted_pay_over_estimate():
 
 def test_huge_digit_run_does_not_raise():
     assert level_of("Engineer", "9" * 5000 + " years of experience") == "mid"
+
+
+def test_posted_pay_ignores_funding_and_falls_back_to_estimate():
+    f = triage(job(description="Backed by $10M funding. Python."), RankingConfig())
+    assert f.pay_estimated and f.pay_source != "posted"
+
+
+def test_years_range_uses_lower_bound():
+    assert level_of("Backend Engineer", "2-5 years of experience.") == "mid"
+    assert level_of("Backend Engineer", "5-7 years of experience.") == "senior"
+    assert level_of("Backend Engineer", "5+ years of experience.") == "senior"
