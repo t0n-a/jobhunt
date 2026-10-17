@@ -128,6 +128,8 @@ def assisted_apply(
     )
     if result.status != "ready":
         return f"Couldn't prepare the form: {result.reason}. Apply here: {job.url}"
+    if result.reason:
+        print(result.reason)
     if ask("Did you submit it? [y/N] ").strip().lower() == "y":
         application.channel = "assisted"
         set_status(session, application, "sent", note="assisted")

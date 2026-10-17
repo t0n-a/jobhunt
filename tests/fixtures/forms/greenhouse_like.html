@@ -1,0 +1,30 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Apply</title></head><body><form id="f" onsubmit="event.preventDefault(); if (document.querySelector('[name=question_2_value]').value && document.getElementById('first_name').value) document.body.innerHTML = '<h1>Thank you for applying</h1>'">
+<label for="first_name">First name</label><input id="first_name" type="text" aria-required="true">
+<label for="last_name">Last name</label><input id="last_name" type="text" aria-required="true">
+<label for="email">Email</label><input id="email" type="text" aria-required="true">
+<input id="iti-0__search-input" type="search">
+<label for="resume">Resume</label><input id="resume" type="file" aria-required="true">
+<label for="question_2">Will you require sponsorship?</label>
+<div><input id="question_2" type="text" role="combobox" aria-required="true" autocomplete="off">
+<div class="select__single-value"></div><div id="lb" role="listbox" hidden></div>
+<input type="hidden" name="question_2_value"></div>
+<button type="submit">Submit application</button></form>
+<script>
+const q = document.getElementById("question_2"), lb = document.getElementById("lb");
+function show() {
+  lb.innerHTML = "";
+  for (const o of ["Yes", "No"]) {
+    if (!o.toLowerCase().startsWith(q.value.toLowerCase())) continue;
+    const d = document.createElement("div");
+    d.setAttribute("role", "option"); d.textContent = o;
+    d.onclick = () => {
+      document.querySelector(".select__single-value").textContent = o;
+      document.querySelector("[name=question_2_value]").value = o;
+      q.value = ""; lb.hidden = true;
+    };
+    lb.appendChild(d);
+  }
+  lb.hidden = false;
+}
+q.addEventListener("focus", show); q.addEventListener("input", show);
+</script></body></html>

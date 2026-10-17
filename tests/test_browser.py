@@ -206,3 +206,52 @@ def test_no_confirmation_counts_as_clicked(base, tmp_path):
     assert _run(base, tmp_path, "no_confirm.html", timeout_ms=800).clicked is True
     assert _run(base, tmp_path, "simple.html").clicked is True
     assert _run(base, tmp_path, "simple.html", submit=False).clicked is False
+
+
+def _gh_plan(tmp_path, sponsorship="No"):
+    cv = tmp_path / "cv.pdf"
+    cv.write_bytes(b"%PDF-1.4")
+    return FormPlan(
+        filled=[
+            Planned("first_name", "Ada", "profile"),
+            Planned("last_name", "Lovelace", "profile"),
+            Planned("email", "ada@example.com", "profile"),
+            Planned("resume", str(cv), "document"),
+            Planned("question_2", sponsorship, "answers"),
+        ]
+    )
+
+
+def test_id_only_inputs_are_scanned_and_filled(base):
+    with sync_playwright() as pw:
+        b = pw.chromium.launch()
+        page = b.new_page()
+        page.goto(f"{base}/greenhouse_like.html")
+        fields = {f.name: f for f in scan_fields(page)}
+        b.close()
+    assert {"first_name", "last_name", "email", "resume", "question_2"} <= set(fields)
+    assert fields["first_name"].label == "First name" and fields["first_name"].required
+    assert fields["question_2"].kind == "select" and fields["question_2"].options == []
+
+
+def test_combobox_option_is_selected(base, tmp_path):
+    r = _run(base, tmp_path, "greenhouse_like.html", plan=_gh_plan(tmp_path))
+    assert r.status == "submitted"
+
+
+def test_combobox_without_matching_option_is_left(base, tmp_path):
+    plan = _gh_plan(tmp_path, "Maybe")
+    r = _run(base, tmp_path, "greenhouse_like.html", plan=plan)
+    assert r.status == "stopped" and r.reason == "could not fill: question_2"
+    r = _run(base, tmp_path, "greenhouse_like.html", plan=plan, submit=False, allow_obstacles=True)
+    assert r.status == "ready" and "left for you: question_2" in r.reason
+
+
+def test_search_inputs_are_not_fields(base):
+    with sync_playwright() as pw:
+        b = pw.chromium.launch()
+        page = b.new_page()
+        page.goto(f"{base}/greenhouse_like.html")
+        names = [f.name for f in scan_fields(page)]
+        b.close()
+    assert not any("search" in n for n in names)

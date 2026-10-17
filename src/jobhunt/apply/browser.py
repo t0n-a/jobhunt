@@ -46,9 +46,9 @@ _SCAN_JS = """() => {
   };
   const out = [], radios = {};
   for (const e of document.querySelectorAll("input, textarea, select")) {
-    const name = e.getAttribute("name"), type = (e.getAttribute("type") || "text").toLowerCase();
+    const name = e.getAttribute("name") || e.id, type = (e.getAttribute("type") || "text").toLowerCase();
     if (!name || !vis(e) || /captcha-response/i.test(name)) continue;
-    if (["hidden", "submit", "button", "password"].includes(type)) continue;
+    if (["hidden", "submit", "button", "password", "search"].includes(type)) continue;
     const required = e.hasAttribute("required") || e.getAttribute("aria-required") === "true";
     if (type === "radio") {
       let g = radios[name];
@@ -60,6 +60,10 @@ _SCAN_JS = """() => {
       }
       g.required = g.required || required;
       g.options.push(labelOf(e) || e.value);
+      continue;
+    }
+    if (e.getAttribute("role") === "combobox") {  // react-select: options exist only once opened
+      out.push({name, label: labelOf(e) || name, kind: "select", required, options: []});
       continue;
     }
     let kind = e.tagName === "SELECT" ? "select" : e.tagName === "TEXTAREA" ? "textarea" : "text";
@@ -128,9 +132,24 @@ def scan_fields(page) -> list[FormField]:
     return [FormField(**d) for d in page.evaluate(_SCAN_JS)]
 
 
+def _locate(page, key: str):
+    q = key.replace("\\", "\\\\").replace('"', '\\"')
+    by_name = page.locator(f'[name="{q}"]')
+    return by_name if by_name.count() else page.locator(f'[id="{q}"]')
+
+
+def _pick_option(page, first, label: str) -> None:
+    first.click()
+    first.fill(label)
+    want = re.compile(rf"^\s*{re.escape(label.strip())}\s*$", re.IGNORECASE)
+    page.locator("[role=option]").filter(has_text=want).first.click(timeout=3000)
+
+
 def _fill_one(page, p) -> None:
-    loc = page.locator(f'[name="{p.name}"]')
+    loc = _locate(page, p.name)
     first = loc.first
+    if first.get_attribute("role") == "combobox":
+        return _pick_option(page, first, p.value)
     tag = first.evaluate("e => e.tagName")
     typ = (first.get_attribute("type") or "").lower()
     if typ == "radio":
@@ -232,6 +251,7 @@ def _run_form(
             failed = fill(page, plan)
             if failed and not lenient:
                 return done("stopped", "could not fill: " + ", ".join(failed))
+            left = "left for you: " + ", ".join(failed) if failed else ""
             btn = submit_control(page)
             if btn is None:
                 return done("stopped", "no submit button")
@@ -241,7 +261,7 @@ def _run_form(
                         page.wait_for_event("close", timeout=0)
                     except PlaywrightError:  # the candidate closed the whole window, not the tab
                         pass
-                return FormRun("ready")
+                return FormRun("ready", left)
             # Captcha scripts can arrive after load (on focus, on fill): look again before clicking.
             late = obstacles(page)
             if late and not allow_obstacles:
