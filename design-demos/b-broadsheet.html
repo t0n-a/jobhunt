@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>B · Broadsheet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Newsreader:opsz,wght@6..72,400;6..72,600&family=Courier+Prime:wght@700&display=swap" rel="stylesheet">
+<style>
+/* Hallmark · macrostructure: Long Document (broadsheet front page) · tone: editorial · theme: Newsprint
+ * the best match is the lead story; flagged text gets the editor's red pen */
+:root {
+  --paper: oklch(95% 0.02 85); --paper-2: oklch(91% 0.03 85); --ink: oklch(20% 0.01 60); --ink-soft: oklch(42% 0.02 60);
+  --rule: oklch(20% 0.01 60); --red: oklch(50% 0.2 28); --focus: oklch(50% 0.2 28);
+  --display: "Playfair Display", Georgia, serif; --body: "Newsreader", Georgia, serif; --stamp: "Courier Prime", monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: oklch(19% 0.01 70); --paper-2: oklch(24% 0.015 70); --ink: oklch(90% 0.02 85); --ink-soft: oklch(70% 0.02 85);
+  --rule: oklch(85% 0.02 85); --red: oklch(70% 0.17 28); --focus: oklch(75% 0.15 28);
+}}
+* { box-sizing: border-box; }
+html, body { overflow-x: clip; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.5 var(--body); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+a { color: inherit; }
+.page { max-width: 1180px; margin: 0 auto; padding: 0 20px 60px; }
+.ears { display: flex; justify-content: space-between; gap: 1rem; font: 700 12px var(--stamp); text-transform: uppercase; padding: 14px 0 6px; border-bottom: 1px solid var(--rule); }
+.masthead { text-align: center; font: 900 clamp(2.6rem, 8vw, 5.5rem)/1 var(--display); letter-spacing: -.02em; margin: 10px 0 6px; overflow-wrap: anywhere; }
+.dateline { display: flex; flex-wrap: wrap; justify-content: center; gap: .3rem 1.5rem; border-block: 3px double var(--rule); padding: 6px 0; font-size: 14px; }
+.dateline a { text-decoration: none; } .dateline a[aria-current] { font-weight: 600; text-decoration: underline; }
+.stamp { display: inline-block; font: 700 11px/1 var(--stamp); text-transform: uppercase; letter-spacing: .06em; padding: 4px 6px; border: 1.5px solid currentColor; transform: rotate(-2deg); }
+.stamp.waiting, .stamp.blocked { color: var(--red); }
+.stamp.sent { opacity: .65; }
+.front { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 0 28px; margin-top: 22px; }
+.lead { border-right: 1px solid var(--rule); padding-right: 28px; }
+.lead h2 { font: 900 clamp(2rem, 4.6vw, 3.4rem)/1.02 var(--display); margin: 10px 0 8px; overflow-wrap: anywhere; }
+.lead .deck { font-size: 21px; color: var(--ink-soft); margin: 0 0 14px; }
+.lead .body { columns: 2 16rem; column-gap: 24px; column-rule: 1px solid var(--paper-2); }
+.lead .body p:first-of-type::first-letter { float: left; font: 900 4.1rem/.8 var(--display); padding: 6px 8px 0 0; }
+.fitbig { font: 900 5rem/1 var(--display); float: right; margin: 0 0 0 16px; text-align: center; }
+.fitbig small { display: block; font: 700 11px var(--stamp); text-transform: uppercase; }
+.redpen { color: var(--ink); text-decoration: line-through 2px var(--red); }
+.margin-note { display: block; color: var(--red); font: italic 600 15px var(--body); border-left: 3px solid var(--red); padding-left: 10px; margin: 8px 0; }
+.act { display: inline-block; margin-top: 12px; font: 700 15px var(--body); color: var(--paper); background: var(--ink); padding: 10px 18px; border: 0; cursor: pointer; text-decoration: none; }
+.act:hover { background: var(--red); } .act:active { transform: translateY(1px); }
+.side h3 { font: 700 13px var(--stamp); text-transform: uppercase; border-bottom: 2px solid var(--rule); padding-bottom: 4px; margin: 0 0 10px; }
+.brief { padding: 12px 0; border-bottom: 1px solid var(--paper-2); }
+.brief h4 { font: 700 21px/1.15 var(--display); margin: 6px 0 4px; }
+.brief p { margin: 0; font-size: 15px; color: var(--ink-soft); }
+.brief .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.brief .n { font: 900 26px var(--display); }
+.classifieds { margin-top: 34px; border-top: 3px double var(--rule); padding-top: 10px; }
+.classifieds h3 { font: 900 1.7rem var(--display); margin: 0 0 12px; text-align: center; }
+.grid { columns: 3 15rem; column-gap: 22px; column-rule: 1px solid var(--rule); }
+.ad { break-inside: avoid; border: 1px solid var(--rule); padding: 10px 12px; margin: 0 0 14px; font-size: 15px; }
+.ad b { font: 700 17px var(--display); display: block; }
+.ad .row { display: flex; justify-content: space-between; margin-top: 6px; font-size: 13px; }
+.ad a { font-weight: 600; }
+.ad.lowfit { opacity: .7; }
+@media (max-width: 760px) { .front { grid-template-columns: minmax(0, 1fr); } .lead { border-right: 0; padding-right: 0; border-bottom: 1px solid var(--rule); padding-bottom: 20px; } .ears span:last-child { display: none; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="ears"><span>Edition № 214 · private copy</span><span>Weather: 3 waiting on you</span></div>
+  <div class="masthead">The Daily Match</div>
+  <nav class="dateline"><a href="#">Home</a><a href="#">Today</a><a href="#" aria-current="page">Jobs</a><a href="#">Gaps</a><a href="#">Applications</a><a href="#">Evidence</a><a href="#">Counselor</a><a href="#">Import</a></nav>
+  <div class="front">
+    <article class="lead" id="lead"></article>
+    <aside class="side"><h3>Also on the front page</h3><div id="briefs"></div></aside>
+  </div>
+  <section class="classifieds"><h3>The Classifieds</h3><div class="grid" id="ads"></div></section>
+</div>
+<script src="data.js"></script>
+<script>
+const stamp = s => `<span class="stamp ${s}">${STAGE_LABEL[s]}</span>`;
+const [first, ...rest] = JOBS;
+lead.innerHTML = `${stamp(first.status)}
+  <h2>${first.company} wants a ${first.title}, and you fit</h2>
+  <p class="deck">${first.where} · ${first.track} · seniority ${first.seniority}</p>
+  <div class="body"><div class="fitbig">${first.fit}<small>fit</small></div>
+  <p>${first.rationale} The cover letter is drafted from your evidence bank and is waiting on one decision from you.</p>
+  <p>One line could not be verified: <span class="redpen">${first.flag.text}</span>
+  <span class="margin-note">Editor: ${first.flag.why}. Cut it or attach the evidence.</span></p></div>
+  <a class="act" href="#">${first.next} →</a>`;
+briefs.innerHTML = rest.slice(0, 3).map(j => `<div class="brief"><div class="row">${stamp(j.status)}<span class="n">${j.fit}</span></div>
+  <h4>${j.title}, ${j.company}</h4><p>${j.rationale}</p>
+  ${j.flag ? `<span class="margin-note">${j.flag.text}: ${j.flag.why}</span>` : ""}
+  <p><a href="#">${j.next} →</a></p></div>`).join("");
+ads.innerHTML = rest.slice(3).map(j => `<div class="ad${j.fit < 60 ? " lowfit" : ""}"><b>${j.title.toUpperCase()}</b>
+  ${j.company}, ${j.where}. ${j.rationale || "Not scored yet."}
+  ${j.flag ? `<span class="margin-note">${j.flag.text}: ${j.flag.why}</span>` : ""}
+  <div class="row">${stamp(j.status)}<span>fit ${j.fit} · <a href="#">${j.next}</a></span></div></div>`).join("");
+</script>
+</body>
+</html>

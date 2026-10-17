@@ -2,38 +2,44 @@
 {% block title %}Today — jobhunt{% endblock %}
 {% block content %}
 {% if not today.step %}
-  <h2>Nothing queued</h2>
-  <p class="empty">No active quest. Pick a <a href="/gaps">skill gap</a> to start one.</p>
+  <section class="panel quest">
+    <h2>Nothing queued</h2>
+    <p class="empty">No active quest. Pick a <a href="/gaps">skill gap</a> to start one.</p>
+  </section>
 {% else %}
-  <p class="meta">{{ today.why }}</p>
-  <h2>{{ today.step.title }}</h2>
-  <p class="meta">About {{ today.minutes }} minutes</p>
-  <form method="post" action="/today/energy" class="energy">
-    {% for level in ["low", "normal", "high"] %}
-      <button type="submit" name="energy" value="{{ level }}"
-              data-busy="{{ level }}"
-              aria-pressed="{{ 'true' if energy.value == level else 'false' }}">{{ level }}</button>
-    {% endfor %}
-  </form>
-  <p>{{ today.step.instructions }}</p>
+  <section class="panel quest">
+    <p class="meta">{{ today.why }}</p>
+    <h2>{{ today.step.title }}</h2>
+    <div class="questbar">
+      <span class="pill">About {{ today.minutes }} minutes</span>
+      <form method="post" action="/today/energy" class="energy" aria-label="Your energy today">
+        {% for level in ["low", "normal", "high"] %}
+          <button type="submit" name="energy" value="{{ level }}"
+                  data-busy="{{ level }}"
+                  aria-pressed="{{ 'true' if energy.value == level else 'false' }}">{{ level }}</button>
+        {% endfor %}
+      </form>
+    </div>
+    <p class="why">{{ today.step.instructions }}</p>
 
-  <div class="callout">
-    <strong>What this earns you</strong>
-    <p>{{ today.reward }}</p>
-  </div>
+    <div class="earns">
+      <strong>What this earns you</strong>
+      <p>{{ today.reward }}</p>
+    </div>
 
-  <form method="post" action="/today/done">
-    <textarea name="proof_note" rows="2" placeholder="What did you make? (optional)"></textarea>
-    <button type="submit" class="primary">Done</button>
-  </form>
-  <div class="actions">
-    <form method="post" action="/today/swap">
-      <button type="submit">Not this one</button>
+    <form method="post" action="/today/done" class="done">
+      <textarea name="proof_note" rows="2" placeholder="What did you make? (optional)"></textarea>
+      <button type="submit" class="primary">Done</button>
     </form>
-    <button hx-post="/today/verify" hx-target="#verify" hx-swap="innerHTML"
-            hx-indicator="#verify-ind" hx-disabled-elt="this">Check my repo</button>
-    <span id="verify-ind" class="indicator">Checking…</span>
-  </div>
-  <div id="verify"></div>
+    <div class="actions">
+      <form method="post" action="/today/swap">
+        <button type="submit">Not this one</button>
+      </form>
+      <button hx-post="/today/verify" hx-target="#verify" hx-swap="innerHTML"
+              hx-indicator="#verify-ind" hx-disabled-elt="this">Check my repo</button>
+      <span id="verify-ind" class="indicator">Checking…</span>
+    </div>
+    <div id="verify"></div>
+  </section>
 {% endif %}
 {% endblock %}

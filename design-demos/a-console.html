@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A · Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+/* Hallmark · macrostructure: Workbench (split list + inspector) · tone: technical · theme: Terminal
+ * dark = phosphor console, light = green-bar tractor-feed printout */
+:root {
+  --paper: oklch(17% 0.02 160); --paper-2: oklch(21% 0.025 160); --row-alt: oklch(19% 0.02 160);
+  --ink: oklch(88% 0.12 150); --ink-soft: oklch(65% 0.07 150); --rule: oklch(32% 0.04 155);
+  --sel: oklch(30% 0.07 150); --focus: oklch(85% 0.17 95);
+  --st-found: oklch(70% 0.03 150); --st-ranked: oklch(78% 0.12 220); --st-drafted: oklch(80% 0.13 300);
+  --st-waiting: oklch(86% 0.17 95); --st-sent: oklch(80% 0.17 150); --st-blocked: oklch(70% 0.2 25);
+  --flag: oklch(70% 0.2 25); --mono: "JetBrains Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+  --paper: oklch(97% 0.01 100); --paper-2: oklch(93% 0.03 150); --row-alt: oklch(93% 0.04 150);
+  --ink: oklch(25% 0.02 150); --ink-soft: oklch(45% 0.03 150); --rule: oklch(80% 0.04 150);
+  --sel: oklch(86% 0.08 95); --focus: oklch(45% 0.15 260);
+  --st-found: oklch(45% 0.02 150); --st-ranked: oklch(45% 0.13 240); --st-drafted: oklch(45% 0.15 300);
+  --st-waiting: oklch(48% 0.13 70); --st-sent: oklch(42% 0.13 150); --st-blocked: oklch(48% 0.19 25);
+  --flag: oklch(48% 0.19 25);
+}}
+* { box-sizing: border-box; }
+html, body { overflow-x: clip; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 13px/1.5 var(--mono); }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+header { display: flex; flex-wrap: wrap; gap: 0 2ch; padding: 6px 2ch; border-bottom: 1px solid var(--rule); background: var(--paper-2); }
+header b { font-weight: 800; }
+header nav a { text-decoration: none; color: var(--ink-soft); margin-right: 1.5ch; }
+header nav a[aria-current] { color: var(--ink); text-decoration: underline; }
+header .who { margin-left: auto; color: var(--ink-soft); }
+.wrap { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); height: calc(100dvh - 60px); }
+.list { overflow: auto; border-right: 1px solid var(--rule); }
+.counts { padding: 8px 2ch; color: var(--ink-soft); border-bottom: 1px dashed var(--rule); }
+.counts button { font: inherit; background: none; border: 0; color: inherit; cursor: pointer; padding: 0 .5ch; }
+.counts button[aria-pressed="true"] { color: var(--paper); background: var(--ink); }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-weight: 600; color: var(--ink-soft); padding: 4px 1ch; position: sticky; top: 0; background: var(--paper); border-bottom: 1px solid var(--rule); }
+td { padding: 5px 1ch; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 0; }
+tr:nth-child(even) td { background: var(--row-alt); }
+tbody tr { cursor: pointer; }
+tbody tr[aria-selected="true"] td { background: var(--sel); }
+tbody tr[aria-selected="true"] td:first-child::before { content: "▶ "; }
+.fit { text-align: right; width: 6ch; font-weight: 800; }
+.bar { color: var(--ink-soft); width: 12ch; text-overflow: clip; }
+.tag { font-weight: 800; }
+.tag.found { color: var(--st-found); } .tag.ranked { color: var(--st-ranked); } .tag.drafted { color: var(--st-drafted); }
+.tag.waiting { color: var(--st-waiting); } .tag.sent { color: var(--st-sent); } .tag.blocked { color: var(--st-blocked); }
+.tag.waiting::after, .tag.blocked::after { content: " *"; animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.flagdot { color: var(--flag); font-weight: 800; }
+.insp { overflow: auto; padding: 14px 2.5ch 80px; }
+.insp h2 { font-size: 18px; margin: 0; font-weight: 800; }
+.insp .co { color: var(--ink-soft); margin-bottom: 12px; }
+.insp dl { display: grid; grid-template-columns: 12ch 1fr; gap: 2px 1ch; margin: 0 0 14px; }
+.insp dt { color: var(--ink-soft); }
+.insp dd { margin: 0; }
+.insp .why { border-left: 2px solid var(--rule); padding-left: 1.5ch; margin: 0 0 14px; }
+.flagbox { border: 1px solid var(--flag); color: var(--flag); padding: 8px 1.5ch; margin: 0 0 14px; }
+.flagbox::before { content: "!! UNVERIFIED"; display: block; font-weight: 800; }
+.flagbox .q { color: var(--ink); text-decoration: underline wavy var(--flag); text-underline-offset: 3px; }
+.next { display: inline-flex; gap: 1ch; font: 800 13px var(--mono); background: var(--ink); color: var(--paper); border: 0; padding: 8px 2ch; cursor: pointer; }
+.next:hover { background: var(--st-waiting); }
+.next:active { transform: translateY(1px); }
+.next kbd { opacity: .7; font: inherit; }
+.cmd { position: fixed; inset: auto 0 0 0; display: flex; gap: 1ch; padding: 6px 2ch; background: var(--paper-2); border-top: 1px solid var(--rule); color: var(--ink-soft); }
+.cmd input { flex: 1; min-width: 0; font: inherit; color: var(--ink); background: none; border: 0; outline: none; caret-color: var(--focus); }
+.cmd span { white-space: nowrap; }
+@media (max-width: 760px) {
+  .wrap { grid-template-columns: minmax(0, 1fr); height: auto; }
+  .list { border-right: 0; } .bar, .col-track { display: none; }
+  .cmd span { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .tag::after { animation: none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <b>jobhunt</b>
+  <nav><a href="#">home</a><a href="#">today</a><a href="#" aria-current="page">jobs</a><a href="#">gaps</a><a href="#">apps</a><a href="#">evidence</a><a href="#">counselor</a></nav>
+  <span class="who">antónio@127.0.0.1</span>
+</header>
+<div class="wrap">
+  <section class="list" aria-label="Ranked jobs">
+    <div class="counts" id="counts"></div>
+    <table>
+      <thead><tr><th>role</th><th class="col-track">track</th><th class="bar">fit</th><th class="fit">%</th><th>state</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </section>
+  <section class="insp" id="insp" aria-live="polite"></section>
+</div>
+<form class="cmd" onsubmit="event.preventDefault()">
+  <label for="c">:</label><input id="c" placeholder="paste a job url, or type a filter (e.g. remote, waiting)" autocomplete="off">
+  <span>j/k move · ⏎ next action · / filter</span>
+</form>
+<script src="data.js"></script>
+<script>
+let filter = null, sel = 0;
+const tag = s => ({ found: "[FOUND ]", ranked: "[RANKED]", drafted: "[DRAFT ]", waiting: "[ YOUR ]", sent: "[ SENT ]", blocked: "[BLOCKD]" })[s];
+const bar = f => "█".repeat(Math.round(f / 10)) + "░".repeat(10 - Math.round(f / 10));
+const visible = () => JOBS.filter(j => !filter || j.status === filter);
+function render() {
+  const n = s => JOBS.filter(j => j.status === s).length;
+  counts.innerHTML = `<button aria-pressed="${!filter}" data-f="">all ${JOBS.length}</button>` +
+    STAGES.map(s => `<button aria-pressed="${filter === s}" data-f="${s}">${s} ${n(s)}</button>`).join("");
+  const v = visible(); sel = Math.min(sel, v.length - 1);
+  rows.innerHTML = v.map((j, i) => `<tr aria-selected="${i === sel}" data-i="${i}">
+    <td>${j.flag ? '<span class="flagdot" title="has unverified text">!</span> ' : ""}${j.title} <span style="color:var(--ink-soft)">@ ${j.company}</span></td>
+    <td class="col-track">${j.track}</td><td class="bar">${bar(j.fit)}</td><td class="fit">${j.fit}</td>
+    <td><span class="tag ${j.status}">${tag(j.status)}</span></td></tr>`).join("");
+  const j = v[sel]; if (!j) { insp.innerHTML = "<p>nothing here.</p>"; return; }
+  insp.innerHTML = `<h2>${j.title}</h2><div class="co">${j.company} · ${j.where} · #${j.id}</div>
+    <dl><dt>state</dt><dd><span class="tag ${j.status}">${STAGE_LABEL[j.status]}</span></dd>
+    <dt>fit</dt><dd>${j.fit}/100 ${bar(j.fit)}</dd><dt>track</dt><dd>${j.track}</dd>
+    <dt>seniority</dt><dd>${j.seniority}</dd><dt>age</dt><dd>${j.age}</dd></dl>
+    ${j.rationale ? `<p class="why">${j.rationale}</p>` : ""}
+    ${j.flag ? `<div class="flagbox"><span class="q">${j.flag.text}</span> ${j.flag.why}</div>` : ""}
+    <button class="next">${j.next} <kbd>⏎</kbd></button>`;
+}
+counts.onclick = e => { const b = e.target.closest("button"); if (b) { filter = b.dataset.f || null; sel = 0; render(); } };
+rows.onclick = e => { const r = e.target.closest("tr"); if (r) { sel = +r.dataset.i; render(); } };
+addEventListener("keydown", e => {
+  if (e.target === c) { if (e.key === "Escape") c.blur(); return; }
+  if (e.key === "j") sel = Math.min(sel + 1, visible().length - 1);
+  else if (e.key === "k") sel = Math.max(sel - 1, 0);
+  else if (e.key === "/") { e.preventDefault(); c.focus(); return; }
+  else return;
+  render(); rows.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" });
+});
+render();
+</script>
+</body>
+</html>

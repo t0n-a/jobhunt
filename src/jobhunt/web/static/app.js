@@ -15,3 +15,12 @@ document.addEventListener('htmx:afterSwap', function (event) {
     if (last && last.scrollIntoView) last.scrollIntoView({ block: 'end', behavior: 'smooth' });
   }
 });
+
+// In the counselor composer, Enter sends and Shift+Enter starts a new line.
+document.addEventListener('keydown', function (event) {
+  var box = event.target;
+  if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+  if (!box.matches || !box.matches('form.composer textarea')) return;
+  event.preventDefault();
+  box.form.requestSubmit();
+});

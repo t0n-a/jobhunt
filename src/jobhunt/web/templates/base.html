@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}jobhunt{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&display=swap">
   <link rel="stylesheet" href="/static/app.css">
   <script src="/static/htmx.min.js"></script>
 </head>
@@ -13,6 +15,7 @@
     <a href="{{ href }}"{% if path == href or (href != '/' and path.startswith(href + '/')) or (href != '/' and path == href) %} aria-current="page"{% endif %}>{{ label }}</a>
   {%- endmacro %}
   <nav class="tabs">
+    <a class="brand" href="/">jobhunt</a>
     {{ tab('/', 'Home') }}
     {{ tab('/today', 'Today') }}
     {{ tab('/jobs', 'Jobs') }}
@@ -26,7 +29,7 @@
   </nav>
   {% set flashed = read_flash(request) %}
   {% if flashed %}<div class="flash {{ flashed[1] }}">{{ flashed[0] }}</div>{% endif %}
-  <main>
+  <main{% block main_class %}{% endblock %}>
     <h1>{% block kicker %}{{ self.title().split(' — ')[0] }}{% endblock %}</h1>
     {% block content %}{% endblock %}
   </main>

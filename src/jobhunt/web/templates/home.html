@@ -1,17 +1,18 @@
 {% extends "base.html" %}
 {% block title %}Home — jobhunt{% endblock %}
 {% block content %}
-<div class="callout">
-  <strong>Next</strong>
+<section class="panel nextstep">
+  <span class="lbl">Next</span>
   {% if state.next_step.href %}
-    <p><a href="{{ state.next_step.href }}">{{ state.next_step.text }}</a></p>
+    <p class="big"><a href="{{ state.next_step.href }}">{{ state.next_step.text }}</a></p>
+    <a class="button primary" href="{{ state.next_step.href }}">Go →</a>
   {% else %}
-    <p>{{ state.next_step.text | replace("`jobhunt scan`", "<code>jobhunt scan</code>") | safe }}</p>
+    <p class="big">{{ state.next_step.text | replace("`jobhunt scan`", "<code>jobhunt scan</code>") | safe }}</p>
   {% endif %}
   {% if state.confirmed + state.unconfirmed == 0 %}
     <p class="meta">Import a CV, your GitHub or a course list — or <a href="/counselor">talk to the counselor</a>.</p>
   {% endif %}
-</div>
+</section>
 
 <div class="steps">
   <a class="card" href="/atoms">
@@ -24,6 +25,7 @@
     <p class="label">2 · Jobs</p>
     <p class="n">{{ state.jobs_scored }}</p>
     <p class="meta">scored of {{ state.jobs_total }}</p>
+    {% if state.jobs_total %}<div class="fitbar"><span><i style="--p: {{ (100 * state.jobs_scored / state.jobs_total)|round|int }}"></i></span></div>{% endif %}
   </a>
   <a class="card" href="/today">
     <p class="label">3 · Today</p>

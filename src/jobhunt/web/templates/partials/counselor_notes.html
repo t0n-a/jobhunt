@@ -1,12 +1,13 @@
 {% if not notes %}
   <p class="empty">Nothing noted yet.</p>
 {% else %}
-  <ul class="cards">
+  <ul class="notes-list">
     {% for note in notes %}
-      <li class="card note" id="note-{{ note.id }}">
-        <div class="head"><span class="pill">{{ note.kind }}</span><p>{{ note.text }}</p></div>
-        <button type="button" class="danger" hx-post="/counselor/notes/{{ note.id }}/close"
-                hx-target="#notes" hx-swap="innerHTML">Forget this</button>
+      <li class="note" id="note-{{ note.id }}">
+        <span class="k {{ note.kind }}">{{ note.kind }}</span>
+        <p>{{ note.text }}</p>
+        <button type="button" hx-post="/counselor/notes/{{ note.id }}/close"
+                hx-target="#notes" hx-swap="innerHTML">Forget</button>
       </li>
     {% endfor %}
   </ul>

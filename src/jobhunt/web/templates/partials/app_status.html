@@ -1,0 +1,6 @@
+{#- One application's status pill, same vocabulary as the Jobs page (design.md). -#}
+{%- set s = application.status -%}
+{%- set plan = application.form_plan or {} -%}
+{%- set blocked = s in ('drafted', 'queued') and (plan.get('unknown') or [])|selectattr('required')|list -%}
+{%- set key = 'blocked' if blocked else {'queued': 'waiting', 'drafted': 'drafted', 'approved': 'approved', 'sent': 'sent', 'replied': 'sent', 'interview': 'sent', 'offer': 'sent'}.get(s, 'closed') -%}
+<span class="st{% if key in ('blocked', 'waiting') %} hot{% endif %} {{ key }}">{{ 'blocked' if blocked else ('needs your yes' if s == 'queued' else s) }}</span>

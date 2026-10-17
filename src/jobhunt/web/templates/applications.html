@@ -4,22 +4,25 @@
 {% if not applications %}
   <p class="empty">No applications yet. Open a job and tailor a resume for it.</p>
 {% else %}
-  <ul class="cards">
-    {% for application in applications %}
-      <li class="card">
-        <div class="head">
-          <h3><a href="/applications/{{ application.id }}">
-            {{ jobs[application.job_id].title if application.job_id in jobs else "Job" }}
-            — {{ jobs[application.job_id].company if application.job_id in jobs else "" }}
-          </a></h3>
-          <span class="pill{% if application.status in ('sent', 'replied', 'interview', 'offer') %} ok{% endif %}">{{ application.status }}</span>
-        </div>
-        <p class="meta">
-          {% if application.coverage is not none %}{{ application.coverage }}% keyword coverage{% endif %}
-          {%- if application.dropped_bullets %} · {{ application.dropped_bullets|length }} line(s) dropped{% endif %}
-        </p>
-      </li>
-    {% endfor %}
-  </ul>
+  <section class="panel list">
+    <table class="jobs">
+      <thead><tr><th>Role</th><th>Keywords</th><th>Status</th></tr></thead>
+      <tbody>
+      {% for application in applications %}{% set job = jobs.get(application.job_id) %}
+        {% set req = ((application.form_plan or {}).get('unknown') or [])|selectattr('required')|list %}
+        {% set rowkey = 'blocked' if application.status in ('drafted', 'queued') and req else ('waiting' if application.status == 'queued' else '') %}
+        <tr{% if rowkey %} class="hot {{ rowkey }}"{% endif %}>
+          <td class="role">
+            <a class="t" href="/applications/{{ application.id }}">{{ job.title if job else "Job" }}</a>
+            <div class="c">{{ job.company if job else "" }}
+              {%- if application.dropped_bullets %} · {{ application.dropped_bullets|length }} line(s) dropped{% endif %}</div>
+          </td>
+          <td class="fitcell">{% if application.coverage is not none %}<div class="fitbar"><span><i style="--p: {{ application.coverage }}"></i></span><b>{{ application.coverage|round|int }}</b></div>{% else %}<span class="meta">—</span>{% endif %}</td>
+          <td>{% include "partials/app_status.html" %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
 {% endif %}
 {% endblock %}

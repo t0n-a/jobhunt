@@ -257,3 +257,26 @@ def test_paste_without_a_confirmed_profile_returns_502_not_a_bogus_score(make_cl
     )
 
     assert response.status_code == 502
+
+
+def test_queued_application_shows_under_needs_you(make_client):
+    from jobhunt.tailor.models import Application
+
+    client = make_client([])
+    job_id = seed(client, title="Drafted role", fit=90)
+    seed(client, title="Plain role", fit=70)
+    with Session(client.engine) as session:
+        session.add(Application(job_id=job_id, status="queued"))
+        session.commit()
+    text = client.get("/jobs").text
+    assert "Needs you" in text
+    assert "needs your yes" in text
+    assert text.index("Needs you") < text.index("Plain role")
+
+
+def test_inbox_selects_the_job_named_in_the_query(make_client):
+    client = make_client([])
+    seed(client, title="High fit", fit=90)
+    low = seed(client, title="Low fit", fit=40)
+    text = client.get(f"/jobs?sel={low}").text
+    assert f'<h2><a href="/jobs/{low}">Low fit</a></h2>' in text
