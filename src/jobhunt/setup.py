@@ -85,20 +85,24 @@ def setup_keys(root: Path, p: Prompter, http: httpx.Client) -> None:
             p.say("No message found. Run jobhunt setup again after messaging the bot.")
 
 
-def _ask_field(name: str, annotation, p: Prompter):
+def _ask_field(label: str, annotation, p: Prompter, minimum: int | None = None):
     if annotation is bool:
         while True:
-            raw = p.ask(f"{name} (y/n): ").strip().lower()
+            raw = p.ask(f"{label} (y/n): ").strip().lower()
             if raw in ("y", "n"):
                 return raw == "y"
     if annotation is int:
-        for _ in range(2):
+        while True:
             try:
-                return int(p.ask(f"{name}: ").strip())
+                value = int(p.ask(f"{label}: ").strip().replace(",", ""))
             except ValueError:
                 p.say("Please enter a whole number.")
-        return 0  # shortcut: required ints have no default, so 0 after two bad tries
-    return p.ask(f"{name}: ").strip()
+                continue
+            if minimum is not None and value < minimum:
+                p.say(f"Please enter at least {minimum}.")
+                continue
+            return value
+    return p.ask(f"{label}: ").strip()
 
 
 def setup_answers(root: Path, p: Prompter) -> bool:
@@ -107,9 +111,12 @@ def setup_answers(root: Path, p: Prompter) -> bool:
         return False
     values = {}
     for name, field in StandardAnswers.model_fields.items():
+        label = name.replace("_", " ").capitalize()
         if field.is_required():
-            values[name] = _ask_field(name, field.annotation, p)
-        elif field.annotation is str and (typed := p.ask(f"{name} [{field.default}]: ").strip()):
+            # The maximum salary can't be below the minimum the candidate just gave.
+            minimum = values.get("salary_min_eur") if name == "salary_max_eur" else None
+            values[name] = _ask_field(label, field.annotation, p, minimum)
+        elif field.annotation is str and (typed := p.ask(f"{label} [{field.default}]: ").strip()):
             values[name] = typed
     save_answers(path, StandardAnswers.model_validate(values))
     return True

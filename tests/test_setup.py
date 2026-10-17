@@ -115,3 +115,10 @@ def test_secrets_never_echoed(tmp_path):
     s = run(tmp_path, FULL, [KEY, TOKEN])
     assert not any(KEY in m or TOKEN in m for m in s.said)
     assert yaml.safe_load((tmp_path / "config.yaml").read_text())["profile"]["name"] == "Hugo"
+
+
+def test_max_salary_below_min_is_reasked(tmp_path):
+    asks = CONFIG + [""] + ["EU", "n", "1 month", "40000", "30000", "60000", "n", "y", "", "", "", ""]
+    s = run(tmp_path, asks, [KEY, TOKEN])
+    assert load_answers(tmp_path / "answers.yaml").salary_max_eur == 60000
+    assert any("at least 40000" in m for m in s.said)
