@@ -2,10 +2,12 @@ import logging
 from collections.abc import Callable
 from datetime import datetime
 
+import httpx
 from sqlmodel import Session, select
 
 from jobhunt.apply.digest import build_digest
 from jobhunt.apply.followup import mark_cold
+from jobhunt.apply.prepare import prepare_plan
 from jobhunt.apply.queue import tailor_shortlist
 from jobhunt.cli import summarize_scan
 from jobhunt.config import Config
@@ -52,6 +54,13 @@ def run_daily(
             try:
                 run = tailor_shortlist(session, llm, config)
                 stopped = run.stopped
+                with httpx.Client(timeout=15) as http:
+                    for application in run.queued:
+                        try:
+                            prepare_plan(session, application, config, llm, http)
+                        except Exception:  # one unreadable form must not stop the run
+                            log.warning("form plan failed for #%s", application.id, exc_info=True)
+                            session.rollback()
                 if client:
                     for application in run.queued:
                         _send_queued(session, client, application, config.autopilot.web_url)

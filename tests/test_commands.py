@@ -191,3 +191,16 @@ def test_yes_reply_points_at_the_pdf_only_when_there_is_one(session):
     session.commit()
     _, client = tick(session, msg(2, "yes 2"))
     assert "PDF and answers: http://127.0.0.1:8000/applications/2" in client.sent[0]
+
+
+def test_yes_mentions_assisted_apply_when_planned(session):
+    from jobhunt.apply.form import FormField
+    from jobhunt.apply.plan import FormPlan
+
+    app = session.get(Application, 1)
+    app.form_plan = FormPlan(unknown=[FormField("q", "Why?", "text", True)]).to_json()
+    session.add(app)
+    session.commit()
+    _, client = tick(session, msg(1, "yes 1"))
+    assert "At your computer: jobhunt apply 1 opens the form already filled." in client.sent[0]
+    assert "(1 question(s) left for you.)" in client.sent[0]

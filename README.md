@@ -58,6 +58,14 @@ Telegram commands: yes N, no N (queue), sent N (you applied), replied N, intervi
 
 Timers can be installed later with `uv run jobhunt install-timers`; run `loginctl enable-linger $USER` so they fire while you are logged out.
 
+## Applying
+
+Each daily run reads the form of every newly queued application (Greenhouse, Lever and Ashby) and plans its answers from your profile, `answers.yaml`, the tailored PDF and cover letter, and confirmed evidence. The plan shows on the review page under "Form answers"; anything it can't answer is left for you.
+
+At your computer, `uv run jobhunt apply --id N` opens the real form in a visible browser, already filled. You check it and click submit yourself, then answer the prompt to mark it sent. It needs a desktop session.
+
+Autopilot rarely fires: these ATSs use invisible captchas, and jobhunt won't get past them. Those applications stay with you, and assisted apply is the usual route.
+
 ## First Run, In Order
 
 The Home page shows the four stages and names the one thing to do next. Everything in this system is downstream of **confirmed evidence atoms**, so the order matters more than it looks:

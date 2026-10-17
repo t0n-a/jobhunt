@@ -43,6 +43,22 @@
   </ul>
 {% endif %}
 
+{% if form_plan %}
+  <h3>Form answers</h3>
+  <p class="meta">Planned from your profile, answers and evidence. <code>jobhunt apply --id {{ application.id }}</code> fills the real form with these.</p>
+  <ul class="cards">
+    {% for item in form_plan.filled %}
+      <li class="card"><p><strong>{{ item.name }}</strong>: {{ item.value }}</p><p class="meta">{{ item.source }}</p></li>
+    {% endfor %}
+    {% for item in form_plan.unknown %}
+      <li class="card warn"><p><strong>{{ item.label or item.name }}</strong></p><p class="meta">you answer this</p></li>
+    {% endfor %}
+    {% for item in form_plan.dropped %}
+      <li class="card warn"><p>{{ item.answer }}</p><p class="meta">{{ item.reason }}</p></li>
+    {% endfor %}
+  </ul>
+{% endif %}
+
 <h3>Cover letter</h3>
 <pre class="letter">{{ application.cover_letter }}</pre>
 

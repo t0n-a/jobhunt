@@ -140,3 +140,25 @@ def test_no_llm_skips_tailoring_but_sends_the_digest(engine, monkeypatch):
     assert calls == []
     assert "Tailoring stopped: No LLM key; tailoring skipped. Run jobhunt setup." in digest
     assert client.sent
+
+
+def test_daily_prepares_plans_for_new_queue_items(engine, monkeypatch):
+    fake_tailor(monkeypatch, engine)
+    seen = []
+    monkeypatch.setattr(daily, "prepare_plan", lambda s, a, c, llm, http: seen.append(a.id))
+    go(engine, FakeClient())
+    assert seen == [1, 2]
+
+
+def test_daily_survives_a_failing_plan(engine, monkeypatch):
+    fake_tailor(monkeypatch, engine)
+    seen = []
+
+    def boom(s, a, c, llm, http):
+        seen.append(a.id)
+        raise RuntimeError("x")
+
+    monkeypatch.setattr(daily, "prepare_plan", boom)
+    client = FakeClient()
+    out = go(engine, client)
+    assert seen == [1, 2] and client.sent[-1] == (out, None)

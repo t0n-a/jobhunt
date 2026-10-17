@@ -289,3 +289,26 @@ def test_opening_a_queued_application_marks_it_reviewed(make_client):
     with Session(client.engine) as db:
         assert db.get(Application, 1).reviewed_at is not None
         assert trust_count(db) == 1
+
+
+def test_review_page_shows_form_answers(make_client):
+    from jobhunt.apply.form import FormField
+    from jobhunt.apply.plan import FormPlan, Planned
+    from jobhunt.tailor.models import Application
+
+    client = make_client([])
+    job_id = seed(client)
+    plan = FormPlan(
+        filled=[Planned("email", "a@example.com", "profile")],
+        unknown=[FormField("why", "Why us?", "text", True)],
+        dropped=[{"name": "x", "answer": "I led NASA", "reason": "not supported"}],
+    )
+    with Session(client.engine) as s:
+        app = Application(job_id=job_id, status="queued", resume_json={}, form_plan=plan.to_json())
+        s.add(app)
+        s.commit()
+        app_id = app.id
+    html = client.get(f"/applications/{app_id}").text
+    assert "Form answers" in html and "a@example.com" in html and "profile" in html
+    assert "Why us?" in html and "you answer this" in html
+    assert "I led NASA" in html and "not supported" in html

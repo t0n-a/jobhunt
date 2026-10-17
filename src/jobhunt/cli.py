@@ -75,9 +75,10 @@ def run_scan_command(config) -> str:
 def main() -> None:
     load_env()
     parser = argparse.ArgumentParser(prog="jobhunt")
-    parser.add_argument("command", choices=["serve", "scan", "today", "notify", "shortlist", "tick", "daily", "install-timers", "setup"])
+    parser.add_argument("command", choices=["serve", "scan", "today", "notify", "shortlist", "tick", "daily", "install-timers", "setup", "apply"])
     parser.add_argument("--config", type=Path, default=Path("config.yaml"))
     parser.add_argument("--limit", type=int, default=30)
+    parser.add_argument("--id", type=int)
     parser.add_argument("--port", type=int, default=8000)
     args = parser.parse_args()
 
@@ -100,6 +101,36 @@ def main() -> None:
 
     if args.command == "scan":
         print(run_scan_command(config))
+        return
+
+    if args.command == "apply":
+        import os
+
+        from sqlmodel import Session
+
+        from jobhunt.apply.prepare import assisted_apply
+        from jobhunt.db import create_engine_for, init_db
+        from jobhunt.llm import LLMError, build_provider
+        from jobhunt.tailor.models import Application
+
+        if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+            print("jobhunt apply needs a desktop session (it opens a browser window).")
+            return
+        if args.id is None:
+            print("Usage: jobhunt apply --id N")
+            return
+        engine = create_engine_for(config.data_dir / "jobhunt.db")
+        init_db(engine)
+        try:
+            llm = build_provider(config.llm)
+        except LLMError:
+            llm = None
+        with Session(engine) as db, httpx.Client(timeout=15) as http:
+            application = db.get(Application, args.id)
+            if application is None:
+                print(f"No application #{args.id}.")
+                return
+            print(assisted_apply(db, application, config, llm, http))
         return
 
     if args.command == "shortlist":

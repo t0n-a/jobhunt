@@ -4,6 +4,7 @@ from datetime import datetime
 from sqlmodel import Session, select
 
 from jobhunt.apply.followup import followups_due, mark_followup_done
+from jobhunt.apply.plan import FormPlan
 from jobhunt.apply.queue import approve, autopilot_available, skip, trust_count
 from jobhunt.apply.tracker import NEXT_STATUSES, set_status
 from jobhunt.config import Config
@@ -62,6 +63,11 @@ def handle_command(
             f"{review}: {cfg.web_url}/applications/{arg}\n"
             f'Send "sent {arg}" once it\'s out.'
         )
+        if application.form_plan:
+            left = len(FormPlan.from_json(application.form_plan).unknown)
+            reply += f"\nAt your computer: jobhunt apply {arg} opens the form already filled."
+            if left:
+                reply += f" ({left} question(s) left for you.)"
         if application.reviewed_at is None:
             reply += "\nOpen the review page before approving to count toward trust."
         if not before and autopilot_available(session, cfg):
