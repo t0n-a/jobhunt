@@ -65,7 +65,7 @@ def run_scan_command(config) -> str:
 def main() -> None:
     load_env()
     parser = argparse.ArgumentParser(prog="jobhunt")
-    parser.add_argument("command", choices=["serve", "scan", "today", "notify", "shortlist"])
+    parser.add_argument("command", choices=["serve", "scan", "today", "notify", "shortlist", "tick"])
     parser.add_argument("--config", type=Path, default=Path("config.yaml"))
     parser.add_argument("--limit", type=int, default=30)
     parser.add_argument("--port", type=int, default=8000)
@@ -125,6 +125,30 @@ def main() -> None:
             print("Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env to use notify.")
             return
         print("sent" if send_telegram(token, chat_id, line) else "send failed")
+        return
+
+    if args.command == "tick":
+        import os
+        from datetime import UTC, datetime
+
+        from sqlmodel import Session
+
+        from jobhunt.apply import commands
+        from jobhunt.db import create_engine_for, init_db
+        from jobhunt.telegram import TelegramClient
+
+        token = os.environ.get("TELEGRAM_BOT_TOKEN")
+        chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+        if not token or not chat_id:
+            print("Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env to use tick.")
+            return
+        engine = create_engine_for(config.data_dir / "jobhunt.db")
+        init_db(engine)
+        with Session(engine) as db, httpx.Client(timeout=15) as http:
+            handled = commands.run_tick(
+                db, TelegramClient(token, chat_id, http), config, datetime.now(UTC)
+            )
+        print(f"handled={handled}")
         return
 
     uvicorn.run(create_app(config), host="127.0.0.1", port=args.port)
