@@ -50,3 +50,7 @@ def test_triage_prefers_posted_pay_over_estimate():
     facts = triage(job(), RankingConfig())
     assert (facts.pay_yearly_eur, facts.pay_estimated) == (65_000, True)  # DE mid
     assert facts.country == "DE" and facts.visa == "easy"
+
+
+def test_huge_digit_run_does_not_raise():
+    assert level_of("Engineer", "9" * 5000 + " years of experience") == "mid"

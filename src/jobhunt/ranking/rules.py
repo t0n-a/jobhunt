@@ -19,7 +19,7 @@ _JUNIOR_TITLE = re.compile(
     re.IGNORECASE,
 )
 # Years count as seniority only when experience is asked for, not "we've been around for 5 years".
-_YEARS = re.compile(r"\b(\d+)\+?\s*(?:years?|yrs?)\b", re.IGNORECASE)
+_YEARS = re.compile(r"\b(\d{1,3})\+?\s*(?:years?|yrs?)\b", re.IGNORECASE)
 _EXPERIENCE_NEAR = re.compile(r"experience|years of", re.IGNORECASE)
 
 _LANGUAGES = [
