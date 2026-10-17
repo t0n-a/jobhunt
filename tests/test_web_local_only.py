@@ -31,3 +31,4 @@ def test_foreign_host_is_refused(tmp_path):
     c = client(tmp_path)
     assert c.get("/healthz", headers={"Host": "rebound.evil.example"}).status_code == 403
     assert c.get("/healthz", headers={"Host": "localhost:8000"}).status_code == 200
+

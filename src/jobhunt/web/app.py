@@ -66,8 +66,7 @@ def _importer_errors():
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
-# "testserver" is the host FastAPI's TestClient sends.
-LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1", "testserver"}
+LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 
 
 def create_app(config: Config) -> FastAPI:
