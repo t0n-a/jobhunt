@@ -164,7 +164,7 @@ def draft_repo_readme(session, gh, full_name, atoms, llm):
         md += ["## Running it", "", *run, ""]
     return upsert_suggestion(
         session, "readme", full_name, title=f"README for {name}", body="\n".join(md).rstrip() + "\n",
-        flags=_flags(dropped, bool(old_sha)),
+        flags=_flags(dropped, bool(old_sha)), base_sha=old_sha,
     )
 
 
@@ -199,10 +199,11 @@ def draft_profile_readme(session, gh, user, atoms, public_repos, llm):
     if lines:
         md += ["## Projects", "", *lines, ""]
     try:
-        replaces = gh.readme(f"{user}/{user}")[1] is not None
+        base_sha = gh.readme(f"{user}/{user}")[1]
     except GhError:
         return None
+    replaces = base_sha is not None
     return upsert_suggestion(
         session, "profile_readme", f"{user}/{user}", title="Profile README", body="\n".join(md).rstrip() + "\n",
-        flags=_flags(dropped, replaces),
+        flags=_flags(dropped, replaces), base_sha=base_sha,
     )

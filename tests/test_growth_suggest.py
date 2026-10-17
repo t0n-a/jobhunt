@@ -162,3 +162,23 @@ def test_publish_audits_at_most_ten_repos_newest_pushed_first(session, tmp_path)
     out = suggest.suggest_publish(session, FakeGh(private=repos), cfg(), audit=audit, workdir=tmp_path)
     assert len(out) == suggest.MAX_AUDITS_PER_REFRESH == 10
     assert "ada/r00" not in {s.target for s in out} and "ada/r11" in {s.target for s in out}
+
+
+def test_a_crashing_step_still_sets_the_refresh_time(session, tmp_path, monkeypatch):
+    from jobhunt.state import get_state
+
+    monkeypatch.setattr(suggest, "suggest_publish", lambda *a, **k: 1 / 0)
+    suggest.refresh(session, FakeGh(), cfg(), now=NOW, workdir=tmp_path)
+    assert get_state(session, "growth_refreshed_at") == NOW.isoformat()
+
+
+def test_malformed_gh_output_is_a_gh_error():
+    from types import SimpleNamespace
+
+    import pytest
+
+    from jobhunt.growth.gh import Gh, GhError
+
+    gh = Gh(run=lambda *a, **k: SimpleNamespace(returncode=0, stdout="not json", stderr=""))
+    with pytest.raises(GhError):
+        gh.languages("ada/x")

@@ -25,6 +25,10 @@ class Suggestion(SQLModel, table=True):
     error: str = ""
     # README drafts only: set once the Telegram message with the full body was sent.
     shown_at: datetime | None = None
+    # The flags as last shown to him: publish must not act on findings he never saw.
+    shown_flags: list[str] | None = Field(default=None, sa_column=Column(JSON, nullable=True))
+    # README drafts: the README version the draft replaces (None = there was none).
+    base_sha: str | None = None
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
 

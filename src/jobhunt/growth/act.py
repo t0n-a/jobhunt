@@ -5,7 +5,7 @@ from sqlmodel import Session
 from jobhunt.growth.audit import audit_repo
 from jobhunt.growth.gh import GhError
 from jobhunt.growth.models import Suggestion, _now
-from jobhunt.growth.readme import REPLACES
+from jobhunt.ranking.shortlist import _clean
 
 
 def _open(session: Session, suggestion_id: int, kinds: tuple[str, ...]) -> Suggestion | str:
@@ -39,6 +39,13 @@ def publish(session: Session, gh, config, suggestion_id: int, *, audit=None) -> 
         if fresh.blocking != s.blocking or fresh.flags != s.flags:
             s.flags, s.blocking = fresh.flags, fresh.blocking
             _save(session, s, s.status)
+        unseen = [f for f in s.flags if f not in (s.shown_flags or [])]
+        if not s.blocking and (s.shown_at is None or unseen):
+            # This reply is the first time he sees them; the next publish N confirms.
+            s.shown_flags, s.shown_at = list(s.flags), _now()
+            _save(session, s, s.status)
+            listed = "\n".join(f"  ⚠ {_clean(f)}" for f in unseen) or "  (no warnings)"
+            return f"Before publishing {s.target}, note:\n{listed}\nSend publish {s.id} again to go ahead."
         if s.blocking:
             first = s.flags[0] if s.flags else "a secret was found"
             return (
@@ -75,8 +82,8 @@ def approve(session: Session, gh, suggestion_id: int) -> str:
         )
     try:
         sha = gh.readme(s.target)[1]
-        if sha and REPLACES not in (s.flags or []):  # the draft said "new README"; one has appeared
-            msg = f"A README appeared on {s.target} since the draft; nothing committed. Decline it; a new draft comes next week."
+        if sha != s.base_sha:  # his README changed (or appeared) since the draft he saw
+            msg = f"The README on {s.target} changed since the draft; nothing committed. Decline it; a new draft comes next week."
             _save(session, s, "failed", msg)
             return msg
         gh.put_file(s.target, "README.md", s.body, "docs: README (drafted with jobhunt, approved by you)", sha)

@@ -7,7 +7,6 @@ from sqlmodel import Session
 
 from jobhunt.growth.audit import audit_repo
 from jobhunt.growth.certs import CERT_TABLE
-from jobhunt.growth.gh import GhError
 from jobhunt.growth.models import Suggestion, upsert_suggestion
 from jobhunt.matching.skills import canonical_skill
 from jobhunt.ranking.shortlist import shortlist
@@ -133,8 +132,12 @@ def refresh(session: Session, gh, config, *, now: datetime, workdir: Path) -> li
     ):
         try:
             out += step()
-        except GhError as e:
-            logger.warning("growth refresh: %s", e)
-    out += suggest_certs(session, config)
-    set_state(session, "growth_refreshed_at", now.isoformat())
+        except Exception:
+            session.rollback()
+            logger.warning("growth refresh step failed", exc_info=True)
+    try:
+        out += suggest_certs(session, config)
+    finally:
+        # Set even after a failure, or every daily run re-clones up to the audit cap.
+        set_state(session, "growth_refreshed_at", now.isoformat())
     return out

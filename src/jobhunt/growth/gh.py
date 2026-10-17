@@ -56,10 +56,17 @@ class Gh:
                 "--json", _REPO_FIELDS,
             ]
         )
-        return json.loads(out)
+        return self._json(out)
+
+    @staticmethod
+    def _json(text: str):
+        try:
+            return json.loads(text)
+        except ValueError as e:  # malformed gh output must not escape as a non-GhError
+            raise GhError(f"unexpected gh output: {e}") from e
 
     def languages(self, full_name: str) -> dict[str, int]:
-        return json.loads(self._ok(["api", f"repos/{_name(full_name)}/languages"]))
+        return self._json(self._ok(["api", f"repos/{_name(full_name)}/languages"]))
 
     def readme(self, full_name: str) -> tuple[str, str | None]:
         proc = self._exec(["api", f"repos/{_name(full_name)}/readme"])
@@ -67,12 +74,16 @@ class Gh:
             if "HTTP 404" in proc.stderr:
                 return "", None
             raise GhError(proc.stderr.strip()[:300])
-        data = json.loads(proc.stdout)
-        # GitHub wraps the base64 body at 60 columns; b64decode skips the newlines.
-        return base64.b64decode(data["content"]).decode("utf-8"), data["sha"]
+        data = self._json(proc.stdout)
+        try:
+            # GitHub wraps the base64 body at 60 columns; b64decode skips the newlines.
+            text = base64.b64decode(data["content"]).decode("utf-8", errors="replace")
+            return text, data["sha"]
+        except (KeyError, TypeError, ValueError) as e:
+            raise GhError(f"unexpected README payload: {e}") from e
 
     def tree(self, full_name: str) -> list[str]:
-        data = json.loads(self._ok(["api", f"repos/{_name(full_name)}/git/trees/HEAD?recursive=1"]))
+        data = self._json(self._ok(["api", f"repos/{_name(full_name)}/git/trees/HEAD?recursive=1"]))
         return [entry["path"] for entry in data.get("tree", [])][:_TREE_LIMIT]
 
     def make_public(self, full_name: str) -> None:

@@ -279,8 +279,8 @@ def test_growth_commands(session, monkeypatch):
     monkeypatch.setattr(commands, "Gh", FakeGh)
     monkeypatch.setattr(act, "audit_repo", lambda *a, **k: Audit([], False))
     FakeGh.calls = []
-    p = upsert_suggestion(session, "publish", "ada/x", title="t")
-    r = upsert_suggestion(session, "readme", "ada/y", title="t", body="# y", shown_at=datetime.now(UTC))
+    p = upsert_suggestion(session, "publish", "ada/x", title="t", shown_at=datetime.now(UTC), shown_flags=[])
+    r = upsert_suggestion(session, "readme", "ada/y", title="t", body="# y", shown_at=datetime.now(UTC), base_sha=FakeGh().readme("ada/y")[1])
     d = upsert_suggestion(session, "pin", "ada/z", title="t")
     _, c = tick(session, msg(1, "approve 99"), msg(2, f"approve {p.id}"), msg(3, f"approve {r.id}"),
                 msg(4, f"decline {d.id}"), msg(5, f"publish {p.id}"))
@@ -297,6 +297,6 @@ def test_growth_callback_from_another_chat_is_ignored(session, monkeypatch):
     from jobhunt.growth.models import Suggestion, upsert_suggestion
 
     monkeypatch.setattr(commands, "Gh", FakeGh)
-    p = upsert_suggestion(session, "publish", "ada/x", title="t")
+    p = upsert_suggestion(session, "publish", "ada/x", title="t", shown_at=datetime.now(UTC), shown_flags=[])
     n, c = tick(session, cb(1, f"publish:{p.id}", chat="99"))
     assert n == 0 and c.sent == [] and session.get(Suggestion, p.id).status == "suggested"

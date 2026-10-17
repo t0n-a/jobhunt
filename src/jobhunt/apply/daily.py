@@ -131,10 +131,11 @@ def _grow(session: Session, config: Config, llm, client, now: datetime) -> None:
         ).all()
         ids = {s.id for s in new}
         for s in [*new, *(u for u in unsent if u.id not in ids)]:
-            if client.send(growth_message(s)) and s.kind in ("readme", "profile_readme"):
+            if client.send(growth_message(s)) and s.kind in ("readme", "profile_readme", "publish"):
                 row = session.get(Suggestion, s.id)
-                if row is not None:  # only now can approve commit it: the body has been seen
+                if row is not None:  # only now can approve/publish act: he has seen it
                     row.shown_at = now
+                    row.shown_flags = list(row.flags or [])
                     session.add(row)
                     session.commit()
 

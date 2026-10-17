@@ -46,6 +46,8 @@ def session(tmp_path):
 
 
 def pub(session, **kw):
+    # A suggestion he has already seen on Telegram, unless the test says otherwise.
+    kw = {"shown_at": _now(), "shown_flags": list(kw.get("flags", []))} | kw
     return upsert_suggestion(session, "publish", "ada/x", title="Make x public", **kw)
 
 
@@ -91,7 +93,8 @@ def test_gh_failure_is_reported_not_done(session):
 
 
 def shown(session, **kw):
-    kw = {"title": "README", "body": "# x\n", "flags": ["replaces existing README"], "shown_at": _now()} | kw
+    kw = {"title": "README", "body": "# x\n", "flags": ["replaces existing README"], "shown_at": _now(),
+          "base_sha": "old"} | kw
     return upsert_suggestion(session, "readme", "ada/x", **kw)
 
 
@@ -154,9 +157,31 @@ def test_approve_refuses_an_unseen_draft(session):
 
 
 def test_approve_refuses_when_a_readme_appeared_after_a_new_readme_draft(session):
-    s = shown(session, flags=[])
+    s = shown(session, flags=[], base_sha=None)
     gh = FakeGh()
-    assert "appeared" in act.approve(session, gh, s.id) and gh.calls == []
+    assert "changed since the draft" in act.approve(session, gh, s.id) and gh.calls == []
+
+
+def test_approve_refuses_when_he_edited_the_readme_after_the_draft(session):
+    s = shown(session, base_sha="v1")
+    gh = FakeGh(sha="v2")
+    assert "changed since the draft" in act.approve(session, gh, s.id) and gh.calls == []
+    assert "changed since the draft" in act.approve(session, gh, s.id)  # a retry refuses too
+
+
+def test_publish_shows_new_findings_before_acting(session):
+    s = pub(session)
+    gh = FakeGh()
+    found = lambda *a, **k: Audit(["may hold personal data: users.csv (30 emails)"], False)
+    first = act.publish(session, gh, CONFIG, s.id, audit=found)
+    assert "users.csv" in first and "publish" in first and gh.calls == []
+    assert act.publish(session, gh, CONFIG, s.id, audit=found) == "ada/x is public now."
+
+
+def test_publish_never_shown_asks_first(session):
+    s = pub(session, shown_at=None)
+    gh = FakeGh()
+    assert "again to go ahead" in act.publish(session, gh, CONFIG, s.id, audit=clean_audit) and gh.calls == []
 
 
 def test_readme_message_says_replace_and_shows_dropped_note(session):
