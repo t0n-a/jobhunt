@@ -385,8 +385,9 @@ def create_app(config: Config) -> FastAPI:
             if job is None:
                 raise HTTPException(status_code=404, detail="No such job")
             score = _latest_scores(db).get(job_id)
+            state = job_state(job, score, latest_applications(db).get(job_id))
             return templates.TemplateResponse(
-                request, "job_detail.html", {"job": job, "score": score}
+                request, "job_detail.html", {"job": job, "score": score, "state": state}
             )
 
     @app.post("/jobs/paste")

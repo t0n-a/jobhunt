@@ -1,38 +1,75 @@
 {% extends "base.html" %}
 {% block title %}{{ job.title }} — jobhunt{% endblock %}
 {% block kicker %}Jobs{% endblock %}
+{% block main_class %} class="wide"{% endblock %}
 {% block content %}
-<h2>{{ job.title }}</h2>
-<p class="meta">{{ job.company }}{% if job.location %} · {{ job.location }}{% endif %}
-  {% if job.remote %} · remote{% endif %}
-  {% if job.url %} · <a href="{{ job.url }}">original posting</a>{% endif %}</p>
+{% set st = state %}
+<div class="workbench">
+  <div class="stack">
+    <section class="panel jobcard">
+      <div class="head">
+        <div>
+          <span class="st{% if st.key in ('blocked', 'waiting') %} hot{% endif %} {{ st.key }}">{{ st.label }}</span>
+          <h2>{{ job.title }}</h2>
+          <p class="co">{{ job.company }}</p>
+        </div>
+        {% if score %}<div class="ring" style="--p: {{ score.fit_score }}"><div><b>{{ score.fit_score }}</b><small>fit</small></div></div>{% endif %}
+      </div>
+      <ul class="facts">
+        {% if job.remote %}<li>remote</li>{% endif %}
+        {% if job.location %}<li>{{ job.location }}</li>{% endif %}
+        {% if score %}<li>{{ score.track }}</li><li>seniority: {{ score.seniority_fit }}</li>{% endif %}
+        {% if job.salary_text %}<li>{{ job.salary_text }}</li>{% endif %}
+        <li>found {{ ago(job.first_seen) }}</li>
+        {% if job.url %}<li><a href="{{ job.url }}">original posting ↗</a></li>{% endif %}
+      </ul>
+      {% if score %}
+        <p class="why">{{ score.rationale }}</p>
+      {% else %}
+        <p class="empty">Not scored yet.</p>
+      {% endif %}
+    </section>
 
-{% if score %}
-  <p><span class="pill{% if score.fit_score >= 70 %} ok{% endif %}">fit {{ score.fit_score }}/100</span>
-     <span class="pill">{{ score.track }}</span>
-     <span class="pill">seniority {{ score.seniority_fit }}</span></p>
-  <p>{{ score.rationale }}</p>
-  <h4>Matched</h4>
-  <p>{% for s in score.matched_skills %}<span class="pill ok">{{ s }}</span>{% endfor %}</p>
-  <h4>Missing</h4>
-  <p>{% for s in score.missing_skills %}<span class="pill warn">{{ s }}</span>{% endfor %}</p>
-  {% if score.red_flags %}
-    <h4>Red flags</h4>
-    <ul>{% for f in score.red_flags %}<li>{{ f }}</li>{% endfor %}</ul>
-  {% endif %}
-{% else %}
-  <p class="empty">Not scored yet.</p>
-{% endif %}
+    {% if score %}
+    <section class="panel doc skills">
+      <div>
+        <h2 class="sec">Matched</h2>
+        <p>{% for s in score.matched_skills %}<span class="pill ok">{{ s }}</span>{% else %}<span class="meta">Nothing yet.</span>{% endfor %}</p>
+      </div>
+      <div>
+        <h2 class="sec">Missing</h2>
+        <p>{% for s in score.missing_skills %}<span class="pill warn">{{ s }}</span>{% else %}<span class="meta">Nothing missing.</span>{% endfor %}</p>
+      </div>
+      {% if score.red_flags %}
+        <div class="flag"><b>Red flags</b>
+          <ul>{% for f in score.red_flags %}<li>{{ f }}</li>{% endfor %}</ul>
+        </div>
+      {% endif %}
+    </section>
+    {% endif %}
 
-<div class="actions">
-  <form method="post" action="/jobs/{{ job.id }}/tailor">
-    <button type="submit" class="primary" data-busy="Tailoring…">Tailor a resume for this</button>
-  </form>
-  <form method="post" action="/jobs/{{ job.id }}/rescore">
-    <button type="submit" data-busy="Scoring…">Re-score</button>
-  </form>
+    <section class="panel doc">
+      <h2 class="sec">Posting</h2>
+      <p class="prose">{{ job.description }}</p>
+    </section>
+  </div>
+
+  <aside class="side">
+    <section class="panel actpanel">
+      <h2 class="sec">Next</h2>
+      {% if st.application_id %}
+        <p class="meta">{{ st.next }}.</p>
+        <div class="controls"><a class="button primary" href="{{ st.href }}">Open the application →</a></div>
+      {% endif %}
+      <div class="actions">
+        <form method="post" action="/jobs/{{ job.id }}/tailor">
+          <button type="submit"{% if not st.application_id %} class="primary"{% endif %} data-busy="Tailoring…">Tailor a resume for this</button>
+        </form>
+        <form method="post" action="/jobs/{{ job.id }}/rescore">
+          <button type="submit" data-busy="Scoring…">Re-score</button>
+        </form>
+      </div>
+    </section>
+  </aside>
 </div>
-
-<h3>Posting</h3>
-<p class="prose">{{ job.description }}</p>
 {% endblock %}

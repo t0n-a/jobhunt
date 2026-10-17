@@ -1,92 +1,128 @@
 {% extends "base.html" %}
 {% block title %}{{ job.title if job }} — jobhunt{% endblock %}
 {% block kicker %}Applications{% endblock %}
+{% block main_class %} class="wide"{% endblock %}
 {% block content %}
-<h2>{{ job.title if job }} — {{ job.company if job }}</h2>
-<p>
-  <span class="pill{% if application.status in ('sent', 'replied', 'interview', 'offer') %} ok{% endif %}">{{ application.status }}</span>
-  {%- if application.coverage is not none %} <span class="pill">{{ application.coverage }}% keyword coverage</span>{% endif %}
-</p>
+{% set s = application.status %}
+{% set blocked = form_plan and not form_plan.complete and s in ('drafted', 'queued') %}
+{% set key = 'blocked' if blocked else {'queued': 'waiting', 'drafted': 'drafted', 'approved': 'approved', 'sent': 'sent', 'replied': 'sent', 'interview': 'sent', 'offer': 'sent'}.get(s, 'closed') %}
+{% set label = 'blocked' if blocked else ('needs your yes' if s == 'queued' else s) %}
+{% set ns = namespace(yours=0) %}{% for _, b in bullets %}{% if b.source == 'user' %}{% set ns.yours = ns.yours + 1 %}{% endif %}{% endfor %}
 
-{% if application.missing_keywords %}
-  <p class="meta">Not mentioned: {{ application.missing_keywords|join(", ") }}</p>
-{% endif %}
+<div class="workbench">
+  <div class="stack">
+    <section class="panel jobcard apphead">
+      <div class="head">
+        <div>
+          <span class="st{% if key in ('blocked', 'waiting') %} hot{% endif %} {{ key }}">{{ label }}</span>
+          <h2>{% if job %}<a href="/jobs/{{ job.id }}">{{ job.title }}</a>{% endif %}</h2>
+          <p class="co">{{ job.company if job }}</p>
+        </div>
+        {% if application.coverage is not none %}
+          <div class="ring" style="--p: {{ application.coverage }}"><div><b>{{ application.coverage|round|int }}%</b><small>keywords</small></div></div>
+        {% endif %}
+      </div>
+      {% if application.missing_keywords %}
+        <p class="meta">Not mentioned: {% for k in application.missing_keywords %}<span class="pill">{{ k }}</span>{% endfor %}</p>
+      {% endif %}
+    </section>
 
-<h3>Header</h3>
-<div class="callout">
-  <strong>Model-written and NOT checked against your evidence</strong>
-  <p>Read these before you send.</p>
-</div>
-<p><strong>{{ application.resume_json.headline }}</strong></p>
-{% if application.resume_json.summary %}
-  <p>{{ application.resume_json.summary }}</p>
-{% endif %}
-{% if application.resume_json.skills %}
-  <p class="meta">Skills: {{ application.resume_json.skills|join(", ") }}</p>
-{% endif %}
+    <section class="panel doc">
+      <h2 class="sec">Header</h2>
+      <div class="flag">
+        <b>Check this before it goes out</b>
+        Model-written and not checked against your evidence. Read these before you send.
+      </div>
+      <p class="headline">{{ application.resume_json.headline }}</p>
+      {% if application.resume_json.summary %}<p>{{ application.resume_json.summary }}</p>{% endif %}
+      {% if application.resume_json.skills %}
+        <p class="meta">Skills: {{ application.resume_json.skills|join(", ") }}</p>
+      {% endif %}
+    </section>
 
-<h3>Resume lines</h3>
-<ul class="cards" id="bullets">
-  {% include "partials/bullet_list.html" %}
-</ul>
+    <section class="panel doc">
+      <h2 class="sec">Resume lines
+        {% if ns.yours %}<span class="st hot blocked">{{ ns.yours }} not from evidence</span>{% endif %}</h2>
+      <ul class="cards" id="bullets">
+        {% include "partials/bullet_list.html" %}
+      </ul>
 
-{% if application.dropped_bullets %}
-  <h3>Dropped, unverified</h3>
-  <p class="meta">These claims were not supported by your evidence, so they are not in the document.</p>
-  <ul class="cards">
-    {% for dropped in application.dropped_bullets %}
-      <li class="card warn">
-        <p>{{ dropped.text }}</p>
-        <p class="meta">{{ dropped.reason }}</p>
-      </li>
-    {% endfor %}
-  </ul>
-{% endif %}
+      {% if application.dropped_bullets %}
+        <details class="dropped">
+          <summary>{{ application.dropped_bullets|length }} claim{{ 's' if application.dropped_bullets|length != 1 }} dropped, unverified</summary>
+          <p class="meta">These claims were not supported by your evidence, so they are not in the document.</p>
+          <ul class="cards">
+            {% for dropped in application.dropped_bullets %}
+              <li class="card"><p class="struck">{{ dropped.text }}</p><p class="meta">{{ dropped.reason }}</p></li>
+            {% endfor %}
+          </ul>
+        </details>
+      {% endif %}
+    </section>
 
-{% if form_plan %}
-  <h3>Form answers</h3>
-  <p class="meta">Planned from your profile, answers and evidence. <code>jobhunt apply --id {{ application.id }}</code> fills the real form with these.</p>
-  <ul class="cards">
-    {% for item in form_plan.filled %}
-      <li class="card"><p><strong>{{ item.name }}</strong>: {{ item.value }}</p><p class="meta">{{ item.source }}</p></li>
-    {% endfor %}
-    {% for item in form_plan.unknown %}
-      <li class="card warn"><p><strong>{{ item.label or item.name }}</strong></p><p class="meta">you answer this</p></li>
-    {% endfor %}
-    {% for item in form_plan.dropped %}
-      <li class="card warn"><p>{{ item.answer }}</p><p class="meta">{{ item.reason }}</p></li>
-    {% endfor %}
-  </ul>
-{% endif %}
+    <section class="panel doc">
+      <h2 class="sec">Cover letter</h2>
+      <pre class="letter">{{ application.cover_letter }}</pre>
+    </section>
+  </div>
 
-<h3>Cover letter</h3>
-<pre class="letter">{{ application.cover_letter }}</pre>
+  <aside class="side">
+    <section class="panel actpanel">
+      {% if s == 'queued' %}
+        <h2 class="sec">Send this one?</h2>
+        {% if blocked %}{% set n = form_plan.unknown|selectattr('required')|list|length %}
+          <p class="flag"><b>Blocked</b>{{ n }} required form question{{ 's' if n != 1 }} {{ 'have' if n != 1 else 'has' }} no answer yet. <a href="#form">See below</a>.</p>
+        {% endif %}
+        <p class="meta">Approve it and it goes out with the next run. Skip it and it won't be sent.</p>
+        <div class="controls">
+          <form method="post" action="/applications/{{ application.id }}/approve" class="inline">
+            <button type="submit" class="primary">Approve</button>
+          </form>
+          <form method="post" action="/applications/{{ application.id }}/skip" class="inline">
+            <button type="submit">Skip</button>
+          </form>
+        </div>
+      {% else %}
+        <h2 class="sec">Next</h2>
+      {% endif %}
+      <div class="actions">
+        <form method="post" action="/applications/{{ application.id }}/render">
+          <button type="submit"{% if s != 'queued' and not application.pdf_path %} class="primary"{% endif %} data-busy="Rendering…">Render the PDF</button>
+        </form>
+        {% if application.pdf_path %}
+          <a class="button" href="/applications/{{ application.id }}/pdf">Download the PDF</a>
+        {% endif %}
+        {% if s in ('drafted', 'queued', 'approved') %}
+        <form method="post" action="/applications/{{ application.id }}/applied">
+          <button type="submit"{% if s == 'drafted' and application.pdf_path %} class="primary"{% endif %}>Mark as applied</button>
+        </form>
+        {% endif %}
+        {% for next in next_statuses %}
+          <form method="post" action="/applications/{{ application.id }}/status">
+            <input type="hidden" name="status" value="{{ next }}">
+            <button type="submit">Mark as {{ next }}</button>
+          </form>
+        {% endfor %}
+      </div>
+    </section>
 
-<div class="actions">
-  <form method="post" action="/applications/{{ application.id }}/render">
-    <button type="submit" class="primary" data-busy="Rendering…">Render the PDF</button>
-  </form>
-  {% if application.pdf_path %}
-    <a href="/applications/{{ application.id }}/pdf">Download the PDF</a>
-  {% endif %}
-  {% if application.status in ('drafted', 'queued', 'approved') %}
-  <form method="post" action="/applications/{{ application.id }}/applied">
-    <button type="submit">Mark as applied</button>
-  </form>
-  {% endif %}
-  {% for next in next_statuses %}
-    <form method="post" action="/applications/{{ application.id }}/status">
-      <input type="hidden" name="status" value="{{ next }}">
-      <button type="submit">Mark as {{ next }}</button>
-    </form>
-  {% endfor %}
-  {% if application.status == 'queued' %}
-    <form method="post" action="/applications/{{ application.id }}/approve">
-      <button type="submit" class="primary">Approve</button>
-    </form>
-    <form method="post" action="/applications/{{ application.id }}/skip">
-      <button type="submit">Skip</button>
-    </form>
-  {% endif %}
+    {% if form_plan %}
+    <section class="panel formplan" id="form">
+      <h2 class="sec">Form answers</h2>
+      <p class="meta">Planned from your profile, answers and evidence. <code>jobhunt apply --id {{ application.id }}</code> fills the real form with these.</p>
+      <ul>
+        {% for item in form_plan.unknown %}
+          <li class="miss"><strong>{{ item.label or item.name }}</strong><span>you answer this{% if item.required %} · required{% endif %}</span></li>
+        {% endfor %}
+        {% for item in form_plan.dropped %}
+          <li class="miss"><strong class="struck">{{ item.answer }}</strong><span>{{ item.reason }}</span></li>
+        {% endfor %}
+        {% for item in form_plan.filled %}
+          <li><strong>{{ item.name }}</strong><span>{{ item.value }} · {{ item.source }}</span></li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+  </aside>
 </div>
 {% endblock %}

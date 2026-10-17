@@ -274,7 +274,7 @@ table.jobs tr[aria-selected="true"] td:first-child { box-shadow: inset 3px 0 0 v
 .jobcard .co { font-size: 17px; color: var(--ink-soft); margin: 0 0 14px; }
 .ring { --p: 50; width: 84px; aspect-ratio: 1; border-radius: 50%; flex: none; display: grid; place-items: center;
   background: radial-gradient(closest-side, var(--panel) 76%, transparent 78%), conic-gradient(var(--bar) calc(var(--p) * 1%), var(--bar-bg) 0); }
-.ring b { display: block; font-size: 26px; font-weight: 800; line-height: 1; text-align: center; }
+.ring b { display: block; font-size: 24px; font-weight: 800; line-height: 1; text-align: center; }
 .ring small { display: block; font-size: 11px; color: var(--ink-soft); text-align: center; }
 .facts { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; padding: 0; list-style: none; }
 .facts li { border: 1px dashed var(--line); border-radius: 10px; padding: 3px 10px; font-size: 13px; }
@@ -404,6 +404,40 @@ table.jobs tr[aria-selected="true"] td:first-child { box-shadow: inset 3px 0 0 v
 .atoms-from-talks li { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
 .atoms-from-talks a { color: var(--ink); }
 .atoms-from-talks .st { font-size: 12px; }
+
+/* ---------- job detail ---------- */
+.skills { display: grid; gap: 4px; }
+.skills h2.sec { margin-bottom: 6px; }
+.skills p { margin: 0 0 8px; }
+.flag ul { margin: 4px 0 0; padding-left: 1.1rem; }
+
+/* ---------- application detail ---------- */
+.doc, .actpanel, .formplan { padding: 18px 20px; }
+h2.sec { font-size: 17px; margin: 0 0 12px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.apphead .meta .pill { margin-bottom: 0; }
+.headline { font-size: 17px; font-weight: 700; margin: 0 0 6px; }
+.doc .cards { margin: 0; }
+.bullet { padding: 10px; }
+.bullet form { margin: 0; gap: 8px; }
+.bullet textarea { background: var(--panel); }
+.bullet .actions { margin: 0; gap: 6px; }
+.bullet .actions button { padding: 7px 12px; }
+.src { margin-right: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--ink-soft);
+  background: var(--panel-2); border-radius: 99px; padding: 3px 10px 3px 8px; }
+.src::before { content: "✓"; color: var(--st-sent); font-weight: 800; }
+.bullet.warn .src { color: var(--flag); background: var(--panel); }
+.bullet.warn .src::before { content: "!"; color: var(--flag); }
+.struck { text-decoration: line-through var(--flag); color: var(--ink-soft); }
+.dropped { margin: 14px 0 0; }
+.dropped .cards { margin-top: 8px; }
+.actpanel .controls { margin-bottom: 10px; }
+.actpanel .controls form.inline { flex: 1; }
+.actpanel .controls form.inline button { width: 100%; }
+.formplan ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.formplan li { display: grid; gap: 2px; padding: 8px 10px; border-radius: 10px; background: var(--panel-2); font-size: 14px; }
+.formplan li span { font-size: 12px; color: var(--ink-soft); }
+.formplan li.miss { background: var(--blocked-bg); box-shadow: inset 4px 0 0 var(--st-blocked); }
+.formplan li.miss span { color: var(--flag); font-weight: 600; }
 
 /* ---------- small screens ---------- */
 @media (max-width: 900px) {

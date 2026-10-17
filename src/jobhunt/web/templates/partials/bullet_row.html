@@ -1,17 +1,14 @@
-<li class="card{% if bullet.source == 'user' %} warn{% endif %}" id="bullet-{{ index }}">
+<li class="card bullet{% if bullet.source == 'user' %} warn{% endif %}" id="bullet-{{ index }}">
   <form method="post" action="/applications/{{ application.id }}/bullets/{{ index }}"
         hx-post="/applications/{{ application.id }}/bullets/{{ index }}"
         hx-target="#bullet-{{ index }}" hx-swap="outerHTML">
     <textarea name="text" rows="2">{{ bullet.text }}</textarea>
     <div class="actions">
+      <span class="src">{% if bullet.source == 'user' %}Yours, not from evidence{% else %}From your evidence{% endif %} · atom {{ bullet.atom_id }}</span>
       <button type="submit">Save</button>
       <button type="button" class="danger"
               hx-post="/applications/{{ application.id }}/bullets/{{ index }}/delete"
               hx-target="#bullets" hx-swap="innerHTML">Remove</button>
     </div>
   </form>
-  <p class="meta">
-    {% if bullet.source == 'user' %}Yours{% else %}Drafted from your evidence{% endif %}
-    · from atom {{ bullet.atom_id }}
-  </p>
 </li>
