@@ -118,3 +118,12 @@ def test_autopilot_line_and_suffix(session):
     out = digest(session)
     assert "  #1 Dev1 @ Co1 (autopilot)" in out
     assert out.endswith("Autopilot: on, 1/10 today")
+
+
+def test_blocked_hosts_listed_when_autopilot_on(session):
+    from jobhunt.state import block_host, set_state
+
+    block_host(session, "jobs.lever.co", "no confirmation")
+    assert "Autopilot blocked" not in digest(session)
+    set_state(session, "autopilot", "1")
+    assert "Autopilot blocked: jobs.lever.co (no confirmation)" in digest(session)

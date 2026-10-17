@@ -127,3 +127,31 @@ def test_assisted_apply_does_not_replan_a_reviewed_plan(tmp_path, http, monkeypa
     run = runner("ready")
     assisted_apply(s, app, cfg, None, http, runner=run, ask=lambda q: "", scan=lever_scan)
     assert run.calls  # opened the form with the stored plan; prepare_plan would have failed
+
+
+def test_unknown_country_plans_with_eu_job_none(tmp_path, http, monkeypatch):
+    import jobhunt.apply.prepare as prep
+
+    seen = {}
+
+    def spy(fields, **kw):
+        seen.update(kw)
+        return FormPlan()
+
+    monkeypatch.setattr(prep, "plan_form", spy)
+    s, cfg = make(tmp_path, LEVER)
+    prepare_plan(s, s.get(Application, 1), cfg, None, http, scan=lever_scan)
+    assert seen["eu_job"] is None
+
+
+def test_assisted_apply_refuses_after_a_maybe_sent_autopilot_run(tmp_path, http):
+    from jobhunt.apply.tracker import set_status
+
+    s, cfg = make(tmp_path, LEVER)
+    app = s.get(Application, 1)
+    set_status(s, app, "queued", note="autopilot error: Error - it may have gone through; check before applying again")
+    run = runner("ready")
+    out = assisted_apply(s, app, cfg, None, http, runner=run, ask=lambda q: "y", scan=lever_scan)
+    assert not run.calls
+    assert out.startswith("#1: autopilot may already have sent this (autopilot error: Error")
+    assert out.endswith('send "sent 1" if it went out.')

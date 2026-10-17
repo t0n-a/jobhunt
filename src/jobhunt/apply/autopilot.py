@@ -1,7 +1,7 @@
 """Autopilot: submit in the candidate's name only when every rule holds. When in doubt, don't."""
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import urlsplit
 
 from sqlmodel import Session, select
@@ -19,7 +19,8 @@ from jobhunt.tailor.models import Application, ApplicationEvent
 log = logging.getLogger(__name__)
 
 # A failed click may still have submitted: the host stays blocked rather than risk a duplicate.
-NO_CONFIRMATION = "autopilot error: no confirmation - it may have gone through; check before applying again"
+MAYBE = "it may have gone through; check before applying again"
+NO_CONFIRMATION = f"autopilot error: no confirmation - {MAYBE}"
 
 
 def autopilot_on(session: Session) -> bool:
@@ -94,6 +95,9 @@ def gate(
         return "blocked host"
     if plan is None or not plan.complete:
         return "form not fully answered"
+    # LLM-drafted prose can state an invented fact that still passes verification; the candidate reads it.
+    if any(p.source == "evidence" for p in plan.filled):
+        return "has answers drafted from evidence"
     if sent_today(session, now) >= cfg.daily_cap:
         return "daily cap reached"
     return None
@@ -117,8 +121,13 @@ def autosubmit(
         ):
             continue
         host = urlsplit(target.apply_url).hostname
+        session.refresh(application)  # another daily run may have taken it since the query
+        if application.status != "queued":
+            continue
         application.channel = "autopilot"
-        set_status(session, application, "approved", note="autopilot", now=now)
+        # If we crash after the click the row stays approved; the note says why.
+        set_status(session, application, "approved", note="autopilot: submitting", now=now)
+        crashed = False
         try:
             run = runner(
                 target.apply_url,
@@ -130,7 +139,7 @@ def autosubmit(
             )
         except Exception as exc:
             log.warning("autopilot run failed for #%s", application.id, exc_info=True)
-            run = browser.FormRun("error", f"{type(exc).__name__}")
+            run, crashed = browser.FormRun("error", f"{type(exc).__name__}"), True
         if run.status == "submitted":
             set_status(session, application, "sent", note="autopilot", now=now)
         elif run.status == "stopped":
@@ -138,11 +147,18 @@ def autosubmit(
                 session, application, "queued", note=f"autopilot stopped: {run.reason}", now=now
             )
         else:
-            block_host(session, host, run.reason)
+            # A permanent block only where the click may really have sent it; a blip expires.
+            # run_form returns an error only for http/navigation failures (before the click) and
+            # "no confirmation"; anything raised is a crash, possibly after the click.
+            transient = not crashed and "no confirmation" not in run.reason
+            block_host(
+                session, host, run.reason,
+                until=now + timedelta(hours=24) if transient else None,
+            )
             note = (
                 NO_CONFIRMATION
                 if "no confirmation" in run.reason
-                else f"autopilot error: {run.reason}"
+                else f"autopilot error: {run.reason} - {MAYBE}"
             )
             set_status(session, application, "queued", note=note, now=now)
         done.append((application, run))

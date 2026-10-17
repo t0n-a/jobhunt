@@ -63,23 +63,23 @@ def _profile(f: FormField, label: str, p: ProfileConfig):
     if f.kind not in ("text", "textarea"):
         return _UNKNOWN
     n = f.name
-    if n == "first_name" or "first name" in label:
+    if n == "first_name" or _has(r"\bfirst name\b", label):
         return p.name.rpartition(" ")[0] or p.name
-    if n == "last_name" or "last name" in label:
+    if n == "last_name" or _has(r"\blast name\b", label):
         return p.name.rpartition(" ")[2] if " " in p.name else None
-    if n == "name" or label in ("name", "full name") or "full name" in label:
+    if n == "name" or label in ("name", "full name") or _has(r"\bfull name\b", label):
         return p.name
-    if n == "email" or "email" in label:
+    if n == "email" or _has(r"\bemail\b", label):
         return p.email
-    if n == "phone" or "phone" in label:
+    if n == "phone" or _has(r"\bphone\b", label):
         return p.phone
-    if "linkedin" in label:
+    if _has(r"\blinkedin\b", label):
         return p.linkedin
-    if "github" in label:
+    if _has(r"\bgithub\b", label):
         return f"https://github.com/{p.github_username}" if p.github_username else None
-    if "website" in label or "portfolio" in label:
+    if _has(r"\b(website|portfolio)\b", label):
         return p.website
-    if n == "location" or "city" in label or re.search(r"\blocation\b", label):
+    if n == "location" or (_has(r"\b(city|location)\b", label) and not _has(_RELOCATE, label)):
         return p.location
     return _UNKNOWN
 
@@ -101,10 +101,11 @@ def _pick(options: list[str], pred) -> str | None:
 def _yes_no(f: FormField, yes: bool):
     if f.kind == "checkbox":
         return yes
+    # Yes/No belongs in a choice; free text ("Which city would you relocate to?") is the candidate's.
+    if f.kind != "select":
+        return None
     word = "yes" if yes else "no"
-    if f.kind == "select":
-        return _pick(f.options, lambda o: o.startswith(word))
-    return word.capitalize()
+    return _pick(f.options, lambda o: o.startswith(word))
 
 
 def _text(f: FormField, value: str):
@@ -142,7 +143,7 @@ _CONSENT = r"\b(privacy|gdpr|data protection)\b|\bconsent\b.*\b(process|personal
 _NOT_CONSENT = r"marketing|newsletter|talent (pool|community)|future (roles|opportunit|position)|\bsms\b"
 
 
-def _answers(f: FormField, label: str, a: StandardAnswers | None, eu_job: bool):
+def _answers(f: FormField, label: str, a: StandardAnswers | None, eu_job: bool | None):
     eeo = next((attr for pattern, attr in _EEO if _has(pattern, label)), None)
     consent = f.kind == "checkbox" and _has(_CONSENT, label) and not _has(_NOT_CONSENT, label)
     matched = (
@@ -154,6 +155,8 @@ def _answers(f: FormField, label: str, a: StandardAnswers | None, eu_job: bool):
         return _UNKNOWN
     if a is None:
         return None
+    if eu_job is None and (_has(_SPONSOR, label) or _has(_AUTHORISED, label)):
+        return None  # unknown country: a legal statement is the candidate's to make
     if _has(_SPONSOR, label):
         return _yes_no(f, not eu_job and a.needs_sponsorship_outside_eu)
     if _has(_AUTHORISED, label):
@@ -222,7 +225,7 @@ def plan_form(
     answers: StandardAnswers | None,
     cover_letter: str,
     pdf_path: Path | None,
-    eu_job: bool,
+    eu_job: bool | None,
     atoms: list[EvidenceAtom],
     llm: LLMProvider | None,
 ) -> FormPlan:

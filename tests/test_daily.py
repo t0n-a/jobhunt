@@ -194,5 +194,16 @@ def test_stopped_note_is_in_queue_message(engine, monkeypatch):
         add_event(s, s.get(Application, 1), "queued", note="autopilot stopped: captcha")
     client = FakeClient()
     go(engine, client)
-    assert client.sent[0][0].endswith("Autopilot stopped: captcha")
-    assert "Autopilot stopped" not in client.sent[1][0]
+    assert client.sent[0][0].endswith("Autopilot: stopped: captcha")
+    assert "Autopilot:" not in client.sent[1][0]
+
+
+def test_error_note_is_in_queue_message(engine, monkeypatch):
+    fake_tailor(monkeypatch, engine)
+    monkeypatch.setattr(daily, "autosubmit", lambda *a, **k: None)
+    note = "autopilot error: Error - it may have gone through; check before applying again"
+    with Session(engine) as s:
+        add_event(s, s.get(Application, 1), "queued", note=note)
+    client = FakeClient()
+    go(engine, client)
+    assert client.sent[0][0].endswith("Autopilot: error: Error - it may have gone through; check before applying again")

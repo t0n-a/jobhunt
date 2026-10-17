@@ -27,8 +27,8 @@ def _send_queued(session: Session, client: TelegramClient, application, web_url:
         .where(ApplicationEvent.application_id == application.id)
         .order_by(ApplicationEvent.id.desc())
     ).first()
-    prefix = "autopilot stopped: "
-    note = last.note[len(prefix) :] if last and last.note.startswith(prefix) else ""
+    # "autopilot stopped: ..." and "autopilot error: ..."; "autopilot: submitting" is not for the candidate.
+    note = last.note if last and last.note.startswith("autopilot ") else ""
     job = session.get(Job, application.job_id)
     score = session.exec(
         select(Score).where(Score.job_id == job.id, Score.content_hash == job.content_hash)

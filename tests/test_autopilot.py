@@ -7,7 +7,7 @@ from jobhunt.apply.ats import detect_ats
 from jobhunt.apply.autopilot import autopilot_on, autosubmit, gate, set_autopilot
 from jobhunt.apply.browser import FormRun
 from jobhunt.apply.form import FormField
-from jobhunt.apply.plan import FormPlan
+from jobhunt.apply.plan import FormPlan, Planned
 from jobhunt.config import AutopilotConfig, Config, ProfileConfig
 from jobhunt.db import create_engine_for, init_db
 from jobhunt.jobs.models import Job, Score
@@ -124,6 +124,8 @@ def test_gate_reasons_in_order(session):
     assert check(session, app, cfg, plan=None) == "form not fully answered"
     hard = FormPlan(unknown=[FormField(name="q", label="Why?", kind="text", required=True)])
     assert check(session, app, cfg, plan=hard) == "form not fully answered"
+    drafted = FormPlan(filled=[Planned("q", "I led it.", "evidence")])
+    assert check(session, app, cfg, plan=drafted) == "has answers drafted from evidence"
     assert check(session, app, cfg) is None
     cap = AutopilotConfig(trust_target=1, daily_cap=0)
     assert check(session, app, cap) == "daily cap reached"
@@ -230,3 +232,84 @@ def test_a_stopped_form_is_not_retried_the_next_day(session, tmp_path):
     go(session, tmp_path, runner)
     go(session, tmp_path, runner)
     assert len(runner.calls) == 1
+
+
+def _notes(session):
+    from sqlmodel import select
+
+    from jobhunt.tailor.models import ApplicationEvent
+
+    return [e.note for e in session.exec(select(ApplicationEvent).order_by(ApplicationEvent.id))]
+
+
+MAYBE = "it may have gone through; check before applying again"
+
+
+def test_marked_approved_with_a_note_before_the_runner_runs(session, tmp_path):
+    app = add(session)
+    seen = {}
+
+    def runner(url, plan, **kw):
+        seen["status"], seen["notes"] = app.status, _notes(session)
+        return FormRun("submitted")
+
+    go(session, tmp_path, runner)
+    assert seen["status"] == "approved" and seen["notes"][-1] == "autopilot: submitting"
+
+
+def test_runner_crash_note_says_it_may_have_gone_through(session, tmp_path):
+    def boom(*a, **k):
+        raise RuntimeError("x")
+
+    add(session)
+    go(session, tmp_path, boom)
+    assert _notes(session)[-1] == f"autopilot error: RuntimeError - {MAYBE}"
+
+
+def test_any_error_result_says_it_may_have_gone_through(session, tmp_path):
+    add(session)
+    go(session, tmp_path, Runner(FormRun("error", "TimeoutError")))
+    assert _notes(session)[-1] == f"autopilot error: TimeoutError - {MAYBE}"
+
+
+def test_block_expiry_by_cause(session, tmp_path):
+    from jobhunt.state import BlockedHost
+
+    add(session)
+    go(session, tmp_path, Runner(FormRun("error", "http 429")))
+    row = session.get(BlockedHost, "boards.greenhouse.io")
+    assert row.until is not None and timedelta(hours=23) < row.until.replace(tzinfo=UTC) - NOW <= timedelta(hours=24)
+
+
+def test_no_confirmation_block_is_permanent(session, tmp_path):
+    from jobhunt.state import BlockedHost
+
+    add(session)
+    go(session, tmp_path, Runner(FormRun("error", "no confirmation")))
+    assert session.get(BlockedHost, "boards.greenhouse.io").until is None
+
+
+def test_expired_block_is_ignored(session):
+    from jobhunt.state import is_blocked
+
+    block_host(session, "h.example", "http 429", until=datetime.now(UTC) - timedelta(hours=1))
+    assert not is_blocked(session, "h.example")
+    block_host(session, "h.example", "http 429", until=datetime.now(UTC) + timedelta(hours=1))
+    assert is_blocked(session, "h.example")
+
+
+def test_row_taken_by_another_run_is_not_submitted(session, tmp_path, monkeypatch):
+    import jobhunt.apply.autopilot as ap
+
+    add(session)
+    real = ap.gate
+
+    def gate_then_steal(*a, **k):
+        r = real(*a, **k)
+        session.connection().exec_driver_sql("update application set status='approved' where id=1")
+        return r
+
+    monkeypatch.setattr(ap, "gate", gate_then_steal)
+    runner = Runner()
+    go(session, tmp_path, runner)
+    assert not runner.calls

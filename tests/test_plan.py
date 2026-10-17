@@ -89,7 +89,7 @@ def test_resume_and_cover_letter():
 
 @pytest.mark.parametrize(("eu", "want"), [(True, "No"), (False, "Yes")])
 def test_sponsorship_depends_on_eu_job(eu, want):
-    plan = run([F("q", "Will you require sponsorship?")], eu_job=eu)
+    plan = run([F("q", "Will you require sponsorship?", "select", options=["Yes", "No"])], eu_job=eu)
     assert vals(plan) == {"q": want}
 
 
@@ -182,3 +182,29 @@ def test_only_processing_consent_is_ticked():
 def test_privacy_notice_is_not_a_notice_period():
     plan = run([F("n", "Privacy notice acknowledgement", "text", required=False)])
     assert not plan.filled
+
+
+@pytest.mark.parametrize("label", ["Ethnicity", "Team capacity", "Which city would you relocate to?"])
+def test_profile_rules_match_whole_words(label):
+    name = "Ethnicity" if label == "Ethnicity" else "q"
+    plan = run([F(name, label)])
+    assert not any(p.source == "profile" for p in plan.filled)
+
+
+def test_city_as_a_word_still_matches():
+    assert vals(run([F("q", "Current city")])) == {"q": PROFILE.location}
+
+
+@pytest.mark.parametrize(
+    "label",
+    ["Describe your remote work experience", "Which city would you relocate to?", "Who would sponsor your visa?"],
+)
+def test_yes_no_never_goes_into_free_text(label):
+    plan = run([F("q", label, kind="textarea")])
+    assert vals(plan) == {} and [f.name for f in plan.unknown] == ["q"]
+
+
+def test_unknown_country_leaves_sponsorship_and_authorisation_unknown():
+    fields = [F("a", "Will you require sponsorship?"), F("b", "Are you legally authorised to work here?")]
+    plan = run(fields, eu_job=None)
+    assert vals(plan) == {} and [f.name for f in plan.unknown] == ["a", "b"]

@@ -22,8 +22,21 @@ class _Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/limited":
             self.send_error(429)
+        elif self.path == "/redirect":
+            self.send_response(302)
+            # localhost vs 127.0.0.1 is a different host
+            self.send_header("Location", f"http://localhost:{self.server.server_port}/simple.html")
+            self.end_headers()
         else:
             super().do_GET()
+
+    def do_POST(self):
+        body = b"<html><body><h1>Thank you for applying</h1></body></html>"
+        self.send_response(200 if self.path == "/thanks" else 404)
+        self.send_header("Content-Type", "text/html")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def log_message(self, *args):
         pass
@@ -126,3 +139,37 @@ def test_http_error_is_error(base, tmp_path):
 def test_a_captcha_injected_after_load_stops_before_submit(base, tmp_path):
     r = _run(base, tmp_path, "late_captcha.html")
     assert r.status == "stopped" and "captcha" in r.reason
+
+
+def test_preexisting_confirmation_text_is_not_a_confirmation(base, tmp_path):
+    r = _run(base, tmp_path, "confirm_boilerplate.html", timeout_ms=800)
+    assert (r.status, r.reason) == ("error", "no confirmation")
+
+
+def test_real_post_navigation_submits(base, tmp_path):
+    assert _run(base, tmp_path, "post_submit.html").status == "submitted"
+
+
+def test_late_rendered_fields_are_seen_and_filled(base, tmp_path):
+    assert _run(base, tmp_path, "late_render.html").status == "submitted"
+
+
+def test_a_page_with_no_fields_stops(base, tmp_path):
+    r = _run(base, tmp_path, "empty.html")
+    assert (r.status, r.reason) == ("stopped", "no form fields found")
+
+
+def test_redirect_to_another_host_stops(base, tmp_path):
+    r = _run(base, tmp_path, "redirect")
+    assert r.status == "stopped" and r.reason.startswith("redirected to localhost")
+
+
+def test_assisted_mode_leaves_unknown_required_fields_to_the_human(base, tmp_path):
+    r = _run(base, tmp_path, "unknown_required.html", submit=False, allow_obstacles=True)
+    assert r.status == "ready"
+
+
+def test_reasons_are_cleaned_of_control_characters():
+    from jobhunt.apply.browser import FormRun
+
+    assert FormRun("stopped", "unrecognised field: A\x1b[31mB\u202e").reason == "unrecognised field: A[31mB"

@@ -9,7 +9,7 @@ from jobhunt.apply.tracker import funnel
 from jobhunt.config import Config
 from jobhunt.jobs.models import Job
 from jobhunt.ranking.shortlist import _clean
-from jobhunt.state import is_paused
+from jobhunt.state import blocked_hosts, is_paused
 from jobhunt.tailor.models import Application, ApplicationEvent
 
 # Keeps the Telegram message short; the web UI lists everything.
@@ -82,6 +82,8 @@ def build_digest(
     cfg = config.autopilot
     note = "; autopilot can now be switched on" if autopilot_available(session, cfg) else ""
     out.append(f"Trust: {trust_count(session)}/{cfg.trust_target} clean approvals{note}")
+    if autopilot_on(session):
+        out += [f"Autopilot blocked: {b.host} ({_clean(b.reason)})" for b in blocked_hosts(session)[:5]]
     out.append(
         f"Autopilot: {'on' if autopilot_on(session) else 'off'}, "
         f"{sent_today(session, now)}/{cfg.daily_cap} today"

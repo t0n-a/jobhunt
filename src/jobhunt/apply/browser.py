@@ -15,6 +15,7 @@ from playwright.sync_api import sync_playwright
 from jobhunt.apply.form import FormField
 from jobhunt.apply.plan import FormPlan
 from jobhunt.jobs.liveness import CLOSED_PHRASES
+from jobhunt.ranking.shortlist import _clean
 
 # Why: invisible captchas still score the visitor as a bot, and the spec stops at a captcha.
 CAPTCHA_MARKERS = (
@@ -85,6 +86,21 @@ class FormRun:
     status: str  # submitted | ready | stopped | error
     reason: str = ""
     screenshot: str | None = None
+
+    def __post_init__(self) -> None:
+        # Reasons quote page labels and reach notes, the terminal and Telegram.
+        self.reason = _clean(self.reason)
+
+
+# Why: SPAs render the form after load; waiting for the network to settle is best-effort.
+_SETTLE_MS = 10_000
+
+
+def settle(page) -> None:
+    try:
+        page.wait_for_load_state("networkidle", timeout=_SETTLE_MS)
+    except PlaywrightTimeout:
+        pass
 
 
 def _body(page) -> str:
@@ -185,15 +201,25 @@ def run_form(
                 return FormRun("error", type(e).__name__)
             if resp is not None and (resp.status in (403, 429) or resp.status >= 500):
                 return FormRun("error", f"http {resp.status}")
+            settle(page)
+            # The ATS host was checked, not wherever a redirect led (e.g. the employer's own site).
+            want = urlparse(apply_url).hostname
+            if urlparse(page.url).hostname != want:
+                return done("stopped", f"redirected to {urlparse(page.url).hostname}")
             found = obstacles(page)
             if found and not allow_obstacles:
                 return done("stopped", "obstacle: " + ", ".join(found))
             have = {p.name for p in plan.filled}
-            for f in scan_fields(page):
-                if f.required and f.name not in have:
+            fields = scan_fields(page)
+            if not fields:
+                return done("stopped", "no form fields found")
+            # Assisted mode fills what is known; the human answers the rest.
+            lenient = allow_obstacles and not submit
+            for f in fields:
+                if f.required and f.name not in have and not lenient:
                     return done("stopped", f"unrecognised field: {f.label}")
             failed = fill(page, plan)
-            if failed:
+            if failed and not lenient:
                 return done("stopped", "could not fill: " + ", ".join(failed))
             btn = submit_control(page)
             if btn is None:
@@ -209,15 +235,21 @@ def run_form(
             late = obstacles(page)
             if late and not allow_obstacles:
                 return done("stopped", "obstacle: " + ", ".join(late))
+            if urlparse(page.url).hostname != want:
+                return done("stopped", f"redirected to {urlparse(page.url).hostname}")
+            # Boilerplate ("once we have received your application...") may already be on the page.
+            before = len(CONFIRM_RE.findall(_body(page)))
             btn.click()
             try:
                 page.wait_for_function(
-                    "re => new RegExp(re.source, re.flags).test(document.body.innerText)",
-                    arg={"source": CONFIRM_RE.pattern, "flags": "i"},
+                    "([re, n]) => (document.body.innerText.match("
+                    "new RegExp(re.source, re.flags + 'g')) || []).length > n",
+                    arg=[{"source": CONFIRM_RE.pattern, "flags": "i"}, before],
                     timeout=timeout_ms,
                 )
             except PlaywrightTimeout:
                 return done("error", "no confirmation")
+            settle(page)  # let the POST finish before the browser closes
             return done("submitted")
         finally:
             browser.close()
