@@ -115,6 +115,7 @@ class Config(BaseModel):
     sources: SourcesConfig = Field(default_factory=SourcesConfig)
     ranking: RankingConfig = Field(default_factory=RankingConfig)
     data_dir: Path = Path("./data")
+    answers_path: Path = Path("answers.yaml")
 
 
 def load_config(path: Path) -> Config:
