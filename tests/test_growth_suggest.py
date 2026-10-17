@@ -127,3 +127,16 @@ def test_java_developer_requirement_is_not_a_cert():
     pat = CERT_TABLE["oracle-java"].pattern
     assert not pat.search("We need a Java SE 17 developer with Spring.")
     assert pat.search("Oracle Certified Professional, Java SE 17 Developer preferred")
+
+
+def test_open_publish_suggestion_is_reaudited(session, tmp_path):
+    from jobhunt.growth.audit import Audit
+
+    gh = FakeGh(private=[repo("a")])
+    clean = lambda *a, **k: Audit([], False)
+    leaked = lambda *a, **k: Audit(["secret in history: aws_access_key in x.py"], True)
+    [s] = suggest.suggest_publish(session, gh, cfg(), audit=clean, workdir=tmp_path)
+    assert not s.blocking
+    assert suggest.suggest_publish(session, gh, cfg(), audit=leaked, workdir=tmp_path) == []
+    session.refresh(s)
+    assert s.blocking and s.flags == ["secret in history: aws_access_key in x.py"]

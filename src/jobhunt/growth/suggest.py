@@ -21,31 +21,35 @@ def _repos(gh, user, visibility):
     return [r for r in gh.repos(user, visibility) if not r.get("isFork") and not r.get("isEmpty")]
 
 
-def _exists(session, kind, target) -> bool:
+def _find(session, kind, target) -> Suggestion | None:
     from sqlmodel import select
 
     return session.exec(
         select(Suggestion).where(Suggestion.kind == kind, Suggestion.target == target)
-    ).first() is not None
+    ).first()
+
 
 
 def suggest_publish(session, gh, config, *, audit=audit_repo, workdir: Path) -> list[Suggestion]:
     out = []
     for repo in _repos(gh, config.profile.github_username, "private"):
         full = repo["nameWithOwner"]
-        if _exists(session, "publish", full):
+        # Open suggestions are re-audited every refresh: a secret pushed since the last audit
+        # must block, and a fixed one must unblock. Only decided rows are left alone.
+        seen = _find(session, "publish", full)
+        if seen is not None and seen.status in ("declined", "done"):
             continue
         desc = repo.get("description") or ""
         readme_text, _ = gh.readme(full)
         result = audit(
             gh, full, readme_text=readme_text, description=desc, paths=gh.tree(full), workdir=workdir
         )
-        out.append(
-            upsert_suggestion(
-                session, "publish", full, title=f"Make {repo['name']} public", body=desc,
-                flags=result.flags, blocking=result.blocking,
-            )
+        row = upsert_suggestion(
+            session, "publish", full, title=f"Make {repo['name']} public", body=desc,
+            flags=result.flags, blocking=result.blocking,
         )
+        if seen is None:
+            out.append(row)
     return out
 
 
