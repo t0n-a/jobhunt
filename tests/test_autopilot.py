@@ -222,3 +222,11 @@ def test_wave2_approved_rows_are_never_autosubmitted(session, tmp_path):
     runner = Runner()
     go(session, tmp_path, runner)
     assert runner.calls == []
+
+
+def test_a_stopped_form_is_not_retried_the_next_day(session, tmp_path):
+    add(session)
+    runner = Runner(FormRun("stopped", "obstacle: captcha"))
+    go(session, tmp_path, runner)
+    go(session, tmp_path, runner)
+    assert len(runner.calls) == 1

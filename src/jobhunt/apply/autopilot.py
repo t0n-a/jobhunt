@@ -76,6 +76,15 @@ def gate(
         return "trust not earned"
     if application.status != "queued":
         return "not queued"
+    # One attempt per application: a form that stopped once (captcha, login) would stop again,
+    # and reloading it every day looks like a bot. It stays in the candidate's queue instead.
+    if session.exec(
+        select(ApplicationEvent).where(
+            ApplicationEvent.application_id == application.id,
+            ApplicationEvent.note.startswith("autopilot"),
+        )
+    ).first():
+        return "autopilot already tried this form"
     if score is None or score.fit_score is None or score.fit_score < cfg.autopilot_fit:
         return f"fit {'?' if score is None or score.fit_score is None else score.fit_score} < {cfg.autopilot_fit}"
     if target is None or target.kind not in cfg.ats_allowlist:
