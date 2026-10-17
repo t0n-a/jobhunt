@@ -43,3 +43,23 @@ def test_another_local_port_is_refused(tmp_path):
         headers={"Origin": "http://localhost:3000", "Host": "localhost:8000"},
     )
     assert r.status_code == 403
+
+
+def test_a_cross_site_embed_does_not_mark_reviewed(tmp_path):
+    from sqlmodel import Session
+
+    from jobhunt.jobs.models import Job
+    from jobhunt.tailor.models import Application
+
+    c = client(tmp_path)
+    engine = c.app.state.engine
+    with Session(engine) as s:
+        s.add(Job(id=1, title="Dev", company="A", description="d", url="u", content_hash="h"))
+        s.add(Application(id=1, job_id=1, status="queued"))
+        s.commit()
+    c.get("/applications/1", headers={"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Dest": "image"})
+    with Session(engine) as s:
+        assert s.get(Application, 1).reviewed_at is None
+    c.get("/applications/1", headers={"Sec-Fetch-Site": "none", "Sec-Fetch-Dest": "document"})
+    with Session(engine) as s:
+        assert s.get(Application, 1).reviewed_at is not None

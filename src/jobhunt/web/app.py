@@ -439,7 +439,11 @@ def create_app(config: Config) -> FastAPI:
     def application_detail(request: Request, application_id: int):
         with Session(app.state.engine) as db:
             application = _application(db, application_id)
-            if application.status == "queued" and application.reviewed_at is None:
+            # Only the candidate opening the page counts: a cross-site <img> or frame must not.
+            seen = request.headers.get("sec-fetch-site", "none") in ("none", "same-origin") and (
+                request.headers.get("sec-fetch-dest", "document") == "document"
+            )
+            if seen and application.status == "queued" and application.reviewed_at is None:
                 application.reviewed_at = datetime.now(UTC)
                 db.add(application)
                 db.commit()
