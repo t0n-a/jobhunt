@@ -9,6 +9,9 @@ from jobhunt.apply.plan import FormPlan
 from jobhunt.apply.queue import approve, autopilot_available, skip, trust_count
 from jobhunt.apply.tracker import NEXT_STATUSES, set_status
 from jobhunt.config import Config
+from jobhunt.growth import act
+from jobhunt.growth.gh import Gh
+from jobhunt.growth.models import Suggestion
 from jobhunt.jobs.models import Job
 from jobhunt.outreach.log import mark
 from jobhunt.outreach.models import Outreach
@@ -20,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 HELP = (
     "Commands: yes N, no N (queue), sent N, replied N, interview N, offer N, rejected N, "
-    "done N (follow-up sent), osent N, oskip N, oreplied N (outreach), pause, resume, status, autopilot on|off, unblock HOST."
+    "done N (follow-up sent), osent N, oskip N, oreplied N (outreach), pause, resume, status, autopilot on|off, unblock HOST, publish N, approve N, decline N (profile)."
 )
 OUTREACH_MOVES = {"osent": "sent", "oskip": "skipped", "oreplied": "replied"}
 SENDABLE = ("drafted", "queued", "approved")
@@ -71,6 +74,15 @@ def handle_command(
             "oskip": f"Skipped outreach #{arg}.",
             "oreplied": f"Nice. Logged the reply to outreach #{arg}.",
         }[verb]
+
+    if verb in ("publish", "approve", "decline"):
+        if session.get(Suggestion, arg) is None:
+            return f"No suggestion #{arg}."
+        if verb == "decline":
+            return act.decline(session, arg)
+        if verb == "approve":
+            return act.approve(session, Gh(), arg)
+        return act.publish(session, Gh(), config, arg)
 
     application = session.get(Application, arg)
     if application is None:

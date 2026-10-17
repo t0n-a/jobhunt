@@ -318,3 +318,32 @@ def test_paused_daily_drafts_no_outreach(engine, monkeypatch):
         set_paused(s, True)
     go(engine, FakeClient())
     assert calls == []
+
+
+def test_daily_growth_failure_does_not_stop_digest(engine, monkeypatch):
+    monkeypatch.setattr(daily, "is_paused", lambda s: False)
+    monkeypatch.setattr(daily, "refresh", lambda *a, **k: 1 / 0)
+    monkeypatch.setattr(daily, "tailor_shortlist", lambda s, l, c: TailorRun(queued=[], stopped=None))
+    monkeypatch.setattr(daily, "draft_for_run", lambda *a: [])
+    monkeypatch.setattr(daily, "draft_followups", lambda *a: [])
+    cfg = CONFIG.model_copy(update={"profile": CONFIG.profile.model_copy(update={"github_username": "ada"})})
+    client = FakeClient()
+    out = daily.run_daily(cfg, engine=engine, llm=LLM, client=client, scan=scan_ok, now=NOW)
+    assert out.startswith("jobhunt daily") and client.sent[-1][0] == out
+
+
+def test_daily_sends_new_suggestions_and_skips_without_username(engine, monkeypatch):
+    from jobhunt.growth.models import Suggestion
+
+    monkeypatch.setattr(daily, "tailor_shortlist", lambda s, l, c: TailorRun(queued=[], stopped=None))
+    monkeypatch.setattr(daily, "draft_for_run", lambda *a: [])
+    monkeypatch.setattr(daily, "draft_followups", lambda *a: [])
+    monkeypatch.setattr(daily, "Gh", lambda: object())
+    monkeypatch.setattr(daily, "refresh", lambda *a, **k: [Suggestion(id=9, kind="pin", target="ada/x", title="t", body="b")])
+    cfg = CONFIG.model_copy(update={"profile": CONFIG.profile.model_copy(update={"github_username": "ada"})})
+    client = FakeClient()
+    daily.run_daily(cfg, engine=engine, llm=None, client=client, scan=scan_ok, now=NOW)
+    assert client.sent[0][0] == "#9 Pin ada/x on your GitHub profile: b"
+    client = FakeClient()
+    go(engine, client, llm=None)  # no username: nothing growth-related
+    assert all("Pin ada/x" not in t for t, _ in client.sent)

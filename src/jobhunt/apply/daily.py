@@ -14,13 +14,18 @@ from jobhunt.apply.prepare import prepare_plan
 from jobhunt.apply.queue import tailor_shortlist
 from jobhunt.cli import summarize_scan
 from jobhunt.config import Config
+from jobhunt.growth.gh import Gh, GhError
+from jobhunt.growth.models import Suggestion
+from jobhunt.growth.readme import draft_profile_readme, draft_repo_readme
+from jobhunt.growth.suggest import _find, refresh
 from jobhunt.jobs.models import Job, JobFacts, Score
 from jobhunt.outreach.log import draft_followups, draft_for_run
 from jobhunt.outreach.models import Contact
+from jobhunt.profile.store import AtomStore
 from jobhunt.scan import ScanResult
 from jobhunt.state import is_paused
 from jobhunt.tailor.models import ApplicationEvent
-from jobhunt.telegram import TelegramClient, outreach_message, queue_message
+from jobhunt.telegram import TelegramClient, growth_message, outreach_message, queue_message
 
 log = logging.getLogger(__name__)
 
@@ -63,6 +68,30 @@ def _send_outreach(session: Session, client: TelegramClient, outreach, web_url: 
         if not client.send(text, buttons) and i == 0 and buttons:
             # Some clients or API versions reject copy_text; the Sent/Skip row still works.
             client.send(text, [r for r in buttons if not any("copy_text" in b for b in r)])
+
+
+def _grow(session: Session, config: Config, llm, client, now: datetime) -> None:
+    user = config.profile.github_username
+    try:
+        gh = Gh()
+        new = refresh(session, gh, config, now=now, workdir=config.data_dir / "growth_audit")
+        if llm is not None:
+            atoms = AtomStore(session).confirmed_only()
+            approved = session.exec(
+                select(Suggestion).where(Suggestion.kind == "publish", Suggestion.status == "approved")
+            ).all()
+            for p in approved:
+                if _find(session, "readme", p.target) is None:
+                    new.append(draft_repo_readme(session, gh, p.target, atoms, llm))
+            if _find(session, "profile_readme", f"{user}/{user}") is None:
+                new.append(draft_profile_readme(session, gh, user, atoms, gh.repos(user, "public"), llm))
+    except GhError as e:  # gh missing or logged out: skip growth, keep going
+        log.warning("growth skipped: %s", e)
+        return
+    if client:
+        for s in new:
+            if s is not None:
+                client.send(growth_message(s))
 
 
 def run_daily(
@@ -125,6 +154,12 @@ def run_daily(
                         _send_outreach(session, client, outreach, config.autopilot.web_url)
             except Exception:  # the digest must still go out
                 log.warning("daily outreach failed", exc_info=True)
+                session.rollback()
+        if not is_paused(session) and config.profile.github_username:
+            try:
+                _grow(session, config, llm, client, now)
+            except Exception:  # the digest must still go out
+                log.warning("daily growth failed", exc_info=True)
                 session.rollback()
         lines = build_digest(
             session,

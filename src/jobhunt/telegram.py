@@ -66,7 +66,7 @@ def discover_chat_id(token: str, http: httpx.Client, code: str) -> str | None:
     return None
 
 
-_NEEDS_ID = {"yes", "no", "sent", "done", "replied", "interview", "offer", "rejected", "osent", "oskip", "oreplied"}
+_NEEDS_ID = {"yes", "no", "sent", "done", "replied", "interview", "offer", "rejected", "osent", "oskip", "oreplied", "publish", "approve", "decline"}
 _NO_ARG = {"pause", "resume", "status", "help"}
 
 
@@ -145,3 +145,16 @@ def outreach_message(outreach, job, contact, web_url: str) -> list[tuple[str, li
         ]
     )
     return [("\n".join(lines), buttons), (text, None)]
+
+
+def growth_message(s) -> str:
+    """One profile suggestion as plain text; repo and README text is cleaned per line."""
+    if s.kind == "publish":
+        lines = [f"#{s.id} {s.title}", *(f"  ⚠ {f}" for f in s.flags or [])]
+        lines.append("Blocked until fixed." if s.blocking else f"publish {s.id} / decline {s.id}")
+        return _clean_lines("\n".join(lines))
+    if s.kind in ("readme", "profile_readme"):
+        return _clean_lines(f"#{s.id} README draft for {s.target}\n\n{s.body}\n\napprove {s.id} / decline {s.id}")
+    if s.kind == "pin":
+        return _clean(f"#{s.id} Pin {s.target} on your GitHub profile: {s.body}")
+    return _clean_lines(f"#{s.id} Certification: {s.title}. {s.body}")

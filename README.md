@@ -54,7 +54,7 @@ uv run jobhunt setup
 
 `setup` asks, in order: your name, email and location; a free AI Studio key (read the training warning first); a Telegram bot token from @BotFather, then a one-time code you send to your bot so only your chat is bound; your standard answers (work authorisation, salary range, and so on); the path to your CV, which it imports and walks you through confirming fact by fact; whether to install the browser that fills application forms (about 150 MB); and whether to install the daily and 5-minute timers. Press Enter to skip any step; rerunning keeps what exists.
 
-Telegram commands: yes N, no N (queue), sent N (you applied), replied N, interview N, offer N, rejected N, done N (follow-up sent), osent N, oskip N, oreplied N (outreach), pause, resume, status, autopilot on|off, unblock HOST (lift a blocked ATS host). "yes" means *you* apply, using the prepared PDF, then send `sent N`. Autopilot is off until you switch it on after enough clean approvals.
+Telegram commands: yes N, no N (queue), sent N (you applied), replied N, interview N, offer N, rejected N, done N (follow-up sent), osent N, oskip N, oreplied N (outreach), pause, resume, status, autopilot on|off, unblock HOST (lift a blocked ATS host), publish N, approve N, decline N (GitHub profile suggestions; publish makes a private repo public and is refused if a secret is found). "yes" means *you* apply, using the prepared PDF, then send `sent N`. Autopilot is off until you switch it on after enough clean approvals.
 
 Timers can be installed later with `uv run jobhunt install-timers`; run `loginctl enable-linger $USER` so they fire while you are logged out.
 

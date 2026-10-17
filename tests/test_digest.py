@@ -158,3 +158,15 @@ def test_digest_sent_counts_distinct_contacts(session):
     session.add(Outreach(job_id=1, contact_id=1, kind="followup", text="c", status="sent"))
     session.commit()
     assert "Outreach: 0 to send, 1 sent, 0 replied" in digest(session)
+
+
+def test_profile_section_only_when_suggestions_wait(session):
+    from jobhunt.growth.models import upsert_suggestion
+
+    args = {"now": NOW, "scan_line": "ok", "linkedin_skipped": False, "ghosted": [], "config": CONFIG}
+    assert "Profile:" not in build_digest(session, **args)
+    for n in range(7):
+        upsert_suggestion(session, "pin", f"ada/r{n}", title=f"Pin r{n}")
+    out = build_digest(session, **args).split("\n")
+    i = out.index("Profile: 7 suggestions waiting")
+    assert out[i + 1] == "  #1 Pin r0" and out[i + 5].startswith("  #5") and "#6" not in out[i + 6]
