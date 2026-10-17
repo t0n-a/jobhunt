@@ -368,7 +368,11 @@ _SPONSOR_HIT = re.compile(
     r"|relocation (?:package|support|assistance)|helps? you relocate",
     re.IGNORECASE,
 )
-_NEGATION = re.compile(r"\b(?:no|not|unable to|cannot|can't|don't|do not|won't)\b", re.IGNORECASE)
+_NEGATION = re.compile(
+    r"\b(?:no|not|unable to|cannot|can't|don't|do not|won't"
+    r"|unavailable|not available|not offered|not provided)\b",
+    re.IGNORECASE,
+)
 
 
 def country_of(location: str | None) -> str | None:
@@ -387,8 +391,9 @@ def country_of(location: str | None) -> str | None:
 
 def mentions_sponsorship(text: str) -> bool:
     for m in _SPONSOR_HIT.finditer(text):
-        window = text[max(0, m.start() - 40) : m.start()]
-        if not _NEGATION.search(re.split(r"[.!?;\n]", window)[-1]):
+        before = re.split(r"[.!?;\n]", text[max(0, m.start() - 40) : m.start()])[-1]
+        after = re.split(r"[.!?;\n]", text[m.end() : m.end() + 40])[0]
+        if not (_NEGATION.search(before) or _NEGATION.search(after)):
             return True
     return False
 

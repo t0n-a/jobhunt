@@ -32,3 +32,15 @@ def test_negated_sponsorship_is_not_sponsorship():
     assert not mentions_sponsorship("We are unable to sponsor visas for this role.")
     assert not mentions_sponsorship("No visa sponsorship available.")
     assert mentions_sponsorship("Relocation package and visa sponsorship provided.")
+
+
+def test_negation_after_the_hit_negates_it():
+    assert not mentions_sponsorship("Visa sponsorship is not available.")
+    assert not mentions_sponsorship("Visa sponsorship: unavailable")
+    assert not mentions_sponsorship("Visa sponsorship is not offered for this role.")
+    assert mentions_sponsorship("Visa sponsorship is available. Not remote.")
+
+
+def test_sponsor_phrasing_without_negation_is_detected():
+    assert mentions_sponsorship("We are able to sponsor your visa.")
+    assert mentions_sponsorship("We sponsor visas for this role.")
