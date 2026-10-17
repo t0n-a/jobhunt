@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 
 from jobhunt.growth.gh import GhError
 from jobhunt.growth.models import upsert_suggestion
@@ -28,7 +29,16 @@ SKILL_GROUPS: dict[str, str] = {
     canonical_skill(s): g for g, names in _BY_GROUP.items() for s in names.split()
 } | {"VS Code": "Tools", "Visual Studio Code": "Tools"}
 _FOLDED = {k.casefold(): v for k, v in SKILL_GROUPS.items()}
-_ENTRY_POINTS = {"pyproject.toml", "package.json", "Makefile", "requirements.txt", "Cargo.toml", "go.mod"}
+# Fixed text per detected entry point; never model output, so nothing unverified lands in "Running it".
+_RUN_STEPS = {
+    "pyproject.toml": "uv sync (or pip install -e .)",
+    "requirements.txt": "pip install -r requirements.txt",
+    "package.json": "npm install",
+    "Makefile": "make",
+    "Cargo.toml": "cargo build",
+    "go.mod": "go build ./...",
+}
+REPLACES = "replaces existing README"  # Suggestion.flags marker; growth_message and approve read it
 
 _REPO_SCHEMA = {
     "type": "object",
@@ -36,7 +46,6 @@ _REPO_SCHEMA = {
         "summary": {"type": "string"},
         "features": {"type": "array", "items": {"type": "string"}},
         "skills": {"type": "array", "items": {"type": "string"}},
-        "run": {"type": "string"},
     },
 }
 _PROFILE_SCHEMA = {
@@ -97,6 +106,21 @@ def _atom(name: str, languages, names: list[str]) -> EvidenceAtom:
     )
 
 
+def _is_repo_ref(ref: str | None, full_name: str) -> bool:
+    """True when source_ref is the repo's full name or its exact GitHub URL."""
+    ref = (ref or "").strip().rstrip("/").casefold().removesuffix(".git")
+    full = full_name.casefold()
+    if ref == full:
+        return True
+    m = re.fullmatch(r"https?://(www\.)?github\.com/([^/?#]+/[^/?#]+)", ref)
+    return bool(m) and m.group(2) == full
+
+
+def _flags(dropped: list[str], replaces: bool) -> list[str]:
+    # Notes for the candidate; the committed body never carries them.
+    return ([REPLACES] if replaces else []) + ([f"dropped skills: {', '.join(dropped)}"] if dropped else [])
+
+
 def _passes(text: str, atoms) -> bool:
     return verify_prose(text, atoms).passed
 
@@ -105,14 +129,12 @@ def draft_repo_readme(session, gh, full_name, atoms, llm):
     try:
         tree = gh.tree(full_name)[:200]
         languages = gh.languages(full_name)
-        old = gh.readme(full_name)[0] or ""
+        old, old_sha = gh.readme(full_name)
+        old = old or ""
     except GhError:
         return None
     name = full_name.split("/")[-1]
-    mine = [
-        a for a in atoms
-        if a.confirmed and a.source_ref and name.casefold() in a.source_ref.casefold()
-    ]
+    mine = [a for a in atoms if a.confirmed and _is_repo_ref(a.source_ref, full_name)]
     data = {
         "repo": name, "tree": tree, "languages": list(languages), "readme": old[:3000],
         "atoms": [{"title": a.title, "description": a.description, "skills": a.skills} for a in mine],
@@ -137,13 +159,12 @@ def draft_repo_readme(session, gh, full_name, atoms, llm):
         md += ["## Features", "", *[f"- {f}" for f in features], ""]
     if skills:
         md += ["## Built with", "", *_render_skills(skills), ""]
-    run = [_clean(ln) for ln in str(raw.get("run", "")).splitlines() if ln.strip()]
-    if run and _ENTRY_POINTS & set(files):
+    run = [f"- {text}" for f, text in _RUN_STEPS.items() if f in files]
+    if run:
         md += ["## Running it", "", *run, ""]
-    if dropped:
-        md += [f"Dropped (no evidence): {', '.join(dropped)}", ""]
     return upsert_suggestion(
-        session, "readme", full_name, title=f"README for {name}", body="\n".join(md).rstrip() + "\n"
+        session, "readme", full_name, title=f"README for {name}", body="\n".join(md).rstrip() + "\n",
+        flags=_flags(dropped, bool(old_sha)),
     )
 
 
@@ -177,8 +198,11 @@ def draft_profile_readme(session, gh, user, atoms, public_repos, llm):
     ]
     if lines:
         md += ["## Projects", "", *lines, ""]
-    if dropped:
-        md += [f"Dropped (no evidence): {', '.join(dropped)}", ""]
+    try:
+        replaces = gh.readme(f"{user}/{user}")[1] is not None
+    except GhError:
+        return None
     return upsert_suggestion(
-        session, "profile_readme", f"{user}/{user}", title="Profile README", body="\n".join(md).rstrip() + "\n"
+        session, "profile_readme", f"{user}/{user}", title="Profile README", body="\n".join(md).rstrip() + "\n",
+        flags=_flags(dropped, replaces),
     )

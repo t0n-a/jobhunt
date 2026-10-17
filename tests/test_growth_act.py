@@ -6,7 +6,7 @@ from jobhunt.db import create_engine_for, init_db
 from jobhunt.growth import act
 from jobhunt.growth.audit import Audit
 from jobhunt.growth.gh import GhError
-from jobhunt.growth.models import Suggestion, upsert_suggestion
+from jobhunt.growth.models import Suggestion, _now, upsert_suggestion
 from jobhunt.telegram import growth_message
 
 CONFIG = Config(profile=ProfileConfig(name="A", email="a@x.com", location="P", github_username="ada"))
@@ -90,8 +90,13 @@ def test_gh_failure_is_reported_not_done(session):
     assert reply == "Couldn't publish ada/x: boom" and row.status == "failed" and row.error == "boom"
 
 
+def shown(session, **kw):
+    kw = {"title": "README", "body": "# x\n", "flags": ["replaces existing README"], "shown_at": _now()} | kw
+    return upsert_suggestion(session, "readme", "ada/x", **kw)
+
+
 def test_approve_commits_readme_with_sha(session):
-    s = upsert_suggestion(session, "readme", "ada/x", title="README", body="# x\n")
+    s = shown(session)
     gh = FakeGh()
     assert act.approve(session, gh, s.id) == "README committed to ada/x (it replaced the old one)."
     assert gh.calls == [("put", "ada/x", "README.md", "# x\n", "old")]
@@ -116,7 +121,46 @@ def test_growth_messages_are_clean_per_line(session):
 
 
 def test_overlong_draft_is_not_committed(session):
-    s = upsert_suggestion(session, "readme", "ada/big", title="t", body="x" * (act.MAX_SHOWN + 1))
+    s = upsert_suggestion(session, "readme", "ada/big", title="t", body="x" * (act.MAX_SHOWN + 1), shown_at=_now())
     gh = FakeGh()
     assert "too long" in act.approve(session, gh, s.id)
     assert gh.calls == []
+
+
+def test_failed_publish_and_approve_can_be_retried(session):
+    s = pub(session)
+    assert act.publish(session, FakeGh(fail="boom"), CONFIG, s.id, audit=clean_audit).startswith("Couldn't")
+    assert act.publish(session, FakeGh(), CONFIG, s.id, audit=clean_audit) == "ada/x is public now."
+    r = shown(session)
+    assert act.approve(session, FakeGh(fail="boom"), r.id).startswith("Couldn't commit")
+    assert session.get(Suggestion, r.id).status == "failed"
+    assert act.approve(session, FakeGh(), r.id).startswith("README committed")
+
+
+def test_approve_sha_conflict_says_changed_and_commits_nothing(session):
+    s = shown(session)
+    gh = FakeGh(fail="HTTP 409: README.md does not match")
+    gh.readme = lambda name: ("# hi", "old")
+    reply = act.approve(session, gh, s.id)
+    assert reply == "The README on ada/x changed since the draft; nothing committed. Decline it; a new draft comes next week."
+    assert session.get(Suggestion, s.id).status == "failed"
+
+
+def test_approve_refuses_an_unseen_draft(session):
+    s = shown(session, shown_at=None)
+    gh = FakeGh()
+    assert act.approve(session, gh, s.id) == f"#{s.id} hasn't reached you on Telegram yet; nothing committed."
+    assert gh.calls == []
+
+
+def test_approve_refuses_when_a_readme_appeared_after_a_new_readme_draft(session):
+    s = shown(session, flags=[])
+    gh = FakeGh()
+    assert "appeared" in act.approve(session, gh, s.id) and gh.calls == []
+
+
+def test_readme_message_says_replace_and_shows_dropped_note(session):
+    r = shown(session, flags=["replaces existing README", "dropped skills: Rust"])
+    lines = growth_message(r).splitlines()
+    assert lines[0] == f"#{r.id} README draft for ada/x (replaces your current README)"
+    assert "⚠ dropped skills: Rust" in lines and "⚠ replaces existing README" not in lines

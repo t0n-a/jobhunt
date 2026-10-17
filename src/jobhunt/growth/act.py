@@ -5,6 +5,7 @@ from sqlmodel import Session
 from jobhunt.growth.audit import audit_repo
 from jobhunt.growth.gh import GhError
 from jobhunt.growth.models import Suggestion, _now
+from jobhunt.growth.readme import REPLACES
 
 
 def _open(session: Session, suggestion_id: int, kinds: tuple[str, ...]) -> Suggestion | str:
@@ -13,7 +14,7 @@ def _open(session: Session, suggestion_id: int, kinds: tuple[str, ...]) -> Sugge
         return f"No suggestion #{suggestion_id}."
     if s.kind not in kinds:
         return ""  # caller words the redirect
-    if s.status not in ("suggested", "approved"):
+    if s.status not in ("suggested", "approved", "failed"):  # failed: gh errors are transient, retry
         return f"#{s.id} is {s.status}; nothing changed."
     return s
 
@@ -65,6 +66,8 @@ def approve(session: Session, gh, suggestion_id: int) -> str:
                 return f"Use publish {suggestion_id} to make a repo public."
             return f"Nothing to approve for #{suggestion_id}; it's a suggestion you act on yourself."
         return s
+    if s.shown_at is None:
+        return f"#{s.id} hasn't reached you on Telegram yet; nothing committed."
     if len(s.body) > MAX_SHOWN:
         return (
             f"#{s.id} is too long to show in full on Telegram ({len(s.body)} characters), so nothing "
@@ -72,8 +75,16 @@ def approve(session: Session, gh, suggestion_id: int) -> str:
         )
     try:
         sha = gh.readme(s.target)[1]
+        if sha and REPLACES not in (s.flags or []):  # the draft said "new README"; one has appeared
+            msg = f"A README appeared on {s.target} since the draft; nothing committed. Decline it; a new draft comes next week."
+            _save(session, s, "failed", msg)
+            return msg
         gh.put_file(s.target, "README.md", s.body, "docs: README (drafted with jobhunt, approved by you)", sha)
     except GhError as e:
+        if "409" in str(e) or "does not match" in str(e):
+            msg = f"The README on {s.target} changed since the draft; nothing committed. Decline it; a new draft comes next week."
+            _save(session, s, "failed", str(e))
+            return msg
         _save(session, s, "failed", str(e))
         return f"Couldn't commit the README to {s.target}: {e}"
     _save(session, s, "done")

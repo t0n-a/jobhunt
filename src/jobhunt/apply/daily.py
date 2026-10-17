@@ -70,37 +70,73 @@ def _send_outreach(session: Session, client: TelegramClient, outreach, web_url: 
             client.send(text, [r for r in buttons if not any("copy_text" in b for b in r)])
 
 
+MAX_README_DRAFTS = 3  # each draft is an LLM call plus several gh calls; the rest follow tomorrow
+
+
 def _grow(session: Session, config: Config, llm, client, now: datetime) -> None:
     user = config.profile.github_username
+    new: list = []
     try:
         gh = Gh()
-        new = refresh(session, gh, config, now=now, workdir=config.data_dir / "growth_audit")
-        if llm is not None:
-            atoms = AtomStore(session).confirmed_only()
-            # Repos he just made public, and pin candidates: draft only where the README is thin,
-            # so a README he wrote himself is never offered a replacement.
-            targets = session.exec(
-                select(Suggestion).where(
-                    ((Suggestion.kind == "publish") & (Suggestion.status == "done"))
-                    | (Suggestion.kind == "pin")
-                )
-            ).all()
-            for p in targets:
-                if _find(session, "readme", p.target) is None and len(gh.readme(p.target)[0]) < 300:
-                    draft = draft_repo_readme(session, gh, p.target, atoms, llm)
-                    if draft is not None:
-                        new.append(draft)
-            if _find(session, "profile_readme", f"{user}/{user}") is None:
-                profile = draft_profile_readme(session, gh, user, atoms, gh.repos(user, "public"), llm)
-                if profile is not None:
-                    new.append(profile)
     except GhError as e:  # gh missing or logged out: skip growth, keep going
         log.warning("growth skipped: %s", e)
         return
+
+    def refreshed():
+        new.extend(refresh(session, gh, config, now=now, workdir=config.data_dir / "growth_audit"))
+
+    def repo_drafts():
+        atoms = AtomStore(session).confirmed_only()
+        # Repos he just made public, and pin candidates: draft only where the README is thin,
+        # so a README he wrote himself is never offered a replacement.
+        targets = session.exec(
+            select(Suggestion).where(
+                ((Suggestion.kind == "publish") & (Suggestion.status == "done"))
+                | (Suggestion.kind == "pin")
+            )
+        ).all()
+        drafted = 0
+        for p in targets:
+            if drafted >= MAX_README_DRAFTS:
+                break
+            if _find(session, "readme", p.target) is None and len(gh.readme(p.target)[0] or "") < 300:
+                drafted += 1
+                draft = draft_repo_readme(session, gh, p.target, atoms, llm)
+                if draft is not None:
+                    new.append(draft)
+
+    def profile_draft():
+        mine = f"{user}/{user}"
+        # Same thin-README gate as repos: a profile README he wrote is never offered a replacement.
+        if _find(session, "profile_readme", mine) is None and len(gh.readme(mine)[0] or "") < 300:
+            atoms = AtomStore(session).confirmed_only()
+            profile = draft_profile_readme(session, gh, user, atoms, gh.repos(user, "public"), llm)
+            if profile is not None:
+                new.append(profile)
+
+    # One failing step must not drop the suggestions the others already created.
+    for step in (refreshed, *((repo_drafts, profile_draft) if llm is not None else ())):
+        try:
+            step()
+        except GhError as e:
+            log.warning("growth step skipped: %s", e)
     if client:
-        for s in new:
-            if s is not None:
-                client.send(growth_message(s))
+        # A draft whose message never arrived is sent again, or approve would refuse it forever.
+        unsent = session.exec(
+            select(Suggestion).where(
+                Suggestion.kind.in_(("readme", "profile_readme")),
+                Suggestion.status == "suggested",
+                Suggestion.shown_at.is_(None),
+            )
+        ).all()
+        ids = {s.id for s in new}
+        for s in [*new, *(u for u in unsent if u.id not in ids)]:
+            if client.send(growth_message(s)) and s.kind in ("readme", "profile_readme"):
+                row = session.get(Suggestion, s.id)
+                if row is not None:  # only now can approve commit it: the body has been seen
+                    row.shown_at = now
+                    session.add(row)
+                    session.commit()
 
 
 def run_daily(

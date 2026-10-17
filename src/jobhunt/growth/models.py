@@ -23,6 +23,8 @@ class Suggestion(SQLModel, table=True):
     # suggested | approved | done | declined | failed
     status: str = "suggested"
     error: str = ""
+    # README drafts only: set once the Telegram message with the full body was sent.
+    shown_at: datetime | None = None
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
 

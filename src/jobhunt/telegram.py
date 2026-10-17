@@ -154,7 +154,11 @@ def growth_message(s) -> str:
         lines.append("Blocked until fixed." if s.blocking else f"publish {s.id} / decline {s.id}")
         return _clean_lines("\n".join(lines))
     if s.kind in ("readme", "profile_readme"):
-        return _clean_lines(f"#{s.id} README draft for {s.target}\n\n{s.body}\n\napprove {s.id} / decline {s.id}")
+        # shortcut: the marker string is duplicated from growth.readme.REPLACES; import it if a third reader appears.
+        replaces = "replaces existing README" in (s.flags or [])
+        notes = [f"⚠ {f}" for f in (s.flags or []) if f != "replaces existing README"]
+        head = f"#{s.id} README draft for {s.target}" + (" (replaces your current README)" if replaces else "")
+        return _clean_lines("\n".join([head, *notes, "", s.body, "", f"approve {s.id} / decline {s.id}"]))
     if s.kind == "pin":
         return _clean(f"#{s.id} Pin {s.target} on your GitHub profile: {s.body}")
     return _clean_lines(f"#{s.id} Certification: {s.title}. {s.body}")
