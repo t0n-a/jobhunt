@@ -2,6 +2,7 @@
 
 import ipaddress
 import re
+import socket
 from urllib.parse import urlsplit
 
 import httpx
@@ -59,13 +60,21 @@ def _probe_allowed(url: str) -> bool:
     """http(s) only, and never localhost or a private/loopback/link-local IP literal."""
     parts = urlsplit(url)
     host = (parts.hostname or "").lower()
-    if parts.scheme not in ("http", "https") or not host or host == "localhost":
+    if parts.scheme not in ("http", "https") or not host:
+        return False
+    bare = host.rstrip(".")
+    if bare == "localhost" or bare.endswith(".localhost"):
         return False
     try:
         ip = ipaddress.ip_address(host)
     except ValueError:
-        return True
-    return not (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved)
+        if not re.fullmatch(r"[0-9a-fx.]+", host) or not re.match(r"\d", host):
+            return True
+        try:  # legacy IPv4 forms: 0x7f000001, 2130706433, 0177.0.0.1
+            ip = ipaddress.IPv4Address(socket.inet_aton(host))
+        except OSError:
+            return True
+    return ip.is_global
 
 
 def check_liveness(url: str, client: httpx.Client) -> str:

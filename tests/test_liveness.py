@@ -47,3 +47,17 @@ def test_non_http_and_private_targets_are_never_probed():
         assert calls == []
         assert check_liveness(U, c) == "active"
         assert len(calls) == 1
+
+
+def test_loopback_aliases_and_non_global_ips_are_never_probed():
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(200, text="ok")
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as c:
+        for url in ("http://localhost./x", "http://app.localhost/x", "http://0x7f000001/x",
+                    "http://2130706433/x", "http://0177.0.0.1/x", "http://100.64.0.1/x"):
+            assert check_liveness(url, c) == "uncertain"
+        assert calls == []
