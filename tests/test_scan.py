@@ -406,3 +406,26 @@ def test_expired_job_leaves_the_shortlist(tmp_path):
     assert result.expired == 1
     with Session(engine) as session:
         assert shortlist(session, RankingConfig()) == []
+
+
+def test_one_bad_job_in_triage_is_skipped_not_the_scan(tmp_path, monkeypatch):
+    from jobhunt import scan as scan_mod
+    from jobhunt.jobs.models import JobFacts
+
+    real = scan_mod.triage
+
+    def flaky(job, cfg):
+        if job.title == "Boom":
+            raise RuntimeError("bad job")
+        return real(job, cfg)
+
+    monkeypatch.setattr(scan_mod, "triage", flaky)
+    engine = fresh(tmp_path)
+    run_scan(
+        engine,
+        [StubSource("stub", [posting(title="Boom"), posting(title="Fine", company="B")])],
+        FakeProvider([score_payload()]),
+        liveness_client=_live_client(),
+    )
+    with Session(engine) as session:
+        assert len(session.exec(select(JobFacts)).all()) == 1

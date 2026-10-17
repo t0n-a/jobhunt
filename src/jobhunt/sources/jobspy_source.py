@@ -50,7 +50,11 @@ class JobSpySource:
                     continue
                 got_rows = True
                 for row in df.to_dict("records"):
-                    posting = self._to_posting(row)
+                    try:
+                        posting = self._to_posting(row)
+                    except Exception as exc:  # noqa: BLE001 - one malformed row must not sink the source
+                        logger.warning("%s: skipping malformed row: %s", self.name, exc)
+                        continue
                     if posting:
                         yield posting
         if not got_rows:
@@ -63,7 +67,8 @@ class JobSpySource:
         lo, hi = _val(row, "min_amount"), _val(row, "max_amount")
         salary = None
         if lo is not None:
-            salary = f"{_val(row, 'currency') or ''} {lo:g}-{(hi if hi is not None else lo):g} yearly".strip()
+            top = hi if hi is not None else lo
+            salary = f"{_val(row, 'currency') or ''} {lo:g}-{top:g} yearly".strip()
         description = _val(row, "description") or ""
         posted = _val(row, "date_posted")
         return RawPosting(

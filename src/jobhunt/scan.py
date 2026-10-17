@@ -241,7 +241,11 @@ def _triage_all(session: Session, cfg: RankingConfig) -> None:
         old = facts.get(job.id)
         if old is not None and old.content_hash == job.content_hash:
             continue
-        new = triage(job, cfg)
+        try:
+            new = triage(job, cfg)
+        except Exception:  # noqa: BLE001 - one bad job must not abort the scan
+            logger.warning("triage failed for job %s; skipping", job.id, exc_info=True)
+            continue
         if old is not None:
             new.liveness, new.liveness_checked_at = old.liveness, old.liveness_checked_at
             session.delete(old)

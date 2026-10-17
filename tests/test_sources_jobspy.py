@@ -36,3 +36,9 @@ def test_one_failing_call_does_not_lose_the_others():
         return r
     cfg = JobSpyConfig(search_terms=["a", "b"], locations=["Portugal"])
     assert len(list(JobSpySource("linkedin", cfg, scrape=scrape).fetch())) == 1
+
+
+def test_one_malformed_row_is_skipped_not_the_source():
+    rows = [dict(ROW, id="bad", date_posted="not a date"), dict(ROW, id="ok")]
+    out = list(JobSpySource("indeed", CFG, scrape=lambda **kw: pd.DataFrame(rows)).fetch())
+    assert [p.external_id for p in out] == ["ok"]

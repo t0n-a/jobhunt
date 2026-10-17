@@ -44,7 +44,8 @@ def ensure_columns(engine) -> list[str]:
                 if not column.nullable:
                     if column.default is None or not column.default.is_scalar:
                         raise RuntimeError(
-                            f"cannot add {table.name}.{column.name}: NOT NULL needs a scalar default"
+                            f"cannot add {table.name}.{column.name}: "
+                            "NOT NULL needs a scalar default"
                         )
                     literal = column.type.literal_processor(engine.dialect)(column.default.arg)
                     ddl += f" NOT NULL DEFAULT {literal}"
