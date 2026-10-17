@@ -9,7 +9,8 @@ from dotenv import dotenv_values
 
 from jobhunt.answers import load_answers
 from jobhunt.config import load_config
-from jobhunt.setup import Prompter, run_setup
+from jobhunt.llm import FakeProvider
+from jobhunt.setup import Prompter, run_setup, setup_evidence
 
 KEY = "AIza-SECRET-KEY"
 TOKEN = "123:SECRET-TOKEN"
@@ -52,11 +53,11 @@ def run(tmp_path, asks, secrets, result=None):
             200, json=result or updates()
         )
         with httpx.Client() as http:
-            run_setup(tmp_path, s.prompter, http)
+            run_setup(tmp_path, s.prompter, http, llm=FakeProvider([]), install=lambda r: "ok")
     return s
 
 
-FULL = CONFIG + ["", *ANSWERS]  # config, chat-id Enter, answers
+FULL = CONFIG + ["", *ANSWERS, "", "n"]  # config, chat-id Enter, answers, no CV, no timers
 
 
 def test_fresh_config_is_written_and_loads(tmp_path):
@@ -67,8 +68,8 @@ def test_fresh_config_is_written_and_loads(tmp_path):
 def test_rerun_keeps_existing_files(tmp_path):
     run(tmp_path, FULL, [KEY, TOKEN])
     before = {n: (tmp_path / n).read_bytes() for n in ("config.yaml", "answers.yaml", ".env")}
-    s = run(tmp_path, [], [])
-    assert s.calls == 0
+    s = run(tmp_path, ["", "n"], [])
+    assert s.calls == 2  # only the CV and timers questions
     assert before == {n: (tmp_path / n).read_bytes() for n in before}
 
 
@@ -90,7 +91,7 @@ def test_training_warning_is_shown_before_the_key_prompt(tmp_path):
     with respx.mock:
         respx.post(f"https://api.telegram.org/bot{TOKEN}/getUpdates").respond(200, json=updates())
         with httpx.Client() as http:
-            run_setup(tmp_path, s.prompter, http)
+            run_setup(tmp_path, s.prompter, http, llm=FakeProvider([]), install=str)
     assert order[0][0] == "say" and "may use your prompts" in order[0][1]
     assert order[1] == ("secret", "AI Studio key: ")
 
@@ -115,7 +116,7 @@ def test_answers_written(tmp_path):
 
 
 def test_bad_int_is_reasked(tmp_path):
-    asks = CONFIG + [""] + ["EU", "n", "1 month", "lots", "40000", "60000", "n", "y", "", "", "", ""]
+    asks = CONFIG + [""] + ["EU", "n", "1 month", "lots", "40000", "60000", "n", "y", "", "", "", "", "", "n"]
     s = run(tmp_path, asks, [KEY, TOKEN])
     assert load_answers(tmp_path / "answers.yaml").salary_min_eur == 40000
     assert any("whole number" in m for m in s.said)
@@ -128,7 +129,7 @@ def test_secrets_never_echoed(tmp_path):
 
 
 def test_max_salary_below_min_is_reasked(tmp_path):
-    asks = CONFIG + [""] + ["EU", "n", "1 month", "40000", "30000", "60000", "n", "y", "", "", "", ""]
+    asks = CONFIG + [""] + ["EU", "n", "1 month", "40000", "30000", "60000", "n", "y", "", "", "", "", "", "n"]
     s = run(tmp_path, asks, [KEY, TOKEN])
     assert load_answers(tmp_path / "answers.yaml").salary_max_eur == 60000
     assert any("at least 40000" in m for m in s.said)
@@ -141,3 +142,77 @@ def test_a_stranger_without_the_code_is_not_bound(tmp_path):
     ]}
     run(tmp_path, FULL, [KEY, TOKEN], result=stranger)
     assert dotenv_values(tmp_path / ".env")["TELEGRAM_CHAT_ID"] == "4242"
+
+
+# --- evidence + timers ---
+CV = "tests/fixtures/sample_cv.txt"
+
+
+def atoms_llm(n=3):
+    return FakeProvider([{"atoms": [
+        {"kind": "project", "title": f"T{i}", "description": f"D{i}", "skills": ["Python"]}
+        for i in range(n)]}])
+
+
+def evidence(tmp_path, asks, llm):
+    (tmp_path / "config.yaml").write_text(yaml.safe_dump(
+        {"profile": {"name": "H", "email": "h@e.com", "location": "L"},
+         "llm": {"provider": "openai_compat", "model": "m"}, "data_dir": "./data"}))
+    s = Script(asks)
+    return s, setup_evidence(tmp_path, s.prompter, llm)
+
+
+def atoms(tmp_path):
+    from sqlmodel import Session
+
+    from jobhunt.db import create_engine_for
+    from jobhunt.profile.store import AtomStore
+    with Session(create_engine_for(tmp_path / "data" / "jobhunt.db")) as ses:
+        return AtomStore(ses).list()
+
+
+def test_cv_import_and_confirm(tmp_path):
+    _, n = evidence(tmp_path, [CV, "y", "n", "s"], atoms_llm())
+    got = atoms(tmp_path)
+    assert n == 1 and len(got) == 2
+    assert sorted(a.confirmed for a in got) == [False, True]
+
+
+def test_quit_stops_confirming(tmp_path):
+    s, n = evidence(tmp_path, [CV, "y", "q"], atoms_llm())
+    assert n == 1 and not s.asks and len(atoms(tmp_path)) == 3
+
+
+def test_existing_confirmed_atoms_skip_the_step(tmp_path):
+    evidence(tmp_path, [CV, "y", "q"], atoms_llm())
+    s, n = evidence(tmp_path, [], atoms_llm())
+    assert n == 0 and s.calls == 0 and any("1 confirmed facts" in m for m in s.said)
+
+
+def test_bad_path_is_reasked_then_skipped(tmp_path):
+    s, n = evidence(tmp_path, ["/nope.txt", "/nope.pdf"], atoms_llm())
+    assert n == 0 and s.calls == 2 and atoms(tmp_path) == []
+
+
+def test_import_failure_does_not_abort_setup(tmp_path):
+    s = Script(CONFIG + ["", *ANSWERS, CV, "n"], [KEY, TOKEN])
+    with respx.mock:
+        respx.post(f"https://api.telegram.org/bot{TOKEN}/getUpdates").respond(200, json=updates())
+        with httpx.Client() as http:
+            run_setup(tmp_path, s.prompter, http, llm=FakeProvider([]), install=str)
+    assert any("CV import failed" in m for m in s.said) and not s.asks
+
+
+def test_timers_installed_only_on_yes(tmp_path):
+    calls = []
+    for answer in ("n", "y"):
+        s = Script(["", answer], [])
+        (tmp_path / "config.yaml").write_text(yaml.safe_dump(
+            {"profile": {"name": "H", "email": "h@e.com", "location": "L"},
+             "llm": {"provider": "openai_compat", "model": "m"}}))
+        (tmp_path / "answers.yaml").write_text("x")
+        (tmp_path / ".env").write_text("OPENAI_API_KEY=k\nTELEGRAM_BOT_TOKEN=t\nTELEGRAM_CHAT_ID=1\n")
+        with httpx.Client() as http:
+            run_setup(tmp_path, s.prompter, http, llm=FakeProvider([]),
+                      install=lambda r: calls.append(r) or "ok")
+    assert calls == [tmp_path]

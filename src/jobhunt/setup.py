@@ -8,11 +8,17 @@ from pathlib import Path
 
 import httpx
 import yaml
-from dotenv import dotenv_values, set_key
+from dotenv import dotenv_values, load_dotenv, set_key
+from sqlmodel import Session
 
 from jobhunt.answers import StandardAnswers, save_answers
-from jobhunt.config import Config
+from jobhunt.config import Config, load_config
+from jobhunt.db import create_engine_for, init_db
+from jobhunt.llm import build_provider
+from jobhunt.profile.importers.cv import import_cv
+from jobhunt.profile.store import AtomStore
 from jobhunt.telegram import discover_chat_id
+from jobhunt.timers import install_timers
 
 # Free tier prompts may be used by Google; the candidate must know before pasting a key.
 KEY_WARNING = (
@@ -129,7 +135,57 @@ def setup_answers(root: Path, p: Prompter) -> bool:
     return True
 
 
-def run_setup(root: Path, p: Prompter, http: httpx.Client) -> None:
+def setup_evidence(root: Path, p: Prompter, llm) -> int:
+    config = load_config(root / "config.yaml")
+    data_dir = root / config.data_dir
+    data_dir.mkdir(parents=True, exist_ok=True)
+    engine = create_engine_for(data_dir / "jobhunt.db")
+    init_db(engine)
+    with Session(engine) as session:
+        store = AtomStore(session)
+        if existing := len(store.confirmed_only()):
+            p.say(f"You have {existing} confirmed facts; add more any time at /atoms.")
+            return 0
+        path = None
+        for _ in range(2):
+            raw = p.ask("Path to your CV (.pdf, .docx or .txt), or Enter to skip: ").strip()
+            if not raw:
+                return 0
+            candidate = Path(raw).expanduser()
+            if candidate.is_file() and candidate.suffix.lower() in (".pdf", ".docx", ".txt"):
+                path = candidate
+                break
+            p.say("That file was not found or is not a .pdf, .docx or .txt.")
+        if path is None:
+            return 0
+        store.add_many(import_cv(path, llm))
+        confirmed = 0
+        for atom in store.list(confirmed=False):
+            p.say(f"{atom.title}\n{atom.description}\nSkills: {', '.join(atom.skills)}")
+            while (c := p.ask("[y] true, keep it  [n] not true, delete  [s] skip  [q] stop: ")
+                   .strip().lower()) not in ("y", "n", "s", "q"):
+                pass
+            if c == "q":
+                break
+            if c == "y":
+                store.update(atom.id, confirmed=True)
+                confirmed += 1
+            elif c == "n":
+                store.delete(atom.id)
+    p.say(f"{confirmed} facts confirmed. Review the rest any time at /atoms (jobhunt serve).")
+    return confirmed
+
+
+def run_setup(root: Path, p: Prompter, http: httpx.Client, *, llm=None, install=install_timers):
     setup_config(root, p)
     setup_keys(root, p, http)
     setup_answers(root, p)
+    try:
+        if llm is None:
+            load_dotenv(root / ".env", override=True)
+            llm = build_provider(load_config(root / "config.yaml").llm)
+        setup_evidence(root, p, llm)
+    except Exception as exc:  # noqa: BLE001 - a bad key or CV must not skip the timers question
+        p.say(f"CV import failed: {exc}. You can import it later at /import.")
+    if p.ask("Install the daily and 5-minute timers now? [y/N] ").strip().lower() == "y":
+        p.say(install(root))

@@ -55,6 +55,19 @@ The Home page shows the four stages and names the one thing to do next. Everythi
 
 Steps 3 onward all **refuse to run** against an empty profile rather than producing something plausible. That is deliberate: with no evidence to match against, the scorer rates whichever job asks for least, and a generator with nothing to draw on writes confident fiction. An early refusal is the honest answer.
 
+## First run
+
+```bash
+uv sync
+uv run jobhunt setup
+```
+
+`setup` asks, in order: your name, email and location; a free AI Studio key (read the training warning first); a Telegram bot token from @BotFather, then a one-time code you send to your bot so only your chat is bound; your standard answers (work authorisation, salary range, and so on); the path to your CV, which it imports and walks you through confirming fact by fact; and whether to install the daily and 5-minute timers. Press Enter to skip any step; rerunning keeps what exists.
+
+Telegram commands: yes N, no N (queue), sent N (you applied), done N (follow-up sent), pause, resume, status. "yes" means *you* apply, using the prepared PDF, then send `sent N`. Autopilot stays off in this version.
+
+Timers can be installed later with `uv run jobhunt install-timers`; run `loginctl enable-linger $USER` so they fire while you are logged out.
+
 ## LLM Provider
 
 The default provider is `agy`, running Google Gemini models via the Antigravity CLI. Configure `llm.provider`, `llm.model`, and `llm.binary` in `config.yaml`.
