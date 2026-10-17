@@ -47,6 +47,7 @@ from jobhunt.tailor.pipeline import mark_applied, render_application, tailor_job
 from jobhunt.web.deps import get_llm, get_store
 from jobhunt.web.flash import FLASH_COOKIE, flash, read_flash
 from jobhunt.web.home import home_state
+from jobhunt.web.inbox import NEEDS_YOU, ago, chart_points, fit_y, job_state, latest_applications
 
 HERE = Path(__file__).parent
 CERTIFICATE_MAX_BYTES = 10 * 1024 * 1024
@@ -85,6 +86,7 @@ def create_app(config: Config) -> FastAPI:
     templates = Jinja2Templates(directory=HERE / "templates")
     templates.env.globals["profile_name"] = config.profile.name
     templates.env.globals["read_flash"] = read_flash
+    templates.env.globals["ago"] = ago
     app.state.templates = templates
 
     @app.middleware("http")
@@ -343,20 +345,37 @@ def create_app(config: Config) -> FastAPI:
         return {row.job_id: row for row in rows if current.get(row.job_id) == row.content_hash}
 
     @app.get("/jobs")
-    def jobs_inbox(request: Request):
+    def jobs_inbox(request: Request, sel: int | None = None):
         with Session(app.state.engine) as db:
             jobs = JobStore(db).list_jobs()
             scores = _latest_scores(db)
+            applications = latest_applications(db)
             ranked = sorted(
                 jobs,
                 key=lambda j: scores[j.id].fit_score if j.id in scores else -1,
                 reverse=True,
             )
             tracks = Counter(scores[j.id].track for j in ranked if j.id in scores).most_common()
+            states = {j.id: job_state(j, scores.get(j.id), applications.get(j.id)) for j in ranked}
+            needs_you = sorted(
+                (j for j in ranked if states[j.id].key in NEEDS_YOU),
+                key=lambda j: NEEDS_YOU.index(states[j.id].key),
+            )
+            by_id = {j.id: j for j in ranked}
+            selected = by_id.get(sel) or (needs_you or ranked or [None])[0]
             return templates.TemplateResponse(
                 request,
                 "inbox.html",
-                {"jobs": ranked, "scores": scores, "tracks": tracks},
+                {
+                    "jobs": ranked,
+                    "scores": scores,
+                    "tracks": tracks,
+                    "states": states,
+                    "needs_you": needs_you,
+                    "selected": selected,
+                    "points": chart_points(ranked, scores, states),
+                    "fit_y": fit_y,
+                },
             )
 
     @app.get("/jobs/{job_id}")

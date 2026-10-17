@@ -1,28 +1,115 @@
 {% extends "base.html" %}
 {% block title %}Jobs — jobhunt{% endblock %}
+{% block main_class %} class="wide"{% endblock %}
 {% block content %}
-{% if tracks %}
-  <p class="meta">Your best matches look like:
-    {% for name, count in tracks %}<span class="pill">{{ name }} · {{ count }}</span>{% endfor %}
-  </p>
-{% endif %}
-
-<details>
-  <summary>Paste a job you found elsewhere</summary>
-  <form method="post" action="/jobs/paste">
-    <input type="text" name="title" placeholder="Job title" required>
-    <input type="text" name="company" placeholder="Company" required>
-    <input type="text" name="url" placeholder="URL (optional)">
-    <textarea name="description" rows="8" placeholder="Paste the full job description" required></textarea>
-    <button type="submit" class="primary" data-busy="Scoring…">Score it</button>
-  </form>
-</details>
-
 {% if not jobs %}
-  <p class="empty">No jobs yet. Run <code>jobhunt scan</code>, or paste one above.</p>
-{% else %}
-  <ul class="cards">
-    {% for job in jobs %}{% include "partials/job_row.html" %}{% endfor %}
-  </ul>
+  <p class="empty">No jobs yet. Run <code>jobhunt scan</code>, or paste one below.</p>
 {% endif %}
+
+<div class="workbench">
+  <div class="stack">
+    {% if needs_you %}
+    <section class="needs" aria-label="Needs you">
+      <h2>Needs you <span class="count">{{ needs_you|length }}</span></h2>
+      <div class="need-cards">
+        {% for job in needs_you %}{% set st = states[job.id] %}{% set score = scores.get(job.id) %}
+        <article class="need {{ st.key }}{% if selected and selected.id == job.id %} on{% endif %}">
+          <span class="lbl">{{ st.label }}</span>
+          <a class="t" href="/jobs?sel={{ job.id }}">{{ job.title }}</a>
+          <span class="c">{{ job.company }}{% if score %} · fit {{ score.fit_score }}{% endif %}</span>
+          {% if st.unverified %}<span class="r">⚠ {{ st.unverified }} line{{ 's' if st.unverified != 1 }} in the resume {{ 'are' if st.unverified != 1 else 'is' }} yours, not from evidence</span>{% endif %}
+          <a class="go" href="{{ st.href }}">{{ st.next }} →</a>
+        </article>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% if jobs %}
+    <section class="panel list">
+      <div class="top">
+        <h2>Ranked</h2>
+        {% if tracks %}
+          <p class="meta">Your best matches look like:
+            {% for name, count in tracks %}<span class="pill">{{ name }} · {{ count }}</span>{% endfor %}
+          </p>
+        {% endif %}
+      </div>
+      <table class="jobs">
+        <thead><tr><th>Role</th><th>Fit</th><th class="col-st">Status</th></tr></thead>
+        <tbody>
+          {% for job in jobs %}{% include "partials/job_row.html" %}{% endfor %}
+        </tbody>
+      </table>
+    </section>
+    {% endif %}
+
+    <details class="panel paste">
+      <summary>Paste a job you found elsewhere</summary>
+      <form method="post" action="/jobs/paste">
+        <input type="text" name="title" placeholder="Job title" required>
+        <input type="text" name="company" placeholder="Company" required>
+        <input type="text" name="url" placeholder="URL (optional)">
+        <textarea name="description" rows="8" placeholder="Paste the full job description" required></textarea>
+        <button type="submit" class="primary" data-busy="Scoring…">Score it</button>
+      </form>
+    </details>
+  </div>
+
+  {% if selected %}
+  <aside class="side">
+    {% set job = selected %}{% set st = states[job.id] %}{% set score = scores.get(job.id) %}
+    <section class="panel jobcard" id="card">
+      <div class="head">
+        <div>
+          <span class="st{% if st.key in ('blocked', 'waiting') %} hot{% endif %} {{ st.key }}">{{ st.label }}</span>
+          <h2><a href="/jobs/{{ job.id }}">{{ job.title }}</a></h2>
+          <p class="co">{{ job.company }}</p>
+        </div>
+        {% if score %}<div class="ring" style="--p: {{ score.fit_score }}"><div><b>{{ score.fit_score }}</b><small>fit</small></div></div>{% endif %}
+      </div>
+      <ul class="facts">
+        {% if job.remote %}<li>remote</li>{% elif job.location %}<li>{{ job.location }}</li>{% endif %}
+        {% if score %}<li>{{ score.track }}</li><li>seniority: {{ score.seniority_fit }}</li>{% endif %}
+        <li>found {{ ago(job.first_seen) }}</li>
+      </ul>
+      {% if score %}<p class="why">{{ score.rationale }}</p>{% else %}<p class="why meta">Not scored yet. Open it to score it.</p>{% endif %}
+      {% if st.unverified %}
+        <div class="flag"><b>Check this before it goes out</b>
+          {{ st.unverified }} line{{ 's' if st.unverified != 1 }} in the resume {{ 'are' if st.unverified != 1 else 'is' }} <mark>yours, not drafted from your evidence</mark>.</div>
+      {% endif %}
+      <div class="controls">
+        <a class="button" href="/jobs/{{ job.id }}">Open posting</a>
+        {% if st.key == 'ranked' %}
+          <form method="post" action="/jobs/{{ job.id }}/tailor" class="inline">
+            <button type="submit" class="primary" data-busy="Tailoring…">Tailor a resume →</button>
+          </form>
+        {% elif st.key not in ('queued', 'closed') %}
+          <a class="button primary" href="{{ st.href }}">{{ st.next }} →</a>
+        {% endif %}
+      </div>
+    </section>
+
+    {% if points %}
+    <section class="panel map">
+      <h2>Fit vs freshness</h2>
+      <p class="meta">Up is better fit, right is fresher. Dashed ring: text needs checking.</p>
+      <svg viewBox="0 0 520 250" role="img" aria-label="Scored jobs plotted by fit and how recently they were found">
+        <rect class="band" x="40" y="{{ fit_y(100) }}" width="470" height="{{ fit_y(80) - fit_y(100) }}" rx="6"/>
+        {% for f in (40, 60, 80, 100) %}<line x1="40" x2="510" y1="{{ fit_y(f) }}" y2="{{ fit_y(f) }}"/><text x="8" y="{{ fit_y(f) + 4 }}">{{ f }}</text>{% endfor %}
+        <text x="40" y="246">2 weeks ago</text><text x="482" y="246">now</text>
+        {% for p in points %}
+        <a href="/jobs?sel={{ p.job_id }}" class="pt {{ p.key }}{% if p.job_id == selected.id %} on{% endif %}">
+          <title>{{ states[p.job_id].label }}: fit {{ scores[p.job_id].fit_score }}</title>
+          {% if p.job_id == selected.id %}<circle class="halo" cx="{{ p.x }}" cy="{{ p.y }}" r="13"/>{% endif %}
+          {% if p.flagged %}<circle class="ring" cx="{{ p.x }}" cy="{{ p.y }}" r="10"/>{% endif %}
+          <circle class="dot" cx="{{ p.x }}" cy="{{ p.y }}" r="{{ 8 if p.job_id == selected.id else 6 }}"/>
+        </a>
+        {% endfor %}
+      </svg>
+    </section>
+    {% endif %}
+  </aside>
+  {% endif %}
+</div>
 {% endblock %}
