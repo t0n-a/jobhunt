@@ -75,11 +75,17 @@ def run_scan_command(config) -> str:
 def main() -> None:
     load_env()
     parser = argparse.ArgumentParser(prog="jobhunt")
-    parser.add_argument("command", choices=["serve", "scan", "today", "notify", "shortlist", "tick", "daily"])
+    parser.add_argument("command", choices=["serve", "scan", "today", "notify", "shortlist", "tick", "daily", "install-timers"])
     parser.add_argument("--config", type=Path, default=Path("config.yaml"))
     parser.add_argument("--limit", type=int, default=30)
     parser.add_argument("--port", type=int, default=8000)
     args = parser.parse_args()
+
+    if args.command == "install-timers":
+        from jobhunt.timers import install_timers
+
+        print(install_timers(Path.cwd()))
+        return
 
     config = load_config(args.config)
 
