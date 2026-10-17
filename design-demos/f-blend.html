@@ -15,6 +15,7 @@
   --found: oklch(72% 0.03 265); --ranked: oklch(75% 0.13 230); --drafted: oklch(74% 0.15 305);
   --waiting: oklch(85% 0.15 85); --sent: oklch(78% 0.15 160); --blocked: oklch(68% 0.2 25);
   --flag: oklch(72% 0.19 25); --flag-bg: oklch(68% 0.2 25 / .14);
+  --waiting-bg: oklch(85% 0.15 85 / .13); --blocked-bg: oklch(68% 0.2 25 / .16); --pill-ink: oklch(18% 0.03 265);
   --bar: oklch(75% 0.13 230); --bar-bg: oklch(30% 0.04 265); --go: oklch(85% 0.15 85); --go-ink: oklch(18% 0.03 265);
   --font: "Bricolage Grotesque", system-ui, sans-serif; --ease-out: cubic-bezier(.2,.8,.2,1);
 }
@@ -26,6 +27,7 @@
   --found: oklch(55% 0.03 265); --ranked: oklch(52% 0.14 235); --drafted: oklch(50% 0.17 305);
   --waiting: oklch(62% 0.15 70); --sent: oklch(52% 0.14 160); --blocked: oklch(52% 0.2 25);
   --flag: oklch(50% 0.2 25); --flag-bg: oklch(52% 0.2 25 / .08);
+  --waiting-bg: oklch(90% 0.1 85 / .55); --blocked-bg: oklch(92% 0.06 25 / .7); --pill-ink: oklch(99% 0 0);
   --bar: oklch(55% 0.14 235); --bar-bg: oklch(92% 0.015 265); --go: oklch(25% 0.04 265); --go-ink: oklch(98% 0 0);
 }
 * { box-sizing: border-box; }
@@ -83,7 +85,26 @@ tbody tr[aria-selected="true"] td:first-child { box-shadow: inset 3px 0 0 var(--
 .fitbar span i { display: block; height: 100%; width: calc(var(--p) * 1%); background: var(--bar); border-radius: inherit; }
 .fitbar b { width: 2ch; text-align: right; font-weight: 700; }
 .st { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; white-space: nowrap; }
-.card { position: sticky; top: 16px; padding: 24px; border-radius: 24px; }
+.right { position: sticky; top: 16px; display: grid; gap: 20px; }
+.card { padding: 24px; border-radius: 24px; }
+.map h2 { font-size: 15px; }
+.needs:empty { display: none; }
+.needs h2 { font-size: 20px; font-weight: 800; margin: 0 0 10px; display: flex; align-items: center; gap: 10px; }
+.needs h2 span { background: var(--blocked); color: var(--pill-ink); border-radius: 99px; padding: 0 10px; font-size: 15px; }
+.needs .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px; }
+.need { border-radius: 16px; padding: 14px 16px; border: 1.5px solid var(--c); background: var(--cbg); border-left-width: 6px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
+.need[aria-selected="true"] { outline: 2px solid var(--focus); outline-offset: 2px; }
+.need .lbl { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--c); }
+.need .t { font-weight: 700; font-size: 16px; line-height: 1.2; }
+.need .c { color: var(--ink-soft); font-size: 13px; }
+.need .r { font-size: 14px; margin-top: 2px; }
+.need button { margin-top: 8px; align-self: start; border: 0; border-radius: 10px; padding: 8px 14px; font-weight: 800; background: var(--c); color: var(--pill-ink); cursor: pointer; }
+.need button:hover { filter: brightness(1.08); }
+tbody tr.hot td { background: var(--cbg); }
+tbody tr.hot td:first-child { box-shadow: inset 4px 0 0 var(--c); }
+tbody tr.hot[aria-selected="true"] td { background: var(--sel); }
+.st.hot { background: var(--c); color: var(--pill-ink); padding: 2px 10px 2px 8px; border-radius: 99px; font-weight: 700; }
+.st.hot::before { background: var(--pill-ink); box-shadow: none; }
 .card .head { display: flex; justify-content: space-between; align-items: start; gap: 16px; }
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 99px; font-weight: 600; font-size: 13px; background: var(--panel-2); }
 .ring-score { --p: 50; width: 84px; aspect-ratio: 1; border-radius: 50%; flex: none; display: grid; place-items: center;
@@ -108,7 +129,7 @@ kbd { font: inherit; border: 1px solid var(--line); border-radius: 5px; padding:
 .theme { position: fixed; right: 16px; bottom: 16px; border: 1px solid var(--line); background: var(--panel); border-radius: 99px; padding: 6px 12px; cursor: pointer; font-size: 13px; }
 @media (max-width: 900px) {
   .wrap { grid-template-columns: minmax(0, 1fr); padding: 0 16px 60px; } header { padding: 14px 16px; }
-  .card { position: static; } .fitbar span { min-width: 48px; } .col-st { display: none; }
+  .right { position: static; } .fitbar span { min-width: 48px; } .col-st { display: none; }
 }
 @media (max-width: 480px) { .controls { grid-template-columns: 1fr 1fr; } .controls .go { grid-column: 1 / -1; } .keys { display: none; } }
 @media (prefers-reduced-motion: reduce) { .controls button { transition: none; } }
@@ -120,12 +141,15 @@ kbd { font: inherit; border: 1px solid var(--line); border-radius: 5px; padding:
   <button class="paste">+ Paste a job</button></header>
 <div class="wrap">
   <div class="left">
-    <section class="panel map"><h2>Where your matches sit</h2><p class="sub">Up is better fit, right is fresher. Dashed ring: text needs checking.</p>
-      <svg id="chart" viewBox="0 0 520 250" role="img" aria-label="Jobs plotted by fit and freshness"></svg></section>
+    <section class="needs" id="needs" aria-label="Needs you"></section>
     <section class="panel list"><div class="top"><h2>Ranked</h2><div class="filters" id="filters"></div></div>
       <table><thead><tr><th>Role</th><th>Fit</th><th class="col-st">Status</th></tr></thead><tbody id="rows"></tbody></table></section>
   </div>
-  <section class="panel card" id="card" aria-live="polite"></section>
+  <div class="right">
+    <section class="panel card" id="card" aria-live="polite"></section>
+    <section class="panel map"><h2>Fit vs freshness</h2><p class="sub">Up is better fit, right is fresher. Dashed ring: text needs checking.</p>
+      <svg id="chart" viewBox="0 0 520 250" role="img" aria-label="Jobs plotted by fit and freshness"></svg></section>
+  </div>
 </div>
 <button class="theme" id="theme">Light / dark</button>
 <script src="data.js"></script>
@@ -134,6 +158,8 @@ const C = s => `var(--${s})`;
 const hours = a => parseFloat(a) * ({ m: 1 / 60, h: 1, d: 24 }[a.slice(-1)]);
 const X = j => 500 - Math.min(hours(j.age), 168) / 168 * 450, Y = f => 225 - (f - 40) / 60 * 210;
 let filter = null, sel = JOBS[0].id;
+const HOT = { blocked: ["var(--blocked)", "var(--blocked-bg)"], waiting: ["var(--waiting)", "var(--waiting-bg)"] };
+const hotvars = s => HOT[s] ? `--c:${HOT[s][0]};--cbg:${HOT[s][1]}` : `--c:${C(s)}`;
 const visible = () => JOBS.filter(j => !filter || j.status === filter);
 const grid = [40, 60, 80, 100].map(f => `<line x1="40" x2="510" y1="${Y(f)}" y2="${Y(f)}"/><text x="8" y="${Y(f) + 4}">${f}</text>`).join("");
 function render() {
@@ -146,10 +172,14 @@ function render() {
   const n = s => JOBS.filter(j => j.status === s).length;
   filters.innerHTML = `<button aria-pressed="${!filter}" data-f="">All ${JOBS.length}</button>` +
     STAGES.filter(n).map(s => `<button class="dotc" style="--c:${C(s)}" aria-pressed="${filter === s}" data-f="${s}">${STAGE_LABEL[s]} ${n(s)}</button>`).join("");
-  rows.innerHTML = v.map(j => `<tr data-id="${j.id}" aria-selected="${j.id === sel}">
+  const hot = JOBS.filter(j => HOT[j.status]).sort((a, b) => (a.status === "blocked" ? -1 : 0) - (b.status === "blocked" ? -1 : 0));
+  needs.innerHTML = hot.length ? `<h2>Needs you <span>${hot.length}</span></h2><div class="cards">` + hot.map(j => `<article class="need" data-id="${j.id}" style="${hotvars(j.status)}" aria-selected="${j.id === sel}">
+    <span class="lbl">${STAGE_LABEL[j.status]}</span><span class="t">${j.title}</span><span class="c">${j.company} · fit ${j.fit}</span>
+    ${j.flag ? `<span class="r">⚠ ${j.flag.text}: ${j.flag.why}</span>` : ""}<button>${j.next} →</button></article>`).join("") + "</div>" : "";
+  rows.innerHTML = v.map(j => `<tr data-id="${j.id}" aria-selected="${j.id === sel}" class="${HOT[j.status] ? "hot" : ""}" style="${hotvars(j.status)}">
     <td class="role"><div class="t">${j.flag ? '<span class="flagmark" title="Has unverified text">!</span>' : ""}${j.title}</div><div class="c">${j.company} · ${j.where}</div></td>
     <td class="fitcell"><div class="fitbar"><span><i style="--p:${j.fit}"></i></span><b>${j.fit}</b></div></td>
-    <td class="col-st"><span class="st dotc" style="--c:${C(j.status)}">${STAGE_LABEL[j.status]}</span></td></tr>`).join("");
+    <td class="col-st"><span class="st dotc${HOT[j.status] ? " hot" : ""}">${STAGE_LABEL[j.status]}</span></td></tr>`).join("");
   const j = JOBS.find(j => j.id === sel);
   card.innerHTML = !j ? "<p>Nothing here.</p>" : `<div class="head"><div><span class="chip dotc" style="--c:${C(j.status)}">${STAGE_LABEL[j.status]}</span>
     <h1>${j.title}</h1><p class="co">${j.company}</p></div>
@@ -161,7 +191,7 @@ function render() {
     <p class="keys"><kbd>↑</kbd> <kbd>↓</kbd> move · <kbd>Enter</kbd> next action</p>`;
 }
 const pick = e => { const t = e.target.closest("[data-id]"); if (t) { sel = +t.dataset.id; render(); if (innerWidth <= 900 && e.currentTarget === rows) card.scrollIntoView({ behavior: "smooth" }); } };
-chart.onclick = pick; rows.onclick = pick;
+chart.onclick = pick; rows.onclick = pick; needs.onclick = pick;
 chart.onkeydown = e => e.key === "Enter" && pick(e);
 filters.onclick = e => { const b = e.target.closest("button"); if (b) { filter = b.dataset.f || null; render(); } };
 addEventListener("keydown", e => {
