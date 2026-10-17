@@ -89,6 +89,16 @@
 .atoms-today li { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
 .atoms-today .st { font-size: 12px; }
 
+/* icon options: .orb is now a plain tile holding a line icon */
+.orb, .orb.sm, .orb.lg { background: var(--panel-2); border: 1px solid var(--line); box-shadow: none; filter: none; border-radius: 30%;
+  display: grid; place-items: center; color: var(--st-ranked); }
+.orb svg { width: 58%; height: 58%; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.orb .letter { font-weight: 800; font-size: 22px; line-height: 1; }
+.orb.sm .letter { font-size: 13px; } .orb.lg .letter { font-size: 40px; }
+body.icon-none .orb { display: none; }
+body.icon-none .c-msg { grid-template-columns: minmax(0, 1fr); }
+body.icon-none .c-msg::before { content: "Counselor"; font-size: 12px; font-weight: 700; color: var(--st-ranked); margin-bottom: -10px; }
+
 /* not-connected state */
 .connect { max-width: 52rem; margin: 20px auto; text-align: center; padding: 36px 28px; border-radius: 28px; }
 .connect .orb.lg { margin: 0 auto 18px; filter: saturate(.5); }
@@ -115,6 +125,13 @@
   <div class="demo-switch">
     <button aria-pressed="true" data-v="talk">Demo: talking</button>
     <button aria-pressed="false" data-v="connect">Demo: no model connected</button>
+  </div>
+  <div class="demo-switch" id="icons">
+    <span class="meta" style="align-self:center">Icon:</span>
+    <button aria-pressed="true" data-i="compass">1 · Compass</button>
+    <button aria-pressed="false" data-i="bubble">2 · Speech bubble</button>
+    <button aria-pressed="false" data-i="mono">3 · Letter C</button>
+    <button aria-pressed="false" data-i="none">4 · No icon</button>
   </div>
 
   <div id="talk" class="room">
@@ -220,6 +237,18 @@ document.querySelector(".demo-switch").onclick = e => {
   document.querySelectorAll(".demo-switch button").forEach(x => x.setAttribute("aria-pressed", x === b));
   talk.hidden = b.dataset.v !== "talk"; connect.hidden = b.dataset.v !== "connect";
 };
+const ICONS = {
+  compass: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5 13.4 13.4 8.5 15.5 10.6 10.6z"/></svg>',
+  bubble: '<svg viewBox="0 0 24 24"><path d="M20 12a7.5 7.5 0 0 1-11 6.6L4 20l1.4-4.6A7.5 7.5 0 1 1 20 12z"/><path d="M12 9v.01M12 12v3"/></svg>',
+  mono: '<span class="letter">C</span>',
+  none: '',
+};
+function setIcon(k) {
+  document.body.className = "icon-" + k;
+  document.querySelectorAll(".orb").forEach(o => o.innerHTML = ICONS[k]);
+  document.querySelectorAll("#icons button").forEach(b => b.setAttribute("aria-pressed", b.dataset.i === k));
+}
+icons.onclick = e => { const b = e.target.closest("button[data-i]"); if (b) setIcon(b.dataset.i); };
 const feed = document.getElementById("feed");
 function accept() {
   proposal.outerHTML = `<p class="recorded">Added: <strong>Billing migration from cron to SQS</strong>. <a href="#">Confirm it on Evidence</a></p>`;
@@ -228,7 +257,7 @@ function accept() {
 }
 function say(text) {
   feed.insertAdjacentHTML("beforeend", `<div class="u-msg"></div>`); feed.lastElementChild.textContent = text;
-  feed.insertAdjacentHTML("beforeend", `<div class="c-msg" id="t"><div class="orb sm"></div><div class="body"><span class="thinking"><i></i><i></i><i></i></span></div></div>`);
+  feed.insertAdjacentHTML("beforeend", `<div class="c-msg" id="t"><div class="orb sm">${ICONS[document.body.className.slice(5)]}</div><div class="body"><span class="thinking"><i></i><i></i><i></i></span></div></div>`);
   chips.innerHTML = ""; feed.lastElementChild.scrollIntoView({ block: "end", behavior: "smooth" });
   setTimeout(() => {
     t.removeAttribute("id");
@@ -237,6 +266,7 @@ function say(text) {
 }
 chips.onclick = e => { const b = e.target.closest("button"); if (b) say(b.textContent); };
 composer.onsubmit = e => { e.preventDefault(); const ta = composer.querySelector("textarea"); if (ta.value.trim()) { say(ta.value.trim()); ta.value = ""; } };
+setIcon("compass");
 composer.querySelector("textarea").onkeydown = e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); composer.requestSubmit(); } };
 </script>
 </body>
