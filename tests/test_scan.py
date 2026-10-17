@@ -28,10 +28,11 @@ class StubSource:
 
 
 def posting(title="Backend Engineer", company="Acme", description="Python and Redis."):
+    slug = f"{company}/{title}".lower().replace(" ", "-")
     return RawPosting(
         source="stub",
         external_id="1",
-        url="https://example.com/1",
+        url=f"https://example.com/{slug}",
         title=title,
         company=company,
         description=description,
