@@ -67,29 +67,35 @@ def _num(tok: str) -> float:
     return value * 1000 if k else value
 
 
+_MILLIONS = re.compile(r"\s?(?:m|mm|million|b|bn|billion)\b", re.IGNORECASE)
+_PERIOD_NEAR = 25  # characters after the number in which its period word must appear
+
+
 def parse_salary(text: str | None) -> Salary | None:
+    """First currency amount that reads as pay: not millions, in range, with a period or >= 10k."""
     if not text:
         return None
-    m = _SALARY.search(text)
-    if not m:
-        return None
-    if m.group("n1"):
-        cur, low_tok, high_tok = m.group("c1"), m.group("n1"), m.group("n2")
-    else:
-        cur, low_tok, high_tok = m.group("c2"), m.group("n3"), m.group("n4")
-    low = _num(low_tok)
-    high = _num(high_tok) if high_tok else low
-    currency = _SYMBOL_CODE.get(cur, cur.upper())
-    period_match = _PERIOD.search(text, m.end())
-    if period_match:
-        period = _PERIOD_WORDS.get(period_match.group(0).lower(), "year")  # "p.a." is a year
-    elif low >= 10_000:
-        period = "year"
-    elif low >= 1_000:
-        period = "month"
-    else:
-        period = "hour"
-    return Salary(low, high, currency, period)
+    for m in _SALARY.finditer(text):
+        if _MILLIONS.match(text, m.end()):
+            continue
+        if m.group("n1"):
+            cur, low_tok, high_tok = m.group("c1"), m.group("n1"), m.group("n2")
+        else:
+            cur, low_tok, high_tok = m.group("c2"), m.group("n3"), m.group("n4")
+        low = _num(low_tok)
+        high = _num(high_tok) if high_tok else low
+        currency = _SYMBOL_CODE.get(cur, cur.upper())
+        period_match = _PERIOD.search(text, m.end(), m.end() + _PERIOD_NEAR)
+        if period_match:
+            period = _PERIOD_WORDS.get(period_match.group(0).lower(), "year")  # "p.a." is a year
+        elif low >= 10_000:
+            period = "year"
+        else:
+            continue
+        salary = Salary(low, high, currency, period)
+        if annual_eur(salary) is not None:
+            return salary
+    return None
 
 
 def annual_eur(s: Salary) -> int | None:

@@ -37,3 +37,17 @@ def test_estimate_by_country_and_level():
     assert estimate_pay("DE", "mid") == 65_000
     assert estimate_pay(None, "junior") is None
     assert estimate_pay("ZZ", "junior") is None
+
+
+def test_million_funding_is_not_a_salary():
+    assert parse_salary("Backed by $10M funding, 50 hours a week") is None
+    assert parse_salary("Raised EUR 2 million per year in growth") is None
+
+
+def test_skips_a_bonus_to_find_the_real_salary():
+    s = parse_salary("$5,000 signing bonus. Salary 80000 EUR per year")
+    assert s == Salary(80000, 80000, "EUR", "year")
+
+
+def test_period_word_far_from_the_number_does_not_count():
+    assert parse_salary("We pay EUR 3000 sometimes." + " " * 40 + "Offices open every day") is None
