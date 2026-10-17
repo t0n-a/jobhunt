@@ -113,8 +113,11 @@ def url_key(url: str) -> str:
     posting. A LinkedIn job id is the stable part of a LinkedIn URL, so any LinkedIn
     job URL reduces to it. Returns "" for input with no host.
     """
-    parts = urlsplit((url or "").strip())
-    host = parts.hostname or ""
+    try:
+        parts = urlsplit((url or "").strip())
+        host = parts.hostname or ""
+    except ValueError:  # scraped URLs are untrusted: "http://[bad" raises
+        return ""
     if host == "linkedin.com" or host.endswith(".linkedin.com"):
         match = _LINKEDIN_VIEW_RE.search(parts.path) or _LINKEDIN_CURRENT_RE.search(parts.query)
         if match:

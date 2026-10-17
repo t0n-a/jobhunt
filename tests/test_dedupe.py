@@ -173,6 +173,15 @@ def test_url_key_strips_tracking_and_normalises_linkedin():
     assert url_key("https://pt.linkedin.com/jobs/view/backend-dev-at-acme-4012345678?trk=abc") == "linkedin.com/jobs/view/4012345678"
     assert url_key("https://www.linkedin.com/jobs/search/?currentJobId=4012345678") == "linkedin.com/jobs/view/4012345678"
 
+def test_url_key_fails_safe_on_malformed_urls():
+    assert url_key("http://[bad") == ""
+
+
+def test_is_duplicate_falls_back_to_company_and_title_on_malformed_urls():
+    posting = make_posting(url="http://[bad")
+    assert is_duplicate(posting, make_job(url="http://[bad")) is True
+    assert is_duplicate(posting, make_job(url="http://[bad", title="Data Engineer")) is False
+
 def test_role_match_rules():
     assert role_match("Backend Developer", "Backend Engineer")
     assert role_match("Backend Software Engineer", "Backend Engineer")
