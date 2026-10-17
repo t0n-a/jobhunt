@@ -124,6 +124,6 @@ def test_stopped_note_is_cleaned_and_capped():
 
     app = SimpleNamespace(id=1)
     job = SimpleNamespace(title="Dev", company="A", location=None, url="u")
-    text, _ = queue_message(app, job, None, None, "http://x", note="field ‮evil" + "x" * 500)
+    text, _ = queue_message(app, job, None, None, "http://x", note="field \u202eevil" + "x" * 500)
     line = text.splitlines()[-1]
-    assert "‮" not in line and len(line) <= len("Autopilot stopped: ") + 200
+    assert "\u202e" not in line and len(line) <= len("Autopilot stopped: ") + 200
