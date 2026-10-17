@@ -5,8 +5,10 @@ from datetime import datetime
 import httpx
 from sqlmodel import Session, select
 
+from jobhunt.answers import load_answers
 from jobhunt.apply.autopilot import autosubmit
 from jobhunt.apply.digest import build_digest
+from jobhunt.apply.easy_apply import easy_apply_brief, is_linkedin_job
 from jobhunt.apply.followup import mark_cold
 from jobhunt.apply.prepare import prepare_plan
 from jobhunt.apply.queue import tailor_shortlist
@@ -21,7 +23,17 @@ from jobhunt.telegram import TelegramClient, queue_message
 log = logging.getLogger(__name__)
 
 
-def _send_queued(session: Session, client: TelegramClient, application, web_url: str) -> None:
+def _load_answers(config: Config):
+    try:
+        return load_answers(config.answers_path)
+    except ValueError:
+        log.warning("answers file unreadable; the Easy Apply brief omits answers", exc_info=True)
+        return None
+
+
+def _send_queued(
+    session: Session, client: TelegramClient, application, web_url: str, answers
+) -> None:
     last = session.exec(
         select(ApplicationEvent)
         .where(ApplicationEvent.application_id == application.id)
@@ -33,7 +45,11 @@ def _send_queued(session: Session, client: TelegramClient, application, web_url:
     score = session.exec(
         select(Score).where(Score.job_id == job.id, Score.content_hash == job.content_hash)
     ).first()
-    text, buttons = queue_message(application, job, score, session.get(JobFacts, job.id), web_url, note)
+    # Easy Apply jobs: the candidate applies himself, so the brief carries the CV link and answers.
+    extra = easy_apply_brief(application, job, answers, web_url) if is_linkedin_job(job.url) else ""
+    text, buttons = queue_message(
+        application, job, score, session.get(JobFacts, job.id), web_url, note, extra
+    )
     client.send(text, buttons)
 
 
@@ -66,6 +82,8 @@ def run_daily(
                 with httpx.Client(timeout=15) as http:
                     for application in run.queued:
                         try:
+                            if is_linkedin_job(session.get(Job, application.job_id).url):
+                                continue  # Easy Apply: no LinkedIn page is fetched
                             prepare_plan(session, application, config, llm, http)
                         except Exception:  # one unreadable form must not stop the run
                             log.warning("form plan failed for #%s", application.id, exc_info=True)
@@ -77,11 +95,12 @@ def run_daily(
                         log.warning("autosubmit failed", exc_info=True)
                         session.rollback()
                 if client:
+                    answers = _load_answers(config)
                     for application in run.queued:
                         session.refresh(application)
                         if application.status != "queued":
                             continue
-                        _send_queued(session, client, application, config.autopilot.web_url)
+                        _send_queued(session, client, application, config.autopilot.web_url, answers)
             except Exception as exc:
                 log.warning("daily tailoring failed", exc_info=True)
                 session.rollback()

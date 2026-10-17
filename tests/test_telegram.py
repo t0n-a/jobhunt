@@ -171,3 +171,12 @@ def test_parse_outreach_commands():
     assert parse_command("oskip:5") == ("oskip", 5)
     assert parse_command("/oreplied 5") == ("oreplied", 5)
     assert parse_command("osent") is None
+
+
+def test_queue_message_extra_is_its_own_paragraph_and_capped():
+    app = SimpleNamespace(id=1)
+    job = SimpleNamespace(title="T", company="C", location="", url="u")
+    text, _ = queue_message(app, job, None, None, "http://w", extra="line one\nline two" + "x" * 2000)
+    _, _, rest = text.partition("\n\n")
+    assert rest.startswith("line one\nline two")
+    assert len(rest) == 1200

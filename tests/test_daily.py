@@ -3,6 +3,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlmodel import Session
 
+from jobhunt.answers import StandardAnswers, save_answers
 from jobhunt.apply import daily
 from jobhunt.apply.queue import TailorRun
 from jobhunt.apply.tracker import add_event, set_status
@@ -219,3 +220,30 @@ def test_error_note_is_in_queue_message(engine, monkeypatch):
     client = FakeClient()
     go(engine, client)
     assert client.sent[0][0].endswith("Autopilot: error: Error - it may have gone through; check before applying again")
+
+
+def test_daily_adds_easy_apply_brief_and_skips_form_plan(engine, monkeypatch, tmp_path):
+    fake_tailor(monkeypatch, engine)
+    with Session(engine) as s:
+        s.get(Job, 1).url = "https://www.linkedin.com/jobs/view/1"
+        s.commit()
+    save_answers(
+        tmp_path / "answers.yaml",
+        StandardAnswers(
+            work_authorization="EU citizen",
+            needs_sponsorship_outside_eu=False,
+            notice_period="1 month",
+            salary_min_eur=60000,
+            salary_max_eur=75000,
+            relocation=True,
+            remote=False,
+        ),
+    )
+    seen = []
+    monkeypatch.setattr(daily, "prepare_plan", lambda s, a, c, llm, http: seen.append(a.id))
+    config = CONFIG.model_copy(update={"answers_path": tmp_path / "answers.yaml"})
+    client = FakeClient()
+    daily.run_daily(config, engine=engine, llm=LLM, client=client, scan=scan_ok, now=NOW)
+    assert seen == [2]
+    assert "LinkedIn Easy Apply" in client.sent[0][0]
+    assert "LinkedIn Easy Apply" not in client.sent[1][0]

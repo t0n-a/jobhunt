@@ -87,7 +87,7 @@ def parse_command(text: str) -> tuple[str, int | str | None] | None:
 
 
 def queue_message(
-    application, job, score, facts, web_url: str, note: str = ""
+    application, job, score, facts, web_url: str, note: str = "", extra: str = ""
 ) -> tuple[str, list[list[dict]]]:
     pay = "pay ?"
     if facts is not None and facts.pay_yearly_eur:
@@ -101,6 +101,9 @@ def queue_message(
     )
     if note:
         text += f"\nAutopilot: {_clean(note).removeprefix('autopilot ')[:200]}"  # reasons quote page labels
+    if extra:
+        # _clean strips newlines too, so each line is cleaned on its own.
+        text += "\n\n" + "\n".join(_clean(line) for line in extra.split("\n"))[:1200]
     buttons = [
         [
             {"text": "Yes", "callback_data": f"yes:{application.id}"},
