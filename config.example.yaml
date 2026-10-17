@@ -32,6 +32,9 @@ data_dir: ./data
 # last path segment of its careers URL.
 sources:
   enabled:
+    # LinkedIn is scraped logged-out and is best-effort; it may be blocked on any run.
+    - linkedin
+    - indeed
     - greenhouse
     - lever
     - ashby

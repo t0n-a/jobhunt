@@ -83,3 +83,9 @@ profile:
     assert cfg.ranking.shortlist_fit == 40
     assert cfg.ranking.strong_fit == 80
     assert cfg.ranking.languages == ["english", "portuguese"]
+
+
+def test_linkedin_and_indeed_enabled_by_default():
+    from jobhunt.config import SourcesConfig
+
+    assert {"linkedin", "indeed"} <= set(SourcesConfig().enabled)

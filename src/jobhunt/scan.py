@@ -13,6 +13,7 @@ from jobhunt.matching.score import score_job
 from jobhunt.profile.store import AtomStore
 from jobhunt.sources.ats import AshbySource, GreenhouseSource, LeverSource
 from jobhunt.sources.hackernews import HackerNewsSource
+from jobhunt.sources.jobspy_source import JobSpySource
 from jobhunt.sources.portugal import ITJobsSource, LandingJobsSource
 from jobhunt.sources.remote_boards import (
     RemoteOkSource,
@@ -64,6 +65,8 @@ def build_sources(cfg: SourcesConfig, itjobs_key: str | None) -> list:
             cfg.location_keywords, cfg.role_keywords, SOURCE_DEADLINE_SECONDS
         ),
         "itjobs": lambda: ITJobsSource(itjobs_key),
+        "linkedin": lambda: JobSpySource("linkedin", cfg.jobspy),
+        "indeed": lambda: JobSpySource("indeed", cfg.jobspy),
     }
     sources = []
     for name in cfg.enabled:

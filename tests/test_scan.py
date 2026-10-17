@@ -332,3 +332,8 @@ def test_a_previously_unscored_job_is_retried_on_the_next_scan(tmp_path):
     second = run_scan(engine, [StubSource("s", [])], FakeProvider([score_payload()]))
 
     assert second.scored == 1
+
+
+def test_build_sources_includes_jobspy_sites():
+    sources = build_sources(SourcesConfig(enabled=["linkedin", "indeed"]), None)
+    assert [s.name for s in sources] == ["linkedin", "indeed"]

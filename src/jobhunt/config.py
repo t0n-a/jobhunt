@@ -27,9 +27,29 @@ class LLMConfig(BaseModel):
     cache_dir: Path = Path("./data/llm_cache")
 
 
+class JobSpyConfig(BaseModel):
+    # Broad on purpose: triage drops senior titles before scoring.
+    search_terms: list[str] = Field(
+        default_factory=lambda: [
+            "software engineer",
+            "software developer",
+            "backend developer",
+            "frontend developer",
+            "full stack developer",
+            "python developer",
+        ]
+    )
+    locations: list[str] = Field(default_factory=lambda: ["Portugal", "European Union", "Remote"])
+    results_wanted: int = 50
+    hours_old: int = 72
+    country_indeed: str = "portugal"
+
+
 class SourcesConfig(BaseModel):
     enabled: list[str] = Field(
         default_factory=lambda: [
+            "linkedin",
+            "indeed",
             "greenhouse",
             "lever",
             "ashby",
@@ -40,6 +60,7 @@ class SourcesConfig(BaseModel):
             "hackernews",
         ]
     )
+    jobspy: JobSpyConfig = Field(default_factory=JobSpyConfig)
     greenhouse: list[str] = Field(default_factory=list)
     lever: list[str] = Field(default_factory=list)
     ashby: list[str] = Field(default_factory=list)
