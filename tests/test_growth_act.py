@@ -112,3 +112,11 @@ def test_growth_messages_are_clean_per_line(session):
     r = upsert_suggestion(session, "readme", "ada/z", title="t", body="# z\n\nbody")
     assert growth_message(r).splitlines()[0] == f"#{r.id} README draft for ada/z"
     assert growth_message(r).endswith(f"approve {r.id} / decline {r.id}")
+
+
+
+def test_overlong_draft_is_not_committed(session):
+    s = upsert_suggestion(session, "readme", "ada/big", title="t", body="x" * (act.MAX_SHOWN + 1))
+    gh = FakeGh()
+    assert "too long" in act.approve(session, gh, s.id)
+    assert gh.calls == []

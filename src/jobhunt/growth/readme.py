@@ -128,7 +128,8 @@ def draft_repo_readme(session, gh, full_name, atoms, llm):
     features = [
         f for f in (_clean(str(x)).strip() for x in (feats if isinstance(feats, list) else [])) if f
     ]
-    features = [f for f in features if _passes(f, proof)]
+    # Kept short enough to read in one Telegram message before approving.
+    features = [f[:200] for f in features if _passes(f, proof)][:8]
     md = [f"# {name}", ""]
     if _passes(summary, proof):
         md += [summary, ""]

@@ -52,6 +52,10 @@ def publish(session: Session, gh, config, suggestion_id: int, *, audit=None) -> 
     return f"{s.target} is public now."
 
 
+# A draft is approved from a Telegram message (4096 chars); anything longer was never fully seen.
+MAX_SHOWN = 3500
+
+
 def approve(session: Session, gh, suggestion_id: int) -> str:
     s = _open(session, suggestion_id, ("readme", "profile_readme"))
     if isinstance(s, str):
@@ -61,6 +65,11 @@ def approve(session: Session, gh, suggestion_id: int) -> str:
                 return f"Use publish {suggestion_id} to make a repo public."
             return f"Nothing to approve for #{suggestion_id}; it's a suggestion you act on yourself."
         return s
+    if len(s.body) > MAX_SHOWN:
+        return (
+            f"#{s.id} is too long to show in full on Telegram ({len(s.body)} characters), so nothing "
+            "was committed. Decline it, or copy what you want into the repo yourself."
+        )
     try:
         sha = gh.readme(s.target)[1]
         gh.put_file(s.target, "README.md", s.body, "docs: README (drafted with jobhunt, approved by you)", sha)
