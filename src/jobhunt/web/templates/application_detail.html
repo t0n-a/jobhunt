@@ -5,8 +5,6 @@
 {% block content %}
 {% set s = application.status %}
 {% set blocked = form_plan and not form_plan.complete and s in ('drafted', 'queued') %}
-{% set key = 'blocked' if blocked else {'queued': 'waiting', 'drafted': 'drafted', 'approved': 'approved', 'sent': 'sent', 'replied': 'sent', 'interview': 'sent', 'offer': 'sent'}.get(s, 'closed') %}
-{% set label = 'blocked' if blocked else ('needs your yes' if s == 'queued' else s) %}
 {% set ns = namespace(yours=0) %}{% for _, b in bullets %}{% if b.source == 'user' %}{% set ns.yours = ns.yours + 1 %}{% endif %}{% endfor %}
 
 <div class="workbench">
@@ -14,7 +12,7 @@
     <section class="panel jobcard apphead">
       <div class="head">
         <div>
-          <span class="st{% if key in ('blocked', 'waiting') %} hot{% endif %} {{ key }}">{{ label }}</span>
+          {% include "partials/app_status.html" %}
           <h2>{% if job %}<a href="/jobs/{{ job.id }}">{{ job.title }}</a>{% endif %}</h2>
           <p class="co">{{ job.company if job }}</p>
         </div>

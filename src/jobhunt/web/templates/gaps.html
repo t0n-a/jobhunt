@@ -12,7 +12,7 @@
         <p class="meta">Missing from {{ gap.job_count }} of your best-fit jobs
           {%- if gap.example_titles %}, including {{ gap.example_titles[0] }}{% endif %}.</p>
         <form method="post" action="/gaps/{{ gap.skill }}/start">
-          <button type="submit" class="primary" data-busy="Planning…">Start a project for this</button>
+          <button type="submit" data-busy="Planning…">Start a project for this</button>
         </form>
       </li>
     {% endfor %}

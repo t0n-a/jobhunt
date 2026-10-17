@@ -21,7 +21,7 @@
     <input type="text" name="issuer" placeholder="Issuer">
     <input type="date" name="issued_on" aria-label="Issued on">
     <input type="file" name="file" accept=".pdf,.png,.jpg,.jpeg" required>
-    <button type="submit" class="primary" data-busy="Adding…">Add certificate</button>
+    <button type="submit" data-busy="Adding…">Add certificate</button>
   </form>
 </section>
 
@@ -29,7 +29,7 @@
   <h3>GitHub</h3>
   <form method="post" action="/import/github">
     <input type="text" name="username" placeholder="github-handle" required>
-    <button type="submit" class="primary" data-busy="Importing…">Import repositories</button>
+    <button type="submit" data-busy="Importing…">Import repositories</button>
   </form>
 </section>
 
@@ -38,7 +38,7 @@
   <form method="post" action="/import/coursework">
     <input type="text" name="institution" value="ISEP" required>
     <textarea name="text" rows="8" placeholder="Paste your course list or transcript" required></textarea>
-    <button type="submit" class="primary" data-busy="Importing…">Import coursework</button>
+    <button type="submit" data-busy="Importing…">Import coursework</button>
   </form>
 </section>
 {% endblock %}

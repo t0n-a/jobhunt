@@ -11,7 +11,7 @@
   --ink: oklch(22% 0.03 265);
   --ink-soft: oklch(46% 0.03 265);
   --line: oklch(89% 0.015 265);
-  --glow: oklch(82% 0.08 265 / .35);
+  --glow: oklch(84% 0.07 265 / .22);
   --focus: oklch(50% 0.2 265);
   --sel: oklch(50% 0.2 265 / .08);
   --bar: oklch(55% 0.14 235);
@@ -202,7 +202,7 @@ a.card:hover { border-color: var(--ink-soft); }
 .st.hot::before { background: var(--pill-ink); box-shadow: none; }
 
 /* ---------- forms ---------- */
-input[type="text"], input[type="file"], input[type="password"], textarea, select {
+input[type="text"], input[type="file"], input[type="password"], input[type="date"], input[type="email"], input[type="url"], input[type="number"], textarea, select {
   font: 15px/1.4 var(--font);
   padding: .6rem .75rem;
   border: 1px solid var(--line); border-radius: var(--radius);
@@ -210,6 +210,11 @@ input[type="text"], input[type="file"], input[type="password"], textarea, select
   width: 100%;
 }
 textarea { resize: vertical; }
+input[type="file"]::file-selector-button {
+  font: 600 13px var(--font); color: var(--ink); background: var(--panel-2);
+  border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; margin-right: 10px; cursor: pointer;
+}
+main > section.card, main > .card + .card { margin: 0 0 14px; }
 input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; border-color: transparent; }
 form { display: grid; gap: .6rem; margin: .75rem 0; }
 form.inline { display: inline; margin: 0; }
