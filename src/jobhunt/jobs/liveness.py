@@ -1,6 +1,8 @@
 """Is a job posting still open? Ported from career-ops liveness-core (MIT, see NOTICE)."""
 
+import ipaddress
 import re
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -53,9 +55,26 @@ def classify(status: int, original_url: str, final_url: str, text: str) -> str:
     return "active"
 
 
-def check_liveness(url: str, client: httpx.Client) -> str:
+def _probe_allowed(url: str) -> bool:
+    """http(s) only, and never localhost or a private/loopback/link-local IP literal."""
+    parts = urlsplit(url)
+    host = (parts.hostname or "").lower()
+    if parts.scheme not in ("http", "https") or not host or host == "localhost":
+        return False
     try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return True
+    return not (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved)
+
+
+def check_liveness(url: str, client: httpx.Client) -> str:
+    # shortcut: hostnames resolving to private IPs (DNS) and redirects to them are not checked;
+    # use a transport that blocks private IPs if jobhunt ever runs on a server.
+    try:
+        if not _probe_allowed(url):
+            return "uncertain"
         resp = client.get(url, follow_redirects=True)
-    except httpx.HTTPError:
+    except (httpx.HTTPError, httpx.InvalidURL, ValueError, UnicodeError):
         return "uncertain"
     return classify(resp.status_code, url, str(resp.url), resp.text)
