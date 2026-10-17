@@ -4,11 +4,12 @@ from collections import Counter
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import httpx
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.exception_handlers import http_exception_handler
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
@@ -65,6 +66,10 @@ def _importer_errors():
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
+# "testserver" is the host FastAPI's TestClient sends.
+LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1", "testserver"}
+
+
 def create_app(config: Config) -> FastAPI:
     app = FastAPI(title="jobhunt")
 
@@ -77,6 +82,23 @@ def create_app(config: Config) -> FastAPI:
     templates.env.globals["profile_name"] = config.profile.name
     templates.env.globals["read_flash"] = read_flash
     app.state.templates = templates
+
+    @app.middleware("http")
+    async def local_only(request: Request, call_next):
+        """Refuse what a web page elsewhere could make the browser send to this local app.
+
+        Any site the candidate visits can post a form to 127.0.0.1, and a rebound DNS name
+        can read pages here; approving an application must only ever be the candidate's click.
+        """
+        host = (request.headers.get("host") or "").rsplit(":", 1)[0].strip("[]")
+        if host not in LOCAL_HOSTS:
+            return PlainTextResponse("jobhunt only answers on localhost.", status_code=403)
+        if request.method not in ("GET", "HEAD", "OPTIONS"):
+            origin = request.headers.get("origin")
+            cross_site = request.headers.get("sec-fetch-site") == "cross-site"
+            if cross_site or (origin and urlsplit(origin).hostname not in LOCAL_HOSTS):
+                return PlainTextResponse("Cross-site request refused.", status_code=403)
+        return await call_next(request)
 
     @app.middleware("http")
     async def clear_flash(request: Request, call_next):

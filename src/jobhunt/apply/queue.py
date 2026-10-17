@@ -11,6 +11,7 @@ from jobhunt.jobs.dedupe import normalize, role_match
 from jobhunt.jobs.models import Job
 from jobhunt.llm import LLMError
 from jobhunt.matching.score import EmptyProfileError
+from jobhunt.profile.store import AtomStore
 from jobhunt.ranking.shortlist import shortlist
 from jobhunt.tailor.models import Application, iter_bullets
 from jobhunt.tailor.pipeline import render_application, tailor_job
@@ -27,6 +28,11 @@ class TailorRun:
 
 def tailor_shortlist(session: Session, llm, config: Config) -> TailorRun:
     run = TailorRun(queued=[])
+    if not AtomStore(session).confirmed_only():
+        run.stopped = (
+            "No confirmed evidence yet. Confirm some facts at /atoms, then tailoring starts."
+        )
+        return run
     taken = [
         (normalize(job.company), job.title)
         for job in session.exec(select(Job).join(Application, Application.job_id == Job.id)).all()
@@ -40,9 +46,10 @@ def tailor_shortlist(session: Session, llm, config: Config) -> TailorRun:
             continue
         try:
             application = tailor_job(session, job, llm, profile=config.profile)
-        except EmptyProfileError as exc:  # subclass of LLMError: must come first
-            run.stopped = str(exc)
-            break
+        except EmptyProfileError:  # subclass of LLMError: must come first
+            # This job matches none of the confirmed evidence; the next one may.
+            run.failed += 1
+            continue
         except LLMError:
             run.failed += 1
             continue
